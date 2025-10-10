@@ -12,6 +12,7 @@ import AppKit
 struct MouseTrackingView: NSViewRepresentable {
     @Binding var position: CGPoint
     var onScroll: ((CGFloat, CGFloat) -> Void)? = nil
+    var onCommandClose: (() -> Void)? = nil
     
     func makeNSView(context: Context) -> TrackingNSView {
         let v = TrackingNSView()
@@ -19,19 +20,24 @@ struct MouseTrackingView: NSViewRepresentable {
             // Update binding on main thread
             DispatchQueue.main.async { self.position = p }
         }
+        v.onScroll = { dx, dy in self.onScroll?(dx, dy) }
+        v.onCommandClose = self.onCommandClose
         return v
     }
     
     func updateNSView(_ nsView: TrackingNSView, context: Context) {
         nsView.onMove = { p in DispatchQueue.main.async { self.position = p } }
         nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) }
+        nsView.onCommandClose = self.onCommandClose
     }
     
     final class TrackingNSView: NSView {
         var onMove: ((CGPoint) -> Void)?
         private var tracking: NSTrackingArea?
         var onScroll: ((CGFloat, CGFloat) -> Void)?
+        var onCommandClose: (() -> Void)?
         private var localMonitor: Any?
+        private var keyMonitor: Any?
         
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -50,6 +56,7 @@ struct MouseTrackingView: NSViewRepresentable {
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor = localMonitor { NSEvent.removeMonitor(monitor); localMonitor = nil }
+            if let k = keyMonitor { NSEvent.removeMonitor(k); keyMonitor = nil }
             guard window != nil else { return }
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self else { return event }
@@ -60,10 +67,19 @@ struct MouseTrackingView: NSViewRepresentable {
                 self.onScroll?(dxBase * invertMult, dyBase * invertMult)
                 return nil // consume so the system doesn't double-handle
             }
+            keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+                guard let self else { return event }
+                if event.modifierFlags.contains(.command), event.charactersIgnoringModifiers?.lowercased() == "w" {
+                    self.onCommandClose?()
+                    return nil
+                }
+                return event
+            }
         }
         
         deinit {
             if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }
+            if let k = keyMonitor { NSEvent.removeMonitor(k) }
         }
         
         private func shouldLetSystemHandleScroll(for event: NSEvent) -> Bool {

@@ -17,8 +17,8 @@ struct JamAIApp: App {
     var body: some Scene {
         WindowGroup {
             if let viewModel = appState.viewModel {
-                CanvasView(viewModel: viewModel)
-                    .preferredColorScheme(appState.project?.appearanceMode.colorScheme)
+                CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
+                    .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
                     .frame(minWidth: 1200, minHeight: 800)
             } else {
                 WelcomeView(appState: appState)
@@ -35,7 +35,7 @@ struct JamAIApp: App {
                 Button("Open Project...") {
                     appState.openProjectDialog()
                 }
-                .keyboardShortcut("o", modifiers: .command)
+                .keyboardShortcut("p", modifiers: .command)
             }
             
             CommandGroup(replacing: .saveItem) {
@@ -49,14 +49,29 @@ struct JamAIApp: App {
                     appState.exportJSON()
                 }
                 .keyboardShortcut("e", modifiers: [.command, .shift])
-                .disabled(appState.viewModel == nil)
                 
                 Button("Export Markdown...") {
                     appState.exportMarkdown()
                 }
                 .disabled(appState.viewModel == nil)
+                // Close items
+                Divider()
+                Button("Close Project") { appState.closeProject() }
+                    .keyboardShortcut("w", modifiers: .command)
+                    .disabled(appState.viewModel == nil)
+                Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
+                    .keyboardShortcut("w", modifiers: [.command, .option])
             }
-            
+
+            CommandGroup(replacing: .windowArrangement) {
+                Button("Close Project") { appState.closeProject() }
+                    .keyboardShortcut("w", modifiers: .command)
+                Divider()
+                Button("Minimize") { NSApp.keyWindow?.miniaturize(nil) }
+                    .keyboardShortcut("m", modifiers: .command)
+                Button("Zoom") { NSApp.keyWindow?.zoom(nil) }
+            }
+        
             CommandGroup(after: .pasteboard) {
                 Button("Copy Node") {
                     appState.viewModel?.copyNode(appState.viewModel?.selectedNodeId ?? UUID())
@@ -100,6 +115,7 @@ struct JamAIApp: App {
             }
         }
     }
+    
 }
 
 // MARK: - App State
@@ -109,15 +125,57 @@ class AppState: ObservableObject {
     @Published var viewModel: CanvasViewModel?
     @Published var project: Project?
     @Published var currentFileURL: URL?
+    @Published var recentProjects: [URL] = []
     
     private var database: Database?
+    private let recentKey = "recentProjectBookmarks"
+    
+    init() {
+        loadRecents()
+    }
+    
+    private func loadRecents() {
+        let defaults = UserDefaults.standard
+        guard let datas = defaults.array(forKey: recentKey) as? [Data] else { return }
+        var urls: [URL] = []
+        for data in datas {
+            var stale = false
+            if let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale) {
+                urls.append(url)
+            }
+        }
+        self.recentProjects = urls
+    }
+    
+    private func saveRecents() {
+        let datas: [Data] = recentProjects.compactMap { url in
+            return try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+        }
+        UserDefaults.standard.set(datas, forKey: recentKey)
+    }
+    
+    func recordRecent(url: URL) {
+        var list = recentProjects.filter { $0.standardizedFileURL != url.standardizedFileURL }
+        list.insert(url, at: 0)
+        if list.count > 10 { list = Array(list.prefix(10)) }
+        recentProjects = list
+        saveRecents()
+    }
+    
+    func openRecent(url: URL) {
+        var accessed = false
+        if url.startAccessingSecurityScopedResource() { accessed = true }
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        openProject(url: url)
+    }
     
     func createNewProject() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
             let panel = NSSavePanel()
-            panel.allowedContentTypes = []
+            // Allow any name; we'll ensure .jam is appended and create the package ourselves
+            panel.allowedContentTypes = [.item]
             panel.allowsOtherFileTypes = true
             panel.nameFieldStringValue = "Untitled Project.\(Config.jamFileExtension)"
             panel.message = "Create a new JamAI project"
@@ -134,8 +192,12 @@ class AppState: ObservableObject {
                         let (loadedProject, database) = try DocumentManager.shared.openProject(from: url.deletingPathExtension())
                         self.project = loadedProject
                         self.database = database
-                        self.currentFileURL = url
+                        // Normalize to a .jam URL for consistency
+                        self.currentFileURL = (url.pathExtension == Config.jamFileExtension)
+                            ? url
+                            : url.appendingPathExtension(Config.jamFileExtension)
                         self.viewModel = CanvasViewModel(project: loadedProject, database: database)
+                        self.recordRecent(url: self.currentFileURL!)
                     } catch {
                         self.showError("Failed to create project: \(error.localizedDescription)")
                     }
@@ -149,10 +211,12 @@ class AppState: ObservableObject {
             guard let self = self else { return }
             
             let panel = NSOpenPanel()
-            panel.message = "Open a JamAI project"
+            panel.message = "Open a JamAI project (.jam)"
+            panel.allowedContentTypes = [.item, .folder]
             panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-            panel.allowsOtherFileTypes = true
+            panel.canChooseFiles = true
+            panel.allowsMultipleSelection = false
+            panel.treatsFilePackagesAsDirectories = true
             
             panel.begin { [weak self] response in
                 guard let self = self else { return }
@@ -164,14 +228,50 @@ class AppState: ObservableObject {
             }
         }
     }
+
+    func closeProject() {
+        if viewModel != nil { save() }
+        viewModel = nil
+        project = nil
+        currentFileURL = nil
+        database = nil
+    }
     
     func openProject(url: URL) {
         do {
-            let (project, database) = try DocumentManager.shared.openProject(from: url)
+            // If the user selected a file inside the package, or the base folder, resolve to nearest .jam
+            var candidate = (url.pathExtension == Config.jamFileExtension) ? url : url
+            let maxAscend = 5
+            var steps = 0
+            while candidate.pathExtension != Config.jamFileExtension && steps < maxAscend {
+                let parent = candidate.deletingLastPathComponent()
+                if parent == candidate { break }
+                candidate = parent
+                steps += 1
+            }
+            // If no .jam ancestor found, allow folder if it looks like a JamAI bundle (contains metadata.json & data.db)
+            if candidate.pathExtension != Config.jamFileExtension {
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDir), isDir.boolValue {
+                    let meta = candidate.appendingPathComponent("metadata.json")
+                    let db = candidate.appendingPathComponent("data.db")
+                    if FileManager.default.fileExists(atPath: meta.path), FileManager.default.fileExists(atPath: db.path) {
+                        // looks good; proceed
+                    } else {
+                        // try adding .jam next to it
+                        let withExt = candidate.appendingPathExtension(Config.jamFileExtension)
+                        if FileManager.default.fileExists(atPath: withExt.path) {
+                            candidate = withExt
+                        }
+                    }
+                }
+            }
+            let (project, database) = try DocumentManager.shared.openProject(from: candidate)
             self.project = project
             self.database = database
-            self.currentFileURL = url
+            self.currentFileURL = candidate
             self.viewModel = CanvasViewModel(project: project, database: database)
+            self.recordRecent(url: candidate)
         } catch {
             self.showError("Failed to open project: \(error.localizedDescription)")
         }

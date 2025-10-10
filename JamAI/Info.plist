@@ -35,6 +35,8 @@
             <string>JamAI Project</string>
             <key>CFBundleTypeRole</key>
             <string>Editor</string>
+            <key>LSTypeIsPackage</key>
+            <true/>
             <key>LSHandlerRank</key>
             <string>Owner</string>
             <key>LSItemContentTypes</key>
@@ -52,6 +54,7 @@
             <array>
                 <string>public.data</string>
                 <string>public.composite-content</string>
+                <string>com.apple.package</string>
             </array>
             <key>UTTypeDescription</key>
             <string>JamAI Project</string>

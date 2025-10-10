@@ -68,6 +68,36 @@ struct WelcomeView: View {
                 .buttonStyle(PlainButtonStyle())
             }
             
+            // Recent Projects
+            if !appState.recentProjects.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Recent Projects")
+                        .font(.headline)
+                        .padding(.top, 8)
+                    ForEach(Array(appState.recentProjects.prefix(10)), id: \.self) { url in
+                        Button(action: {
+                            appState.openRecent(url: url)
+                        }) {
+                            HStack {
+                                Image(systemName: "folder")
+                                Text(url.lastPathComponent)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                                Spacer()
+                                Text(url.deletingPathExtension().path)
+                                    .foregroundColor(.secondary)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .truncationMode(.middle)
+                            }
+                        }
+                        .buttonStyle(LinkButtonStyle())
+                    }
+                }
+                .padding(.horizontal, 40)
+                .frame(maxWidth: 700)
+            }
+            
             Spacer()
             
             // Footer

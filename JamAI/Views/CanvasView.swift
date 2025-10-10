@@ -9,6 +9,7 @@ import SwiftUI
 
 struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    var onCommandClose: (() -> Void)? = nil
     
     @State private var dragOffset: CGSize = .zero
     @State private var isDragging = false
@@ -75,6 +76,8 @@ struct CanvasView: View {
                     viewModel.offset.width += dx
                     viewModel.offset.height += dy
                     dragOffset = viewModel.offset
+                }, onCommandClose: {
+                    onCommandClose?()
                 })
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
