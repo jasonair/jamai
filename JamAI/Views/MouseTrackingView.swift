@@ -67,9 +67,19 @@ struct MouseTrackingView: NSViewRepresentable {
         }
         
         private func shouldLetSystemHandleScroll(for event: NSEvent) -> Bool {
-            guard let responder = window?.firstResponder else { return false }
-            if responder is NSTextView { return true }
-            if let view = responder as? NSView, view.enclosingScrollView != nil { return true }
+            guard let window = self.window else { return false }
+            let location = event.locationInWindow
+            
+            // If a text view (or view inside an NSScrollView) is first responder AND the cursor is inside its scroll region, let system handle.
+            if let responderView = window.firstResponder as? NSView {
+                let scrollView = (responderView as? NSTextView)?.enclosingScrollView ?? responderView.enclosingScrollView
+                if let container = scrollView ?? responderView as NSView? {
+                    let rectInWindow = container.convert(container.bounds, to: nil)
+                    if rectInWindow.contains(location) { return true }
+                }
+            }
+            
+            // Otherwise, allow canvas to pan.
             return false
         }
         
