@@ -142,14 +142,26 @@ struct NodeView: View {
                                 )
                             )
                             .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                            )
                     } else if let nodeColor = NodeColor.color(for: node.color) {
                         Circle()
                             .fill(nodeColor.color)
                             .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                            )
                     } else {
                         Circle()
                             .fill(Color.gray)
                             .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                            )
                     }
                 }
             }

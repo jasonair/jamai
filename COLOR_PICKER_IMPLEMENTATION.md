@@ -45,6 +45,7 @@ Added a FigJam-style color picker feature that allows users to organize nodes by
 - Text color: Automatically white or black based on WCAG luminance calculation
 - Body: Base color (white/dark mode) with 5% opacity tint of selected color
 - Buttons remain visible with appropriate opacity adjustments
+- Color button: 1.5px outline (30% opacity) to ensure visibility against any background
 
 ### 3. NodeItemWrapper.swift (`/JamAI/Views/NodeItemWrapper.swift`)
 **Changes:**
