@@ -11,6 +11,7 @@ import AppKit
 
 struct MouseTrackingView: NSViewRepresentable {
     @Binding var position: CGPoint
+    var onScroll: ((CGFloat, CGFloat) -> Void)? = nil
     
     func makeNSView(context: Context) -> TrackingNSView {
         let v = TrackingNSView()
@@ -23,11 +24,14 @@ struct MouseTrackingView: NSViewRepresentable {
     
     func updateNSView(_ nsView: TrackingNSView, context: Context) {
         nsView.onMove = { p in DispatchQueue.main.async { self.position = p } }
+        nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) }
     }
     
     final class TrackingNSView: NSView {
         var onMove: ((CGPoint) -> Void)?
         private var tracking: NSTrackingArea?
+        var onScroll: ((CGFloat, CGFloat) -> Void)?
+        private var localMonitor: Any?
         
         override func updateTrackingAreas() {
             super.updateTrackingAreas()
@@ -41,6 +45,32 @@ struct MouseTrackingView: NSViewRepresentable {
         override func mouseMoved(with event: NSEvent) {
             let p = convert(event.locationInWindow, from: nil)
             onMove?(p)
+        }
+        
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let monitor = localMonitor { NSEvent.removeMonitor(monitor); localMonitor = nil }
+            guard window != nil else { return }
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+                guard let self else { return event }
+                if self.shouldLetSystemHandleScroll(for: event) { return event }
+                let dxBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : CGFloat(event.deltaX)
+                let dyBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : CGFloat(event.deltaY)
+                let invertMult: CGFloat = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
+                self.onScroll?(dxBase * invertMult, dyBase * invertMult)
+                return nil // consume so the system doesn't double-handle
+            }
+        }
+        
+        deinit {
+            if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }
+        }
+        
+        private func shouldLetSystemHandleScroll(for event: NSEvent) -> Bool {
+            guard let responder = window?.firstResponder else { return false }
+            if responder is NSTextView { return true }
+            if let view = responder as? NSView, view.enclosingScrollView != nil { return true }
+            return false
         }
         
         override var acceptsFirstResponder: Bool { true }

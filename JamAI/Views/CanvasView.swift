@@ -68,11 +68,16 @@ struct CanvasView: View {
                     }
                 }
             }
-            // Track mouse location for cursor-anchored zooming
+            // Track mouse and capture two-finger pan scrolling
             .overlay(
-                MouseTrackingView(position: $mouseLocation)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
+                MouseTrackingView(position: $mouseLocation, onScroll: { dx, dy in
+                    // Pan the canvas with fingers (Figma-style)
+                    viewModel.offset.width += dx
+                    viewModel.offset.height += dy
+                    dragOffset = viewModel.offset
+                })
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(canvasBackground)
