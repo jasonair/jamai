@@ -148,8 +148,12 @@ struct CanvasView: View {
                 Image(systemName: "plus.magnifyingglass")
             }
             
-            Button(action: { viewModel.zoom = Config.defaultZoom }) {
-                Image(systemName: "1.magnifyingglass")
+            Button(action: {
+                viewModel.zoom = Config.defaultZoom
+                lastZoom = viewModel.zoom
+            }) {
+                Label("Reset", systemImage: "arrow.counterclockwise")
+                    .font(.caption)
             }
             
             Divider()
