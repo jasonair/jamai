@@ -63,6 +63,10 @@ class CanvasViewModel: ObservableObject {
             
             nodes = Dictionary(uniqueKeysWithValues: loadedNodes.map { ($0.id, $0) })
             edges = Dictionary(uniqueKeysWithValues: loadedEdges.map { ($0.id, $0) })
+            
+            // Restore canvas view state
+            offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)
+            zoom = project.canvasZoom
         } catch {
             errorMessage = "Failed to load project: \(error.localizedDescription)"
         }
@@ -514,6 +518,11 @@ class CanvasViewModel: ObservableObject {
     func save() {
         // Flush any pending debounced writes first
         flushPendingWrites()
+        
+        // Update project's canvas state before saving
+        project.canvasOffsetX = offset.width
+        project.canvasOffsetY = offset.height
+        project.canvasZoom = zoom
         
         do {
             try database.saveProject(project)

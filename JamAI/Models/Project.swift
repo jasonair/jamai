@@ -25,6 +25,11 @@ struct Project: Identifiable, Codable {
     // Appearance
     var appearanceMode: AppearanceMode
     
+    // Canvas view state
+    var canvasOffsetX: Double
+    var canvasOffsetY: Double
+    var canvasZoom: Double
+    
     init(
         id: UUID = UUID(),
         name: String,
@@ -34,7 +39,10 @@ struct Project: Identifiable, Codable {
         includeRAG: Bool = false,
         ragK: Int = 5,
         ragMaxChars: Int = 2000,
-        appearanceMode: AppearanceMode = .system
+        appearanceMode: AppearanceMode = .system,
+        canvasOffsetX: Double = 0,
+        canvasOffsetY: Double = 0,
+        canvasZoom: Double = 1.0
     ) {
         self.id = id
         self.name = name
@@ -45,6 +53,9 @@ struct Project: Identifiable, Codable {
         self.ragK = ragK
         self.ragMaxChars = ragMaxChars
         self.appearanceMode = appearanceMode
+        self.canvasOffsetX = canvasOffsetX
+        self.canvasOffsetY = canvasOffsetY
+        self.canvasZoom = canvasZoom
         self.createdAt = Date()
         self.updatedAt = Date()
     }

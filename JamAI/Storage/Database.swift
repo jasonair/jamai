@@ -35,6 +35,9 @@ class Database {
                 t.column("rag_k", .integer).notNull().defaults(to: Config.defaultRAGK)
                 t.column("rag_max_chars", .integer).notNull().defaults(to: Config.defaultRAGMaxChars)
                 t.column("appearance_mode", .text).notNull().defaults(to: "system")
+                t.column("canvas_offset_x", .double).notNull().defaults(to: 0)
+                t.column("canvas_offset_y", .double).notNull().defaults(to: 0)
+                t.column("canvas_zoom", .double).notNull().defaults(to: 1.0)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -74,6 +77,15 @@ class Database {
             if try db.columns(in: "nodes").first(where: { $0.name == "height" }) == nil {
                 try db.alter(table: "nodes") { t in
                     t.add(column: "height", .double).notNull().defaults(to: 400)
+                }
+            }
+            
+            // Add canvas state columns if they don't exist (migration)
+            if try db.columns(in: "projects").first(where: { $0.name == "canvas_offset_x" }) == nil {
+                try db.alter(table: "projects") { t in
+                    t.add(column: "canvas_offset_x", .double).notNull().defaults(to: 0)
+                    t.add(column: "canvas_offset_y", .double).notNull().defaults(to: 0)
+                    t.add(column: "canvas_zoom", .double).notNull().defaults(to: 1.0)
                 }
             }
             
@@ -122,8 +134,8 @@ class Database {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO projects 
-                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, canvas_offset_x, canvas_offset_y, canvas_zoom, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     project.id.uuidString,
@@ -135,6 +147,9 @@ class Database {
                     project.ragK,
                     project.ragMaxChars,
                     project.appearanceMode.rawValue,
+                    project.canvasOffsetX,
+                    project.canvasOffsetY,
+                    project.canvasZoom,
                     project.createdAt,
                     project.updatedAt
                 ]
@@ -159,7 +174,10 @@ class Database {
                 includeRAG: row["include_rag"],
                 ragK: row["rag_k"],
                 ragMaxChars: row["rag_max_chars"],
-                appearanceMode: AppearanceMode(rawValue: row["appearance_mode"]) ?? .system
+                appearanceMode: AppearanceMode(rawValue: row["appearance_mode"]) ?? .system,
+                canvasOffsetX: row["canvas_offset_x"] ?? 0,
+                canvasOffsetY: row["canvas_offset_y"] ?? 0,
+                canvasZoom: row["canvas_zoom"] ?? 1.0
             )
         }
     }
