@@ -27,6 +27,14 @@ struct CanvasView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
+                // Background (screen space, world-aligned tiling)
+                WorldBackgroundLayer(
+                    zoom: viewModel.zoom,
+                    offset: viewModel.offset,
+                    showDots: showDots
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                
                 // Full-screen edges overlay (renders in screen coords)
                 EdgeLayer(
                     edges: edgesArray,

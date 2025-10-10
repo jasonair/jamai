@@ -23,9 +23,8 @@ struct EdgeLayer: View {
                     guard let sFrame = frames[edge.sourceId],
                           let tFrame = frames[edge.targetId] else { continue }
                     
-                    // World-space endpoints
-                    let startW = CGPoint(x: sFrame.maxX, y: sFrame.minY + Node.padding)
-                    let endW = CGPoint(x: tFrame.minX, y: tFrame.minY + Node.padding)
+                    // World-space endpoints using best side ports
+                    let (startW, endW, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
                     
                     // Map to screen (top-left anchor): screen = world * zoom + offset
                     let start = CGPoint(
@@ -37,29 +36,34 @@ struct EdgeLayer: View {
                         y: endW.y * zoom + offset.height
                     )
                     
-                    drawBezierCurve(context: context, from: start, to: end)
+                    drawBezierCurve(context: context, from: start, to: end, horizontalPreferred: isHorizontal)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint) {
+    private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint, horizontalPreferred: Bool) {
         var path = Path()
         path.move(to: start)
-        
-        // Control points for smooth horizontal Bezier curve
-        let horizontalOffset = abs(end.x - start.x) * 0.5
-        let control1 = CGPoint(x: start.x + horizontalOffset, y: start.y)
-        let control2 = CGPoint(x: end.x - horizontalOffset, y: end.y)
-        
-        path.addCurve(to: end, control1: control1, control2: control2)
-        
-        // Fixed screen-space stroke
-        context.stroke(path, with: .color(edgeColor), lineWidth: 2.0)
-        
-        // Draw arrow at end
-        drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
+        // Control points based on orientation
+        if horizontalPreferred {
+            let dx = abs(end.x - start.x) * 0.5
+            let control1 = CGPoint(x: start.x + dx, y: start.y)
+            let control2 = CGPoint(x: end.x - dx, y: end.y)
+            path.addCurve(to: end, control1: control1, control2: control2)
+            context.stroke(path, with: .color(edgeColor), lineWidth: 2.0)
+            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
+            return
+        } else {
+            let dy = abs(end.y - start.y) * 0.5
+            let control1 = CGPoint(x: start.x, y: start.y + dy)
+            let control2 = CGPoint(x: end.x, y: end.y - dy)
+            path.addCurve(to: end, control1: control1, control2: control2)
+            context.stroke(path, with: .color(edgeColor), lineWidth: 2.0)
+            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
+            return
+        }
     }
     
     private func drawArrowHead(context: GraphicsContext, at point: CGPoint, angle: Double) {
@@ -93,5 +97,25 @@ struct EdgeLayer: View {
         colorScheme == .dark
             ? Color.white.opacity(0.3)
             : Color.black.opacity(0.2)
+    }
+
+    // Choose best side ports (left/right/top/bottom) based on relative positions
+    // Returns: (startWorldPoint, endWorldPoint, prefersHorizontalBezier)
+    private func bestPorts(from s: CGRect, to t: CGRect) -> (CGPoint, CGPoint, Bool) {
+        let sc = CGPoint(x: s.midX, y: s.midY)
+        let tc = CGPoint(x: t.midX, y: t.midY)
+        let dx = tc.x - sc.x
+        let dy = tc.y - sc.y
+        if abs(dx) >= abs(dy) {
+            // Prefer horizontal routing
+            let start = dx >= 0 ? CGPoint(x: s.maxX, y: sc.y) : CGPoint(x: s.minX, y: sc.y)
+            let end = dx >= 0 ? CGPoint(x: t.minX, y: tc.y) : CGPoint(x: t.maxX, y: tc.y)
+            return (start, end, true)
+        } else {
+            // Prefer vertical routing
+            let start = dy >= 0 ? CGPoint(x: sc.x, y: s.maxY) : CGPoint(x: sc.x, y: s.minY)
+            let end = dy >= 0 ? CGPoint(x: tc.x, y: t.minY) : CGPoint(x: tc.x, y: t.maxY)
+            return (start, end, false)
+        }
     }
 }
