@@ -155,10 +155,11 @@ class AppState: ObservableObject {
     }
     
     func save() {
-        guard let project = project, let url = currentFileURL else { return }
+        guard let project = project, let url = currentFileURL, let database = database else { return }
         
         do {
-            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension())
+            // Save using the existing database instance to preserve nodes/edges
+            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: database)
             viewModel?.save()
         } catch {
             showError("Failed to save project: \(error.localizedDescription)")

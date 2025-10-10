@@ -23,20 +23,21 @@ struct EdgeLayer: View {
                     continue
                 }
                 
-                let sourcePosCenter = CGPoint(
-                    x: source.x + (source.isExpanded ? Node.expandedWidth : Node.collapsedWidth) / 2,
-                    y: source.y + (source.isExpanded ? Node.expandedHeight : Node.collapsedHeight)
+                // Connect from top-right of source to top-left of target
+                let sourcePosRight = CGPoint(
+                    x: source.x + Node.nodeWidth,
+                    y: source.y + Node.padding
                 )
                 
-                let targetPosTop = CGPoint(
-                    x: target.x + (target.isExpanded ? Node.expandedWidth : Node.collapsedWidth) / 2,
-                    y: target.y
+                let targetPosLeft = CGPoint(
+                    x: target.x,
+                    y: target.y + Node.padding
                 )
                 
                 drawBezierCurve(
                     context: context,
-                    from: sourcePosCenter,
-                    to: targetPosTop
+                    from: sourcePosRight,
+                    to: targetPosLeft
                 )
             }
         }
@@ -46,10 +47,10 @@ struct EdgeLayer: View {
         var path = Path()
         path.move(to: start)
         
-        // Control points for smooth Bezier curve
-        let controlPointOffset: CGFloat = abs(end.y - start.y) * 0.5
-        let control1 = CGPoint(x: start.x, y: start.y + controlPointOffset)
-        let control2 = CGPoint(x: end.x, y: end.y - controlPointOffset)
+        // Control points for smooth horizontal Bezier curve
+        let horizontalOffset = abs(end.x - start.x) * 0.5
+        let control1 = CGPoint(x: start.x + horizontalOffset, y: start.y)
+        let control2 = CGPoint(x: end.x - horizontalOffset, y: end.y)
         
         path.addCurve(to: end, control1: control1, control2: control2)
         

@@ -56,7 +56,7 @@ class Database {
                 t.column("ancestry_json", .text).notNull()
                 t.column("summary", .text)
                 t.column("system_prompt_snapshot", .text)
-                t.column("is_expanded", .boolean).notNull().defaults(to: false)
+                t.column("is_expanded", .boolean).notNull().defaults(to: true)
                 t.column("is_frozen_context", .boolean).notNull().defaults(to: false)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()

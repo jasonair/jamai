@@ -22,7 +22,7 @@ class DocumentManager {
         return (project, fileURL)
     }
     
-    func saveProject(_ project: Project, to url: URL) throws {
+    func saveProject(_ project: Project, to url: URL, database: Database? = nil) throws {
         // Create bundle directory
         let bundleURL = url.appendingPathExtension(Config.jamFileExtension)
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
@@ -30,12 +30,19 @@ class DocumentManager {
         // Database file inside bundle
         let dbURL = bundleURL.appendingPathComponent("data.db")
         
-        // Initialize database and save project
-        let database = Database()
-        try database.setup(at: dbURL)
-        try database.saveProject(project)
+        // Use existing database or create new one
+        let db: Database
+        if let existingDB = database {
+            db = existingDB
+        } else {
+            db = Database()
+            try db.setup(at: dbURL)
+        }
         
-        // Create metadata file
+        // Save project metadata to database
+        try db.saveProject(project)
+        
+        // Update metadata file
         let metadata: [String: Any] = [
             "version": "1.0",
             "projectId": project.id.uuidString,

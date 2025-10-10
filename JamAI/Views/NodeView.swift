@@ -10,6 +10,7 @@ import SwiftUI
 struct NodeView: View {
     @Binding var node: Node
     let isSelected: Bool
+    let isGenerating: Bool
     let onTap: () -> Void
     let onPromptSubmit: (String) -> Void
     let onTitleEdit: (String) -> Void
@@ -22,6 +23,7 @@ struct NodeView: View {
     @State private var editedTitle = ""
     @State private var editedDescription = ""
     @State private var promptText = ""
+    @FocusState private var isTitleFocused: Bool
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -74,6 +76,22 @@ struct NodeView: View {
         .onTapGesture {
             onTap()
         }
+        .onAppear {
+            // Auto-focus title for new empty nodes
+            if node.title.isEmpty && isSelected {
+                editedTitle = node.title
+                isEditingTitle = true
+                isTitleFocused = true
+            }
+        }
+        .onChange(of: isSelected) { newValue in
+            // Auto-focus title when selecting an empty node
+            if newValue && node.title.isEmpty {
+                editedTitle = node.title
+                isEditingTitle = true
+                isTitleFocused = true
+            }
+        }
     }
     
     // MARK: - Subviews
@@ -88,14 +106,24 @@ struct NodeView: View {
                 })
                 .textFieldStyle(PlainTextFieldStyle())
                 .font(.headline)
+                .focused($isTitleFocused)
             } else {
-                Text(node.title.isEmpty ? "Untitled" : node.title)
-                    .font(.headline)
-                    .foregroundColor(node.title.isEmpty ? .secondary : .primary)
-                    .onTapGesture {
-                        editedTitle = node.title
-                        isEditingTitle = true
+                HStack(spacing: 8) {
+                    Text(node.title.isEmpty ? "Untitled" : node.title)
+                        .font(.headline)
+                        .foregroundColor(node.title.isEmpty ? .secondary : .primary)
+                        .onTapGesture {
+                            editedTitle = node.title
+                            isEditingTitle = true
+                            isTitleFocused = true
+                        }
+                    
+                    if isGenerating {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .frame(width: 16, height: 16)
                     }
+                }
             }
             
             Spacer()
@@ -118,9 +146,11 @@ struct NodeView: View {
             
             // Expand/Collapse button
             Button(action: {
-                var updatedNode = node
-                updatedNode.isExpanded.toggle()
-                node = updatedNode
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    var updatedNode = node
+                    updatedNode.isExpanded.toggle()
+                    node = updatedNode
+                }
             }) {
                 Image(systemName: node.isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
                     .foregroundColor(.accentColor)
@@ -204,7 +234,7 @@ struct NodeView: View {
                 .font(.body)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background((role == .user ? Color.secondary : Color.accentColor).opacity(0.1))
+                .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
         }
     }

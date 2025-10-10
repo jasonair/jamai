@@ -18,7 +18,7 @@ class CanvasViewModel: ObservableObject {
     @Published var nodes: [UUID: Node] = [:]
     @Published var edges: [UUID: Edge] = [:]
     @Published var selectedNodeId: UUID?
-    @Published var isGenerating = false
+    @Published var generatingNodeId: UUID?
     @Published var errorMessage: String?
     
     // Canvas state
@@ -102,6 +102,9 @@ class CanvasViewModel: ObservableObject {
         
         nodes[node.id] = node
         
+        // Auto-select newly created node
+        selectedNodeId = node.id
+        
         do {
             try database.saveNode(node)
             undoManager.record(.createNode(node))
@@ -118,6 +121,50 @@ class CanvasViewModel: ObservableObject {
         let childY = parent.y + 100
         
         createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: true)
+        
+        // Generate TLDR summary asynchronously
+        Task {
+            await generateTLDRSummary(for: parent.id)
+        }
+    }
+    
+    private func generateTLDRSummary(for parentId: UUID) async {
+        guard var parent = nodes[parentId] else { return }
+        
+        // Get the last few conversation turns
+        let recentConversation = Array(parent.conversation.suffix(6)) // Last 3 exchanges
+        
+        if recentConversation.isEmpty {
+            return
+        }
+        
+        // Build summary prompt
+        var conversationText = ""
+        for msg in recentConversation {
+            let role = msg.role == .user ? "User" : "AI"
+            conversationText += "\(role): \(msg.content)\n\n"
+        }
+        
+        let prompt = """
+        Provide a concise TLDR summary (2-3 sentences max) of this conversation context:
+        
+        \(conversationText)
+        
+        Focus on key points and decisions. This will be used as hidden context for branching conversations.
+        """
+        
+        do {
+            let summary = try await geminiClient.generate(
+                prompt: prompt,
+                systemPrompt: "You are a helpful assistant that creates concise summaries."
+            )
+            
+            parent.summary = summary
+            nodes[parentId] = parent
+            try database.saveNode(parent)
+        } catch {
+            print("Failed to generate TLDR summary: \(error)")
+        }
     }
     
     func updateNode(_ node: Node) {
@@ -178,7 +225,7 @@ class CanvasViewModel: ObservableObject {
     func generateResponse(for nodeId: UUID, prompt: String) {
         guard var node = nodes[nodeId] else { return }
         
-        isGenerating = true
+        generatingNodeId = nodeId
         
         // Add user message to conversation
         node.addMessage(role: .user, content: prompt)
@@ -206,7 +253,7 @@ class CanvasViewModel: ObservableObject {
                     },
                     onComplete: { [weak self] result in
                         Task { @MainActor in
-                            self?.isGenerating = false
+                            self?.generatingNodeId = nil
                             
                             switch result {
                             case .success(let fullResponse):
@@ -235,6 +282,17 @@ class CanvasViewModel: ObservableObject {
     
     private func buildContext(for node: Node) -> [Message] {
         var messages: [Message] = []
+        
+        // Add parent summary as context if available
+        if let parentId = node.parentId,
+           let parent = nodes[parentId],
+           let summary = parent.summary,
+           !summary.isEmpty {
+            messages.append(Message(
+                role: "user",
+                content: "Context from previous conversation: \(summary)"
+            ))
+        }
         
         // Use conversation history if available
         if !node.conversation.isEmpty {

@@ -14,6 +14,7 @@ struct CanvasView: View {
     @State private var isDragging = false
     @State private var draggedNodeId: UUID?
     @State private var dragStartPosition: CGPoint = .zero
+    @State private var lastZoom: CGFloat = 1.0
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -37,6 +38,7 @@ struct CanvasView: View {
                     NodeView(
                         node: binding(for: node.id),
                         isSelected: viewModel.selectedNodeId == node.id,
+                        isGenerating: viewModel.generatingNodeId == node.id,
                         onTap: {
                             viewModel.selectedNodeId = node.id
                         },
@@ -99,7 +101,21 @@ struct CanvasView: View {
                 MagnificationGesture()
                     .onChanged { value in
                         let newZoom = max(Config.minZoom, min(Config.maxZoom, value))
+                        
+                        // Adjust offset to zoom from center
+                        let zoomDelta = newZoom / lastZoom
+                        let centerX = geometry.size.width / 2
+                        let centerY = geometry.size.height / 2
+                        
+                        viewModel.offset.width = centerX + (viewModel.offset.width - centerX) * zoomDelta
+                        viewModel.offset.height = centerY + (viewModel.offset.height - centerY) * zoomDelta
+                        
                         viewModel.zoom = newZoom
+                        lastZoom = newZoom
+                    }
+                    .onEnded { _ in
+                        lastZoom = viewModel.zoom
+                        dragOffset = viewModel.offset
                     }
             )
             .onTapGesture(count: 2) { location in
@@ -110,6 +126,7 @@ struct CanvasView: View {
         }
         .onAppear {
             dragOffset = viewModel.offset
+            lastZoom = viewModel.zoom
         }
     }
     
@@ -166,14 +183,7 @@ struct CanvasView: View {
             
             Spacer()
             
-            // Status
-            if viewModel.isGenerating {
-                ProgressView()
-                    .scaleEffect(0.7)
-                Text("Generating...")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
+            // Status indicator removed - now shown in individual nodes
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -270,6 +280,20 @@ struct CanvasView: View {
             x: (point.x - viewModel.offset.width) / viewModel.zoom,
             y: (point.y - viewModel.offset.height) / viewModel.zoom
         )
+    }
+    
+    private func adjustZoom(to newZoom: CGFloat, viewSize: CGSize) {
+        let oldZoom = viewModel.zoom
+        let zoomDelta = newZoom / oldZoom
+        let centerX = viewSize.width / 2
+        let centerY = viewSize.height / 2
+        
+        viewModel.offset.width = centerX + (viewModel.offset.width - centerX) * zoomDelta
+        viewModel.offset.height = centerY + (viewModel.offset.height - centerY) * zoomDelta
+        
+        viewModel.zoom = newZoom
+        lastZoom = newZoom
+        dragOffset = viewModel.offset
     }
     
     // MARK: - Styling

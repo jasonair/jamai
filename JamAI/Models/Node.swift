@@ -62,7 +62,7 @@ struct Node: Identifiable, Codable, Equatable {
         ancestryJSON: String = "[]",
         summary: String? = nil,
         systemPromptSnapshot: String? = nil,
-        isExpanded: Bool = false,
+        isExpanded: Bool = true,
         isFrozenContext: Bool = false
     ) {
         self.id = id
@@ -131,8 +131,8 @@ struct Node: Identifiable, Codable, Equatable {
 // MARK: - Node Display Constants
 extension Node {
     static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
-    static let collapsedHeight: CGFloat = 160
-    static let expandedHeight: CGFloat = 600
+    static let collapsedHeight: CGFloat = 80
+    static let expandedHeight: CGFloat = 300
     static let padding: CGFloat = 16
     static let cornerRadius: CGFloat = 12
     static let shadowRadius: CGFloat = 8
