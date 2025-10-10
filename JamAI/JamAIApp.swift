@@ -59,8 +59,6 @@ struct JamAIApp: App {
                 Button("Close Project") { appState.closeProject() }
                     .keyboardShortcut("w", modifiers: .command)
                     .disabled(appState.viewModel == nil)
-                Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
-                    .keyboardShortcut("w", modifiers: [.command, .option])
             }
 
             CommandGroup(replacing: .windowArrangement) {
@@ -230,7 +228,16 @@ class AppState: ObservableObject {
     }
 
     func closeProject() {
-        if viewModel != nil { save() }
+        // Save only if we have valid state
+        if let project = project, let url = currentFileURL, let database = database {
+            do {
+                try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: database)
+                viewModel?.save()
+            } catch {
+                // Log but don't block close
+                print("Warning: Failed to save on close: \(error.localizedDescription)")
+            }
+        }
         viewModel = nil
         project = nil
         currentFileURL = nil
