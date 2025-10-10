@@ -25,13 +25,17 @@ struct WorldBackgroundLayer: View {
             if startY < 0 { startY += scaledSpacing }
 
             if showDots {
-                let dotSize: CGFloat = 2.0 // constant screen size
+                // Dots: slight size and opacity boost as you zoom in (Freeform-like)
+                let dotSize: CGFloat = min(4.0, max(2.0, 2.0 + (z - 1.0) * 1.2))
+                let baseAlpha: Double = (colorScheme == .dark) ? 0.08 : 0.12
+                let alphaBoost: Double = min(0.10, max(0.0, Double(z - 1.0) * 0.08))
+                let dotColor: Color = (colorScheme == .dark ? Color.white : Color.black).opacity(baseAlpha + alphaBoost)
                 var y = startY
                 while y < size.height {
                     var x = startX
                     while x < size.width {
                         let rect = CGRect(x: x - dotSize/2, y: y - dotSize/2, width: dotSize, height: dotSize)
-                        context.fill(Path(ellipseIn: rect), with: .color(gridColor))
+                        context.fill(Path(ellipseIn: rect), with: .color(dotColor))
                         x += scaledSpacing
                     }
                     y += scaledSpacing
