@@ -42,6 +42,7 @@ struct Node: Identifiable, Codable, Equatable {
     // UI State
     var isExpanded: Bool
     var isFrozenContext: Bool
+    var color: String // Node color for organization (e.g., "blue", "red", "none")
     
     // Metadata
     var createdAt: Date
@@ -65,7 +66,8 @@ struct Node: Identifiable, Codable, Equatable {
         summary: String? = nil,
         systemPromptSnapshot: String? = nil,
         isExpanded: Bool = true,
-        isFrozenContext: Bool = false
+        isFrozenContext: Bool = false,
+        color: String = "none"
     ) {
         self.id = id
         self.projectId = projectId
@@ -85,6 +87,7 @@ struct Node: Identifiable, Codable, Equatable {
         self.systemPromptSnapshot = systemPromptSnapshot
         self.isExpanded = isExpanded
         self.isFrozenContext = isFrozenContext
+        self.color = color
         self.createdAt = Date()
         self.updatedAt = Date()
     }

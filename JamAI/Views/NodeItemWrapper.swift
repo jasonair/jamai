@@ -17,6 +17,7 @@ struct NodeItemWrapper: View {
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
     let onCreateChild: () -> Void
+    let onColorChange: (String) -> Void
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: () -> Void
     
@@ -30,7 +31,8 @@ struct NodeItemWrapper: View {
             onTitleEdit: onTitleEdit,
             onDescriptionEdit: onDescriptionEdit,
             onDelete: onDelete,
-            onCreateChild: onCreateChild
+            onCreateChild: onCreateChild,
+            onColorChange: onColorChange
         )
         .position(
             x: node.x + Node.nodeWidth / 2,

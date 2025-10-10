@@ -322,6 +322,7 @@ struct CanvasView: View {
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
             onDelete: { handleDeleteNode(node.id) },
             onCreateChild: { handleCreateChildNode(node.id) },
+            onColorChange: { colorId in handleColorChange(colorId, for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
             onDragEnded: { draggedNodeId = nil }
         )
@@ -372,6 +373,12 @@ struct CanvasView: View {
         guard var node = viewModel.nodes[nodeId] else { return }
         node.description = description
         node.descriptionSource = .user
+        viewModel.updateNode(node)
+    }
+    
+    private func handleColorChange(_ colorId: String, for nodeId: UUID) {
+        guard var node = viewModel.nodes[nodeId] else { return }
+        node.color = colorId
         viewModel.updateNode(node)
     }
     

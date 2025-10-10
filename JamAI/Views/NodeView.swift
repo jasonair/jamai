@@ -17,6 +17,7 @@ struct NodeView: View {
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
     let onCreateChild: () -> Void
+    let onColorChange: (String) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -25,6 +26,7 @@ struct NodeView: View {
     @State private var promptText = ""
     @State private var isResizing = false
     @State private var resizeStartHeight: CGFloat = 0
+    @State private var showingColorPicker = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @State private var scrollViewID = UUID()
@@ -35,7 +37,6 @@ struct NodeView: View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
             headerView
-                .padding(Node.padding)
             
             Divider()
             
@@ -126,6 +127,40 @@ struct NodeView: View {
     
     private var headerView: some View {
         HStack {
+            // Color button
+            Button(action: { showingColorPicker = true }) {
+                ZStack {
+                    if let nodeColor = NodeColor.color(for: node.color), nodeColor.id == "rainbow" {
+                        // Rainbow gradient
+                        Circle()
+                            .fill(
+                                AngularGradient(
+                                    gradient: Gradient(colors: [
+                                        .red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red
+                                    ]),
+                                    center: .center
+                                )
+                            )
+                            .frame(width: 24, height: 24)
+                    } else if let nodeColor = NodeColor.color(for: node.color) {
+                        Circle()
+                            .fill(nodeColor.color)
+                            .frame(width: 24, height: 24)
+                    } else {
+                        Circle()
+                            .fill(Color.gray)
+                            .frame(width: 24, height: 24)
+                    }
+                }
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Change Node Color")
+            .popover(isPresented: $showingColorPicker) {
+                ColorPickerPopover(selectedColorId: node.color) { newColorId in
+                    onColorChange(newColorId)
+                }
+            }
+            
             // Title
             if isEditingTitle {
                 TextField("Title", text: $editedTitle, onCommit: {
@@ -134,12 +169,13 @@ struct NodeView: View {
                 })
                 .textFieldStyle(PlainTextFieldStyle())
                 .font(.headline)
+                .foregroundColor(headerTextColor)
                 .focused($isTitleFocused)
             } else {
                 HStack(spacing: 8) {
                     Text(node.title.isEmpty ? "Untitled" : node.title)
                         .font(.headline)
-                        .foregroundColor(node.title.isEmpty ? .secondary : .primary)
+                        .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                         .onTapGesture {
                             editedTitle = node.title
                             isEditingTitle = true
@@ -159,7 +195,7 @@ struct NodeView: View {
             // Delete button
             Button(action: onDelete) {
                 Image(systemName: "trash")
-                    .foregroundColor(.red)
+                    .foregroundColor(.red.opacity(0.9))
             }
             .buttonStyle(PlainButtonStyle())
             .help("Delete Node")
@@ -167,7 +203,7 @@ struct NodeView: View {
             // Create child node button
             Button(action: onCreateChild) {
                 Image(systemName: "plus.square.on.square")
-                    .foregroundColor(.green)
+                    .foregroundColor(.green.opacity(0.9))
             }
             .buttonStyle(PlainButtonStyle())
             .help("Create Child Node")
@@ -180,11 +216,13 @@ struct NodeView: View {
                 node = updatedNode
             }) {
                 Image(systemName: node.isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(headerTextColor)
             }
             .buttonStyle(PlainButtonStyle())
             .help("Toggle Expand/Collapse")
         }
+        .padding(Node.padding)
+        .background(headerBackground)
     }
     
     private var descriptionView: some View {
@@ -301,10 +339,47 @@ struct NodeView: View {
     
     // MARK: - Styling
     
+    private var headerBackground: some View {
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            return AnyView(nodeColor.color)
+        } else {
+            return AnyView(
+                colorScheme == .dark
+                    ? Color(nsColor: .controlBackgroundColor)
+                    : Color(white: 0.95)
+            )
+        }
+    }
+    
+    private var headerTextColor: Color {
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            return nodeColor.textColor(for: nodeColor.color)
+        } else {
+            return .primary
+        }
+    }
+    
     private var cardBackground: some View {
-        colorScheme == .dark
-            ? Color(nsColor: .controlBackgroundColor)
-            : Color.white
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            // Apply subtle tint to card body (5% opacity of selected color)
+            let tintColor = nodeColor.lightVariant.opacity(0.05)
+            let baseColor = colorScheme == .dark
+                ? Color(nsColor: .controlBackgroundColor)
+                : Color.white
+            
+            return AnyView(
+                ZStack {
+                    baseColor
+                    tintColor
+                }
+            )
+        } else {
+            return AnyView(
+                colorScheme == .dark
+                    ? Color(nsColor: .controlBackgroundColor)
+                    : Color.white
+            )
+        }
     }
     
     private var shadowColor: Color {

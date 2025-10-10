@@ -62,6 +62,7 @@ class Database {
                 t.column("system_prompt_snapshot", .text)
                 t.column("is_expanded", .boolean).notNull().defaults(to: true)
                 t.column("is_frozen_context", .boolean).notNull().defaults(to: false)
+                t.column("color", .text).notNull().defaults(to: "none")
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -86,6 +87,13 @@ class Database {
                     t.add(column: "canvas_offset_x", .double).notNull().defaults(to: 0)
                     t.add(column: "canvas_offset_y", .double).notNull().defaults(to: 0)
                     t.add(column: "canvas_zoom", .double).notNull().defaults(to: 1.0)
+                }
+            }
+            
+            // Add color column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "color" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "color", .text).notNull().defaults(to: "none")
                 }
             }
             
@@ -192,8 +200,8 @@ class Database {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -214,6 +222,7 @@ class Database {
                     node.systemPromptSnapshot,
                     node.isExpanded,
                     node.isFrozenContext,
+                    node.color,
                     node.createdAt,
                     node.updatedAt
                 ]
@@ -246,7 +255,8 @@ class Database {
                     summary: row["summary"],
                     systemPromptSnapshot: row["system_prompt_snapshot"],
                     isExpanded: row["is_expanded"],
-                    isFrozenContext: row["is_frozen_context"]
+                    isFrozenContext: row["is_frozen_context"],
+                    color: row["color"] ?? "none"
                 )
             }
         }
