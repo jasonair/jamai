@@ -323,6 +323,7 @@ struct CanvasView: View {
             onDelete: { handleDeleteNode(node.id) },
             onCreateChild: { handleCreateChildNode(node.id) },
             onColorChange: { colorId in handleColorChange(colorId, for: node.id) },
+            onExpandSelection: { selectedText in handleExpandSelection(selectedText, for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
             onDragEnded: { draggedNodeId = nil }
         )
@@ -380,6 +381,10 @@ struct CanvasView: View {
         guard var node = viewModel.nodes[nodeId] else { return }
         node.color = colorId
         viewModel.updateNode(node)
+    }
+    
+    private func handleExpandSelection(_ selectedText: String, for nodeId: UUID) {
+        viewModel.expandSelectedText(parentId: nodeId, selectedText: selectedText)
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)

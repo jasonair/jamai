@@ -18,6 +18,7 @@ struct NodeView: View {
     let onDelete: () -> Void
     let onCreateChild: () -> Void
     let onColorChange: (String) -> Void
+    let onExpandSelection: (String) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -302,7 +303,7 @@ struct NodeView: View {
     
     private func messageView(role: MessageRole, content: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(role == .user ? "You" : "AI")
+            Text(role == .user ? "You" : "Jam")
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(role == .user ? .secondary : .accentColor)
@@ -313,6 +314,9 @@ struct NodeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
                 .cornerRadius(8)
+                .overlay(
+                    RightClickExpandOverlay(onExpand: onExpandSelection)
+                )
         }
     }
     

@@ -134,6 +134,127 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    func expandSelectedText(parentId: UUID, selectedText: String) {
+        guard let parent = nodes[parentId] else { return }
+        
+        // Calculate position for child node (offset to the right and down)
+        let childX = parent.x + Node.nodeWidth + 50
+        let childY = parent.y + 100
+        
+        // Create branch without inheriting conversation
+        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
+        
+        // Generate TLDR summary asynchronously to provide context for the branch
+        Task {
+            await generateTLDRSummary(for: parent.id)
+            
+            // Get the newly created child node
+            guard let childId = self.nodes.values.first(where: { $0.parentId == parentId && $0.conversation.isEmpty })?.id else {
+                return
+            }
+            
+            // Build context-aware prompt for expansion (this won't be shown to user)
+            let expansionPrompt = "Expand on this: \"\(selectedText)\". Provide a short, concise explanation with additional context."
+            
+            // Generate response without adding the prompt to conversation first
+            await MainActor.run {
+                self.generateExpandedResponse(for: childId, prompt: expansionPrompt, selectedText: selectedText)
+            }
+        }
+    }
+    
+    private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
+        guard var node = nodes[nodeId] else { return }
+        
+        generatingNodeId = nodeId
+        
+        // Store prompt in legacy field but don't add to conversation
+        node.prompt = prompt
+        nodes[nodeId] = node
+        
+        Task {
+            do {
+                let context = buildContext(for: node)
+                var streamedResponse = ""
+                
+                geminiClient.generateStreaming(
+                    prompt: prompt,
+                    systemPrompt: node.systemPromptSnapshot ?? project.systemPrompt,
+                    context: context,
+                    onChunk: { [weak self] chunk in
+                        Task { @MainActor in
+                            streamedResponse += chunk
+                            // Temporarily show streaming response
+                            guard var currentNode = self?.nodes[nodeId] else { return }
+                            currentNode.response = streamedResponse
+                            self?.nodes[nodeId] = currentNode
+                        }
+                    },
+                    onComplete: { [weak self] result in
+                        Task { @MainActor in
+                            self?.generatingNodeId = nil
+                            
+                            switch result {
+                            case .success(let fullResponse):
+                                guard var finalNode = self?.nodes[nodeId] else { return }
+                                // Only add assistant response to conversation (not the prompt)
+                                finalNode.addMessage(role: .assistant, content: fullResponse)
+                                finalNode.response = fullResponse
+                                finalNode.updatedAt = Date()
+                                self?.nodes[nodeId] = finalNode
+                                
+                                try? self?.database.saveNode(finalNode)
+                                
+                                // Auto-generate title based on selected text
+                                await self?.autoGenerateTitleForExpansion(for: nodeId, selectedText: selectedText)
+                                
+                            case .failure(let error):
+                                self?.errorMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                )
+            }
+        }
+    }
+    
+    private func autoGenerateTitleForExpansion(for nodeId: UUID, selectedText: String) async {
+        guard var node = nodes[nodeId] else { return }
+        
+        do {
+            let prompt = """
+            Based on this expansion request about "\(selectedText)", and the response:
+            \(node.response)
+            
+            Generate a concise title (max 50 chars) and description (max 150 chars).
+            Format: TITLE: <title>
+            DESCRIPTION: <description>
+            """
+            
+            let result = try await geminiClient.generate(
+                prompt: prompt,
+                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions."
+            )
+            
+            if let titleMatch = result.range(of: "TITLE: (.+)", options: .regularExpression),
+               let title = result[titleMatch].components(separatedBy: "TITLE: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                node.title = String(title.prefix(50))
+                node.titleSource = .ai
+            }
+            
+            if let descMatch = result.range(of: "DESCRIPTION: (.+)", options: .regularExpression),
+               let desc = result[descMatch].components(separatedBy: "DESCRIPTION: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
+                node.description = String(desc.prefix(150))
+                node.descriptionSource = .ai
+            }
+            
+            nodes[nodeId] = node
+            try database.saveNode(node)
+        } catch {
+            print("Failed to auto-generate title/description: \(error)")
+        }
+    }
+    
     private func generateTLDRSummary(for parentId: UUID) async {
         guard var parent = nodes[parentId] else { return }
         
@@ -147,7 +268,7 @@ class CanvasViewModel: ObservableObject {
         // Build summary prompt
         var conversationText = ""
         for msg in recentConversation {
-            let role = msg.role == .user ? "User" : "AI"
+            let role = msg.role == .user ? "User" : "Jam"
             conversationText += "\(role): \(msg.content)\n\n"
         }
         
@@ -346,7 +467,7 @@ class CanvasViewModel: ObservableObject {
             let prompt = """
             Based on this conversation:
             User: \(node.prompt)
-            AI: \(node.response)
+            Jam: \(node.response)
             
             Generate a concise title (max 50 chars) and description (max 150 chars).
             Format: TITLE: <title>
