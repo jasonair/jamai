@@ -127,6 +127,7 @@ class AppState: ObservableObject {
     
     private var database: Database?
     private let recentKey = "recentProjectBookmarks"
+    private var isAccessingSecurityScopedResource = false
     
     init() {
         loadRecents()
@@ -194,6 +195,12 @@ class AppState: ObservableObject {
                         self.currentFileURL = (url.pathExtension == Config.jamFileExtension)
                             ? url
                             : url.appendingPathExtension(Config.jamFileExtension)
+                        
+                        // Start security-scoped access for the newly created project
+                        if let fileURL = self.currentFileURL, fileURL.startAccessingSecurityScopedResource() {
+                            self.isAccessingSecurityScopedResource = true
+                        }
+                        
                         self.viewModel = CanvasViewModel(project: loadedProject, database: database)
                         self.recordRecent(url: self.currentFileURL!)
                     } catch {
@@ -229,15 +236,23 @@ class AppState: ObservableObject {
 
     func closeProject() {
         // Save only if we have valid state
-        if let project = project, let url = currentFileURL, let database = database {
+        if let project = project, let url = currentFileURL {
             do {
-                try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: database)
+                // Let DocumentManager handle the database connection to avoid path mismatches
+                try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: nil)
                 viewModel?.save()
             } catch {
                 // Log but don't block close
                 print("Warning: Failed to save on close: \(error.localizedDescription)")
             }
         }
+        
+        // Stop security-scoped access
+        if isAccessingSecurityScopedResource, let url = currentFileURL {
+            url.stopAccessingSecurityScopedResource()
+            isAccessingSecurityScopedResource = false
+        }
+        
         viewModel = nil
         project = nil
         currentFileURL = nil
@@ -273,6 +288,12 @@ class AppState: ObservableObject {
                     }
                 }
             }
+            
+            // Start security-scoped access for the project file
+            if candidate.startAccessingSecurityScopedResource() {
+                isAccessingSecurityScopedResource = true
+            }
+            
             let (project, database) = try DocumentManager.shared.openProject(from: candidate)
             self.project = project
             self.database = database
@@ -285,11 +306,12 @@ class AppState: ObservableObject {
     }
     
     func save() {
-        guard let project = project, let url = currentFileURL, let database = database else { return }
+        guard let project = project, let url = currentFileURL else { return }
         
         do {
-            // Save using the existing database instance to preserve nodes/edges
-            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: database)
+            // Security-scoped access is already active from openProject
+            // Let DocumentManager handle the database connection to avoid path mismatches
+            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: nil)
             viewModel?.save()
         } catch {
             showError("Failed to save project: \(error.localizedDescription)")
