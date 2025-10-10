@@ -78,15 +78,8 @@ class CanvasViewModel: ObservableObject {
             node.setAncestry(ancestry)
             node.systemPromptSnapshot = project.systemPrompt
             
-            // Inherit conversation context if requested
-            if inheritContext {
-                node.setConversation(parent.conversation)
-                // Set title and description based on parent
-                node.title = "Branch from: \(parent.title)"
-                node.titleSource = .ai
-                node.description = "Continuing conversation from parent node"
-                node.descriptionSource = .ai
-            }
+            // Don't inherit conversation for branches - just use parent summary as hidden context
+            // This gives a clean slate while maintaining context through the summary
             
             // Create edge to parent
             let edge = Edge(projectId: project.id, sourceId: parentId, targetId: node.id)
@@ -120,9 +113,11 @@ class CanvasViewModel: ObservableObject {
         let childX = parent.x + Node.nodeWidth + 50
         let childY = parent.y + 100
         
-        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: true)
+        // Create branch without inheriting conversation (inheritContext: false)
+        // The parent's summary will be used as context instead
+        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
-        // Generate TLDR summary asynchronously
+        // Generate TLDR summary asynchronously to provide context for the branch
         Task {
             await generateTLDRSummary(for: parent.id)
         }
@@ -393,6 +388,7 @@ class CanvasViewModel: ObservableObject {
                 parentId: nil,
                 x: position.x,
                 y: position.y,
+                height: originalNode.height,
                 title: originalNode.title,
                 titleSource: originalNode.titleSource,
                 description: originalNode.description,
@@ -501,6 +497,14 @@ class CanvasViewModel: ObservableObject {
     func save() {
         do {
             try database.saveProject(project)
+            // Save all nodes
+            for node in nodes.values {
+                try database.saveNode(node)
+            }
+            // Save all edges
+            for edge in edges.values {
+                try database.saveEdge(edge)
+            }
         } catch {
             errorMessage = "Auto-save failed: \(error.localizedDescription)"
         }

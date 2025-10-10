@@ -23,6 +23,8 @@ struct NodeView: View {
     @State private var editedTitle = ""
     @State private var editedDescription = ""
     @State private var promptText = ""
+    @State private var isResizing = false
+    @State private var resizeStartHeight: CGFloat = 0
     @FocusState private var isTitleFocused: Bool
     
     @Environment(\.colorScheme) var colorScheme
@@ -36,30 +38,41 @@ struct NodeView: View {
             Divider()
             
             if node.isExpanded {
-                // Expanded content
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 12) {
-                        // Description
-                        descriptionView
-                        
-                        // Conversation thread
-                        conversationView
-                        
-                        // Input area
-                        inputView
+                // Expanded content with fixed input at bottom
+                VStack(spacing: 0) {
+                    // Scrollable conversation area
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 12) {
+                            // Description
+                            descriptionView
+                            
+                            // Conversation thread
+                            conversationView
+                        }
+                        .padding(Node.padding)
                     }
-                    .padding(Node.padding)
+                    
+                    Divider()
+                    
+                    // Input area - always visible at bottom
+                    inputView
+                        .padding(Node.padding)
                 }
-                .frame(height: Node.expandedHeight - 60)
+                .frame(height: node.height - 60)
             } else {
                 // Collapsed content
                 collapsedContentView
                     .padding(Node.padding)
             }
+            
+            // Resize handle at bottom (only when expanded)
+            if node.isExpanded {
+                resizeHandle
+            }
         }
         .frame(
             width: Node.nodeWidth,
-            height: node.isExpanded ? Node.expandedHeight : Node.collapsedHeight
+            height: node.isExpanded ? node.height : Node.collapsedHeight
         )
         .background(cardBackground)
         .cornerRadius(Node.cornerRadius)
@@ -84,7 +97,7 @@ struct NodeView: View {
                 isTitleFocused = true
             }
         }
-        .onChange(of: isSelected) { newValue in
+        .onChange(of: isSelected) { oldValue, newValue in
             // Auto-focus title when selecting an empty node
             if newValue && node.title.isEmpty {
                 editedTitle = node.title
@@ -234,7 +247,7 @@ struct NodeView: View {
                 .font(.body)
                 .padding(8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.secondary.opacity(0.1))
+                .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
                 .cornerRadius(8)
         }
     }
@@ -282,5 +295,41 @@ struct NodeView: View {
         colorScheme == .dark
             ? Color.black.opacity(0.5)
             : Color.black.opacity(0.15)
+    }
+    
+    private var resizeHandle: some View {
+        Rectangle()
+            .fill(Color.gray.opacity(0.3))
+            .frame(height: 6)
+            .frame(maxWidth: .infinity)
+            .overlay(
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(Color.gray)
+                    .frame(width: 40, height: 4)
+            )
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { value in
+                        if !isResizing {
+                            isResizing = true
+                            resizeStartHeight = node.height
+                        }
+                        let newHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + value.translation.height))
+                        var updatedNode = node
+                        updatedNode.height = newHeight
+                        node = updatedNode
+                    }
+                    .onEnded { _ in
+                        isResizing = false
+                    }
+            )
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.resizeUpDown.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
     }
 }

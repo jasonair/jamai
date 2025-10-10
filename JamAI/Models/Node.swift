@@ -21,6 +21,7 @@ struct Node: Identifiable, Codable, Equatable {
     // Position
     var x: CGFloat
     var y: CGFloat
+    var height: CGFloat // Custom height when expanded
     
     // Content
     var title: String
@@ -52,6 +53,7 @@ struct Node: Identifiable, Codable, Equatable {
         parentId: UUID? = nil,
         x: CGFloat = 0,
         y: CGFloat = 0,
+        height: CGFloat = Node.expandedHeight,
         title: String = "",
         titleSource: TextSource = .user,
         description: String = "",
@@ -70,6 +72,7 @@ struct Node: Identifiable, Codable, Equatable {
         self.parentId = parentId
         self.x = x
         self.y = y
+        self.height = height
         self.title = title
         self.titleSource = titleSource
         self.description = description
@@ -131,8 +134,10 @@ struct Node: Identifiable, Codable, Equatable {
 // MARK: - Node Display Constants
 extension Node {
     static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
-    static let collapsedHeight: CGFloat = 80
-    static let expandedHeight: CGFloat = 300
+    static let collapsedHeight: CGFloat = 120 // Tall enough for title and description
+    static let expandedHeight: CGFloat = 400 // Default expanded height
+    static let minHeight: CGFloat = 300 // Minimum height when resizing
+    static let maxHeight: CGFloat = 800 // Maximum height when resizing
     static let padding: CGFloat = 16
     static let cornerRadius: CGFloat = 12
     static let shadowRadius: CGFloat = 8

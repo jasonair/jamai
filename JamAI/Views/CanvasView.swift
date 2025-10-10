@@ -60,7 +60,7 @@ struct CanvasView: View {
                     )
                     .position(
                         x: node.x + Node.nodeWidth / 2,
-                        y: node.y + (node.isExpanded ? Node.expandedHeight : Node.collapsedHeight) / 2
+                        y: node.y + (node.isExpanded ? node.height : Node.collapsedHeight) / 2
                     )
                     .offset(viewModel.offset)
                     .scaleEffect(viewModel.zoom)
@@ -82,7 +82,21 @@ struct CanvasView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(canvasBackground)
+            .background(
+                canvasBackground
+                    .onTapGesture {
+                        // Tap on background to deselect all nodes
+                        viewModel.selectedNodeId = nil
+                    }
+                    .contextMenu {
+                        Button("New Node Here") {
+                            // Create node at center of current viewport
+                            let centerX = (-viewModel.offset.width / viewModel.zoom)
+                            let centerY = (-viewModel.offset.height / viewModel.zoom)
+                            viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
+                        }
+                    }
+            )
             .gesture(
                 DragGesture()
                     .onChanged { value in
@@ -100,22 +114,11 @@ struct CanvasView: View {
             .gesture(
                 MagnificationGesture()
                     .onChanged { value in
-                        let newZoom = max(Config.minZoom, min(Config.maxZoom, value))
-                        
-                        // Adjust offset to zoom from center
-                        let zoomDelta = newZoom / lastZoom
-                        let centerX = geometry.size.width / 2
-                        let centerY = geometry.size.height / 2
-                        
-                        viewModel.offset.width = centerX + (viewModel.offset.width - centerX) * zoomDelta
-                        viewModel.offset.height = centerY + (viewModel.offset.height - centerY) * zoomDelta
-                        
+                        let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * value))
                         viewModel.zoom = newZoom
-                        lastZoom = newZoom
                     }
                     .onEnded { _ in
                         lastZoom = viewModel.zoom
-                        dragOffset = viewModel.offset
                     }
             )
             .onTapGesture(count: 2) { location in
@@ -170,7 +173,10 @@ struct CanvasView: View {
             
             // New node
             Button(action: {
-                viewModel.createNode(at: CGPoint(x: -viewModel.offset.width, y: -viewModel.offset.height))
+                // Create node at center of viewport
+                let centerX = (-viewModel.offset.width / viewModel.zoom)
+                let centerY = (-viewModel.offset.height / viewModel.zoom)
+                viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
             }) {
                 Label("New Node", systemImage: "plus.circle.fill")
             }
@@ -193,9 +199,10 @@ struct CanvasView: View {
     
     private var gridBackground: some View {
         Canvas { context, size in
-            let gridSize = Config.gridSize * viewModel.zoom
-            let offsetX = viewModel.offset.width.truncatingRemainder(dividingBy: gridSize)
-            let offsetY = viewModel.offset.height.truncatingRemainder(dividingBy: gridSize)
+            let gridSize = Config.gridSize
+            let scaledGridSize = gridSize * viewModel.zoom
+            let offsetX = viewModel.offset.width.truncatingRemainder(dividingBy: scaledGridSize)
+            let offsetY = viewModel.offset.height.truncatingRemainder(dividingBy: scaledGridSize)
             
             // Vertical lines
             var x = offsetX
@@ -204,7 +211,7 @@ struct CanvasView: View {
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: size.height))
                 context.stroke(path, with: .color(gridColor), lineWidth: 1)
-                x += gridSize
+                x += scaledGridSize
             }
             
             // Horizontal lines
@@ -214,7 +221,7 @@ struct CanvasView: View {
                 path.move(to: CGPoint(x: 0, y: y))
                 path.addLine(to: CGPoint(x: size.width, y: y))
                 context.stroke(path, with: .color(gridColor), lineWidth: 1)
-                y += gridSize
+                y += scaledGridSize
             }
         }
     }

@@ -46,6 +46,7 @@ class Database {
                 t.column("parent_id", .text)
                 t.column("x", .double).notNull()
                 t.column("y", .double).notNull()
+                t.column("height", .double).notNull().defaults(to: 400)
                 t.column("title", .text).notNull()
                 t.column("title_source", .text).notNull()
                 t.column("description", .text).notNull()
@@ -66,6 +67,13 @@ class Database {
             if try db.columns(in: "nodes").first(where: { $0.name == "conversation_json" }) == nil {
                 try db.alter(table: "nodes") { t in
                     t.add(column: "conversation_json", .text).notNull().defaults(to: "[]")
+                }
+            }
+            
+            // Add height column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "height" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "height", .double).notNull().defaults(to: 400)
                 }
             }
             
@@ -165,9 +173,9 @@ class Database {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO nodes 
-                (id, project_id, parent_id, x, y, title, title_source, description, description_source, 
+                (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
                  conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -175,6 +183,7 @@ class Database {
                     node.parentId?.uuidString,
                     node.x,
                     node.y,
+                    node.height,
                     node.title,
                     node.titleSource.rawValue,
                     node.description,
@@ -207,6 +216,7 @@ class Database {
                     parentId: (row["parent_id"] as String?).flatMap { UUID(uuidString: $0) },
                     x: row["x"],
                     y: row["y"],
+                    height: row["height"] ?? 400,
                     title: row["title"],
                     titleSource: TextSource(rawValue: row["title_source"]) ?? .user,
                     description: row["description"],

@@ -31,6 +31,11 @@ struct JamAIApp: App {
                     appState.createNewProject()
                 }
                 .keyboardShortcut("n", modifiers: .command)
+                
+                Button("Open Project...") {
+                    appState.openProjectDialog()
+                }
+                .keyboardShortcut("o", modifiers: .command)
             }
             
             CommandGroup(replacing: .saveItem) {
@@ -139,18 +144,36 @@ class AppState: ObservableObject {
         }
     }
     
-    func openProject(url: URL) {
+    func openProjectDialog() {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
-            do {
-                let (project, database) = try DocumentManager.shared.openProject(from: url)
-                self.project = project
-                self.database = database
-                self.currentFileURL = url
-                self.viewModel = CanvasViewModel(project: project, database: database)
-            } catch {
-                self.showError("Failed to open project: \(error.localizedDescription)")
+            
+            let panel = NSOpenPanel()
+            panel.message = "Open a JamAI project"
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.allowsOtherFileTypes = true
+            
+            panel.begin { [weak self] response in
+                guard let self = self else { return }
+                guard response == .OK, let url = panel.url else { return }
+                
+                DispatchQueue.main.async {
+                    self.openProject(url: url)
+                }
             }
+        }
+    }
+    
+    func openProject(url: URL) {
+        do {
+            let (project, database) = try DocumentManager.shared.openProject(from: url)
+            self.project = project
+            self.database = database
+            self.currentFileURL = url
+            self.viewModel = CanvasViewModel(project: project, database: database)
+        } catch {
+            self.showError("Failed to open project: \(error.localizedDescription)")
         }
     }
     
