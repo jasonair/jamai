@@ -17,6 +17,7 @@ struct CanvasView: View {
     @State private var lastZoom: CGFloat = 1.0
     @State private var showDots = true // true for dots, false for grid
     // No live layout frames; we compute from model
+    @State private var mouseLocation: CGPoint = .zero
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -67,6 +68,12 @@ struct CanvasView: View {
                     }
                 }
             }
+            // Track mouse location for cursor-anchored zooming
+            .overlay(
+                MouseTrackingView(position: $mouseLocation)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+            )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(canvasBackground)
             .contentShape(Rectangle())
@@ -98,8 +105,20 @@ struct CanvasView: View {
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
+                        // Cursor-anchored zoom: keep the world point under cursor fixed
+                        let oldZoom = viewModel.zoom
                         let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * value))
+                        let s = mouseLocation
+                        // world point under cursor before zoom
+                        let wx = (s.x - viewModel.offset.width) / max(oldZoom, 0.001)
+                        let wy = (s.y - viewModel.offset.height) / max(oldZoom, 0.001)
+                        let newOffset = CGSize(
+                            width: s.x - wx * newZoom,
+                            height: s.y - wy * newZoom
+                        )
                         viewModel.zoom = newZoom
+                        viewModel.offset = newOffset
+                        dragOffset = newOffset
                     }
                     .onEnded { _ in
                         lastZoom = viewModel.zoom
