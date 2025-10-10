@@ -24,6 +24,7 @@ class CanvasViewModel: ObservableObject {
     // Canvas state
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
+    @Published var positionsVersion: Int = 0 // increment to force connector refresh
     
     // Services
     let geminiClient: GeminiClient
@@ -33,6 +34,12 @@ class CanvasViewModel: ObservableObject {
     
     private var cancellables = Set<AnyCancellable>()
     private var autosaveTimer: Timer?
+    
+    // Debounced write queue
+    private var pendingNodeWrites: Set<UUID> = []
+    private var pendingEdgeWrites: Set<UUID> = []
+    private var debounceWorkItem: DispatchWorkItem?
+    private let debounceInterval: TimeInterval = 0.3 // 300ms debounce
     
     // MARK: - Initialization
     
@@ -162,18 +169,27 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
-    func updateNode(_ node: Node) {
+    func updateNode(_ node: Node, immediate: Bool = false) {
         guard let oldNode = nodes[node.id] else { return }
         
         var updatedNode = node
         updatedNode.updatedAt = Date()
+        
+        // Explicitly trigger objectWillChange before mutation
+        objectWillChange.send()
         nodes[node.id] = updatedNode
         
-        do {
-            try database.saveNode(updatedNode)
-            undoManager.record(.updateNode(oldNode: oldNode, newNode: updatedNode))
-        } catch {
-            errorMessage = "Failed to update node: \(error.localizedDescription)"
+        undoManager.record(.updateNode(oldNode: oldNode, newNode: updatedNode))
+        
+        // Debounce database write unless immediate
+        if immediate {
+            do {
+                try database.saveNode(updatedNode)
+            } catch {
+                errorMessage = "Failed to update node: \(error.localizedDescription)"
+            }
+        } else {
+            scheduleDebouncedWrite(nodeId: node.id)
         }
     }
     
@@ -205,14 +221,15 @@ class CanvasViewModel: ObservableObject {
         node.y = position.y
         node.updatedAt = Date()
         
+        // Explicitly trigger objectWillChange before mutation
+        objectWillChange.send()
         nodes[nodeId] = node
+        positionsVersion &+= 1 // signal to views that positions changed
         
-        do {
-            try database.saveNode(node)
-            undoManager.coalesceIfNeeded(.moveNode(id: nodeId, oldPosition: oldPosition, newPosition: position))
-        } catch {
-            errorMessage = "Failed to move node: \(error.localizedDescription)"
-        }
+        undoManager.coalesceIfNeeded(.moveNode(id: nodeId, oldPosition: oldPosition, newPosition: position))
+        
+        // Debounce database write during drag
+        scheduleDebouncedWrite(nodeId: nodeId)
     }
     
     // MARK: - AI Generation
@@ -495,6 +512,9 @@ class CanvasViewModel: ObservableObject {
     }
     
     func save() {
+        // Flush any pending debounced writes first
+        flushPendingWrites()
+        
         do {
             try database.saveProject(project)
             // Save all nodes
@@ -508,5 +528,53 @@ class CanvasViewModel: ObservableObject {
         } catch {
             errorMessage = "Auto-save failed: \(error.localizedDescription)"
         }
+    }
+    
+    // MARK: - Debounced Writes
+    
+    private func scheduleDebouncedWrite(nodeId: UUID) {
+        pendingNodeWrites.insert(nodeId)
+        
+        // Cancel previous debounce
+        debounceWorkItem?.cancel()
+        
+        // Schedule new debounce
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.flushPendingWrites()
+            }
+        }
+        debounceWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+    }
+    
+    private func flushPendingWrites() {
+        // Write all pending nodes
+        for nodeId in pendingNodeWrites {
+            if let node = nodes[nodeId] {
+                do {
+                    try database.saveNode(node)
+                } catch {
+                    errorMessage = "Failed to save node: \(error.localizedDescription)"
+                }
+            }
+        }
+        pendingNodeWrites.removeAll()
+        
+        // Write all pending edges
+        for edgeId in pendingEdgeWrites {
+            if let edge = edges[edgeId] {
+                do {
+                    try database.saveEdge(edge)
+                } catch {
+                    errorMessage = "Failed to save edge: \(error.localizedDescription)"
+                }
+            }
+        }
+        pendingEdgeWrites.removeAll()
+        
+        debounceWorkItem?.cancel()
+        debounceWorkItem = nil
     }
 }

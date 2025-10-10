@@ -16,69 +16,31 @@ struct CanvasView: View {
     @State private var dragStartPosition: CGPoint = .zero
     @State private var lastZoom: CGFloat = 1.0
     @State private var showDots = true // true for dots, false for grid
+    // No live layout frames; we compute from model
     
     @Environment(\.colorScheme) var colorScheme
     
+    // Precomputed helpers to reduce type-checking complexity
+    private var edgesArray: [Edge] { Array(viewModel.edges.values) }
+    private var nodesArray: [Node] { Array(viewModel.nodes.values) }
+
     var body: some View {
         GeometryReader { geometry in
             ZStack {
                 // Background pattern (dots or grid)
-                if showDots {
-                    dotBackground
-                } else {
-                    gridBackground
-                }
+                backgroundLayer
                 
-                // Edges layer
-                EdgeLayer(
-                    edges: Array(viewModel.edges.values),
-                    nodes: viewModel.nodes,
-                    zoom: viewModel.zoom
+                // World container: apply pan/zoom once to both edges and nodes
+                WorldLayerView(
+                    edges: edgesArray,
+                    frames: nodeFrames,
+                    nodes: nodesArray,
+                    zoom: viewModel.zoom,
+                    positionsVersion: viewModel.positionsVersion,
+                    nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
                 )
-                .offset(viewModel.offset)
-                .scaleEffect(viewModel.zoom)
-                
-                // Nodes
-                ForEach(Array(viewModel.nodes.values), id: \.id) { node in
-                    NodeView(
-                        node: binding(for: node.id),
-                        isSelected: viewModel.selectedNodeId == node.id,
-                        isGenerating: viewModel.generatingNodeId == node.id,
-                        onTap: {
-                            viewModel.selectedNodeId = node.id
-                        },
-                        onPromptSubmit: { prompt in
-                            handlePromptSubmit(prompt, for: node.id)
-                        },
-                        onTitleEdit: { title in
-                            handleTitleEdit(title, for: node.id)
-                        },
-                        onDescriptionEdit: { description in
-                            handleDescriptionEdit(description, for: node.id)
-                        },
-                        onDelete: {
-                            handleDeleteNode(node.id)
-                        },
-                        onCreateChild: {
-                            handleCreateChildNode(node.id)
-                        }
-                    )
-                    .position(
-                        x: node.x + Node.nodeWidth / 2,
-                        y: node.y + (node.isExpanded ? node.height : Node.collapsedHeight) / 2
-                    )
                     .offset(viewModel.offset)
                     .scaleEffect(viewModel.zoom)
-                    .gesture(
-                        DragGesture()
-                            .onChanged { value in
-                                handleNodeDrag(node.id, value: value)
-                            }
-                            .onEnded { _ in
-                                draggedNodeId = nil
-                            }
-                    )
-                }
                 
                 // Toolbar overlay
                 VStack {
@@ -284,6 +246,28 @@ struct CanvasView: View {
             set: { viewModel.updateNode($0) }
         )
     }
+
+    private var backgroundLayer: AnyView {
+        if showDots { return AnyView(dotBackground) }
+        else { return AnyView(gridBackground) }
+    }
+
+    @ViewBuilder
+    private func nodeItemView(_ node: Node) -> some View {
+        NodeItemWrapper(
+            node: binding(for: node.id),
+            isSelected: viewModel.selectedNodeId == node.id,
+            isGenerating: viewModel.generatingNodeId == node.id,
+            onTap: { viewModel.selectedNodeId = node.id },
+            onPromptSubmit: { prompt in handlePromptSubmit(prompt, for: node.id) },
+            onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
+            onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
+            onDelete: { handleDeleteNode(node.id) },
+            onCreateChild: { handleCreateChildNode(node.id) },
+            onDragChanged: { value in handleNodeDrag(node.id, value: value) },
+            onDragEnded: { draggedNodeId = nil }
+        )
+    }
     
     private func handleNodeDrag(_ nodeId: UUID, value: DragGesture.Value) {
         if draggedNodeId == nil {
@@ -298,6 +282,7 @@ struct CanvasView: View {
                 x: dragStartPosition.x + value.translation.width / viewModel.zoom,
                 y: dragStartPosition.y + value.translation.height / viewModel.zoom
             )
+            // Update position optimistically - UI updates immediately, DB write is debounced
             viewModel.moveNode(nodeId, to: newPosition)
         }
     }
@@ -332,6 +317,16 @@ struct CanvasView: View {
         viewModel.updateNode(node)
     }
     
+    // Frames for nodes in world coordinates (before pan/zoom)
+    private var nodeFrames: [UUID: CGRect] {
+        var map: [UUID: CGRect] = [:]
+        for node in viewModel.nodes.values {
+            let height = node.isExpanded ? node.height : Node.collapsedHeight
+            map[node.id] = CGRect(x: node.x, y: node.y, width: Node.nodeWidth, height: height)
+        }
+        return map
+    }
+
     private func screenToCanvas(_ point: CGPoint, in size: CGSize) -> CGPoint {
         CGPoint(
             x: (point.x - viewModel.offset.width) / viewModel.zoom,

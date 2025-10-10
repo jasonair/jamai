@@ -2,58 +2,34 @@
 //  EdgeLayer.swift
 //  JamAI
 //
-//  Renders Bezier curve connections between nodes
+//  Renders Bezier curve connections between nodes with real-time updates
 //
 
 import SwiftUI
-import Combine
 
 struct EdgeLayer: View {
     let edges: [Edge]
-    let nodes: [UUID: Node]
+    let frames: [UUID: CGRect]
     let zoom: CGFloat
     
     @Environment(\.colorScheme) var colorScheme
     
-    // Create a computed property that changes when node positions change
-    // This forces the Canvas to redraw
-    private var nodePositionHash: Int {
-        var hasher = Hasher()
-        for (id, node) in nodes {
-            hasher.combine(id)
-            hasher.combine(node.x)
-            hasher.combine(node.y)
-        }
-        return hasher.finalize()
-    }
-    
     var body: some View {
-        Canvas { context, size in
-            for edge in edges {
-                guard let source = nodes[edge.sourceId],
-                      let target = nodes[edge.targetId] else {
-                    continue
+        // Use TimelineView for real-time updates at 60fps
+        TimelineView(.animation) { _ in
+            Canvas { context, _ in
+                for edge in edges {
+                    guard let sFrame = frames[edge.sourceId],
+                          let tFrame = frames[edge.targetId] else { continue }
+                    
+                    // Endpoints from current frames in world coordinates
+                    let start = CGPoint(x: sFrame.maxX, y: sFrame.minY + Node.padding)
+                    let end = CGPoint(x: tFrame.minX, y: tFrame.minY + Node.padding)
+                    
+                    drawBezierCurve(context: context, from: start, to: end)
                 }
-                
-                // Connect from top-right of source to top-left of target
-                let sourcePosRight = CGPoint(
-                    x: source.x + Node.nodeWidth,
-                    y: source.y + Node.padding
-                )
-                
-                let targetPosLeft = CGPoint(
-                    x: target.x,
-                    y: target.y + Node.padding
-                )
-                
-                drawBezierCurve(
-                    context: context,
-                    from: sourcePosRight,
-                    to: targetPosLeft
-                )
             }
         }
-        .id(nodePositionHash) // Force redraw when node positions change
     }
     
     private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint) {
@@ -67,18 +43,16 @@ struct EdgeLayer: View {
         
         path.addCurve(to: end, control1: control1, control2: control2)
         
-        context.stroke(
-            path,
-            with: .color(edgeColor),
-            lineWidth: 2.0 / zoom
-        )
+        // Non-scaling stroke: counteract parent scale with 1/zoom
+        context.stroke(path, with: .color(edgeColor), lineWidth: 2.0 / max(zoom, 0.001))
         
         // Draw arrow at end
         drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
     }
     
     private func drawArrowHead(context: GraphicsContext, at point: CGPoint, angle: Double) {
-        let arrowSize: CGFloat = 10.0 / zoom
+        // Non-scaling arrow head size
+        let arrowSize: CGFloat = 10.0 / max(zoom, 0.001)
         
         var path = Path()
         path.move(to: point)
@@ -95,7 +69,7 @@ struct EdgeLayer: View {
         context.stroke(
             path,
             with: .color(edgeColor),
-            lineWidth: 2.0 / zoom
+            lineWidth: 2.0
         )
     }
     

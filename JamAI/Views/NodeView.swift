@@ -174,11 +174,10 @@ struct NodeView: View {
             
             // Expand/Collapse button
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    var updatedNode = node
-                    updatedNode.isExpanded.toggle()
-                    node = updatedNode
-                }
+                // Update immediately without animation for instant response
+                var updatedNode = node
+                updatedNode.isExpanded.toggle()
+                node = updatedNode
             }) {
                 Image(systemName: node.isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
                     .foregroundColor(.accentColor)
