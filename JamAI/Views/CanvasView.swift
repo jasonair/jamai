@@ -27,14 +27,19 @@ struct CanvasView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // World container: edges + nodes share the same transform
-                WorldLayerView(
+                // Full-screen edges overlay (renders in screen coords)
+                EdgeLayer(
                     edges: edgesArray,
                     frames: nodeFrames,
                     zoom: viewModel.zoom,
-                    offset: viewModel.offset,
-                    showDots: showDots,
-                    positionsVersion: viewModel.positionsVersion,
+                    offset: viewModel.offset
+                )
+                .id("edges-\(viewModel.positionsVersion)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                
+                // World container: edges + nodes share the same transform
+                WorldLayerView(
                     nodes: nodesArray,
                     nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
                 )
