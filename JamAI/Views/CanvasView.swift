@@ -27,21 +27,20 @@ struct CanvasView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background pattern (dots or grid)
-                backgroundLayer
-                
                 // World container: edges + nodes share the same transform
                 WorldLayerView(
                     edges: edgesArray,
                     frames: nodeFrames,
                     zoom: viewModel.zoom,
+                    offset: viewModel.offset,
+                    showDots: showDots,
                     positionsVersion: viewModel.positionsVersion,
                     nodes: nodesArray,
                     nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .scaleEffect(viewModel.zoom, anchor: .topLeading)
                 .offset(viewModel.offset)
-                .scaleEffect(viewModel.zoom)
                 
                 // Toolbar overlay
                 VStack {
