@@ -57,19 +57,42 @@ class DocumentManager {
     }
     
     func openProject(from url: URL) throws -> (Project, Database) {
-        let bundleURL = url.pathExtension == Config.jamFileExtension ? url : url.appendingPathExtension(Config.jamFileExtension)
+        // Handle both .jam extension and directory without extension
+        var bundleURL = url
+        if url.pathExtension != Config.jamFileExtension {
+            // If no .jam extension, try adding it
+            let withExtension = url.appendingPathExtension(Config.jamFileExtension)
+            if FileManager.default.fileExists(atPath: withExtension.path) {
+                bundleURL = withExtension
+            }
+        }
         
         guard FileManager.default.fileExists(atPath: bundleURL.path) else {
             throw DocumentError.fileNotFound
         }
         
+        // Check if it's a directory (bundle)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: bundleURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw DocumentError.invalidProjectStructure
+        }
+        
         // Load database
         let dbURL = bundleURL.appendingPathComponent("data.db")
+        guard FileManager.default.fileExists(atPath: dbURL.path) else {
+            throw DocumentError.databaseNotFound
+        }
+        
         let database = Database()
         try database.setup(at: dbURL)
         
         // Load metadata to get project ID
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
+        guard FileManager.default.fileExists(atPath: metadataURL.path) else {
+            throw DocumentError.metadataNotFound
+        }
+        
         let metadataData = try Data(contentsOf: metadataURL)
         guard let metadata = try JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
               let projectIdString = metadata["projectId"] as? String,
@@ -163,6 +186,9 @@ enum DocumentError: LocalizedError {
     case invalidMetadata
     case projectNotFound
     case encodingFailed
+    case invalidProjectStructure
+    case databaseNotFound
+    case metadataNotFound
     
     var errorDescription: String? {
         switch self {
@@ -174,6 +200,12 @@ enum DocumentError: LocalizedError {
             return "Project data not found in database"
         case .encodingFailed:
             return "Failed to encode project data"
+        case .invalidProjectStructure:
+            return "Invalid project structure - expected a .jam directory"
+        case .databaseNotFound:
+            return "Database file not found in project bundle"
+        case .metadataNotFound:
+            return "Metadata file not found in project bundle"
         }
     }
 }

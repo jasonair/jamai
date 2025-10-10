@@ -15,14 +15,19 @@ struct CanvasView: View {
     @State private var draggedNodeId: UUID?
     @State private var dragStartPosition: CGPoint = .zero
     @State private var lastZoom: CGFloat = 1.0
+    @State private var showDots = true // true for dots, false for grid
     
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Background grid
-                gridBackground
+                // Background pattern (dots or grid)
+                if showDots {
+                    dotBackground
+                } else {
+                    gridBackground
+                }
                 
                 // Edges layer
                 EdgeLayer(
@@ -79,26 +84,30 @@ struct CanvasView: View {
                 VStack {
                     toolbar
                     Spacer()
+                    HStack {
+                        Spacer()
+                        gridToggle
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                canvasBackground
-                    .onTapGesture {
-                        // Tap on background to deselect all nodes
-                        viewModel.selectedNodeId = nil
-                    }
-                    .contextMenu {
-                        Button("New Node Here") {
-                            // Create node at center of current viewport
-                            let centerX = (-viewModel.offset.width / viewModel.zoom)
-                            let centerY = (-viewModel.offset.height / viewModel.zoom)
-                            viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
-                        }
-                    }
-            )
-            .gesture(
-                DragGesture()
+            .background(canvasBackground)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // Tap on background to deselect all nodes
+                viewModel.selectedNodeId = nil
+            }
+            .contextMenu {
+                Button("New Node Here") {
+                    let centerX = (geometry.size.width / 2 - viewModel.offset.width) / viewModel.zoom
+                    let centerY = (geometry.size.height / 2 - viewModel.offset.height) / viewModel.zoom
+                    viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
+                }
+            }
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
                     .onChanged { value in
                         if draggedNodeId == nil {
                             viewModel.offset = CGSize(
@@ -111,7 +120,7 @@ struct CanvasView: View {
                         dragOffset = viewModel.offset
                     }
             )
-            .gesture(
+            .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
                         let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * value))
@@ -173,9 +182,10 @@ struct CanvasView: View {
             
             // New node
             Button(action: {
-                // Create node at center of viewport
-                let centerX = (-viewModel.offset.width / viewModel.zoom)
-                let centerY = (-viewModel.offset.height / viewModel.zoom)
+                // Create node at canvas origin (0,0) - user can drag to reposition
+                // Or we estimate viewport center without needing geometry
+                let centerX = -viewModel.offset.width / viewModel.zoom
+                let centerY = -viewModel.offset.height / viewModel.zoom
                 viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
             }) {
                 Label("New Node", systemImage: "plus.circle.fill")
@@ -195,6 +205,27 @@ struct CanvasView: View {
         .padding(.vertical, 12)
         .background(toolbarBackground)
         .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
+    }
+    
+    private var dotBackground: some View {
+        Canvas { context, size in
+            let dotSize: CGFloat = 2
+            let spacing = Config.gridSize
+            let scaledSpacing = spacing * viewModel.zoom
+            let offsetX = viewModel.offset.width.truncatingRemainder(dividingBy: scaledSpacing)
+            let offsetY = viewModel.offset.height.truncatingRemainder(dividingBy: scaledSpacing)
+            
+            var y = offsetY
+            while y < size.height {
+                var x = offsetX
+                while x < size.width {
+                    let rect = CGRect(x: x - dotSize/2, y: y - dotSize/2, width: dotSize, height: dotSize)
+                    context.fill(Path(ellipseIn: rect), with: .color(gridColor))
+                    x += scaledSpacing
+                }
+                y += scaledSpacing
+            }
+        }
     }
     
     private var gridBackground: some View {
@@ -224,6 +255,25 @@ struct CanvasView: View {
                 y += scaledGridSize
             }
         }
+    }
+    
+    private var gridToggle: some View {
+        Button(action: {
+            showDots.toggle()
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: showDots ? "circle.grid.3x3.fill" : "square.grid.3x3.fill")
+                    .font(.system(size: 14))
+                Text(showDots ? "Dots" : "Grid")
+                    .font(.caption)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(toolbarBackground)
+            .cornerRadius(8)
+            .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
     
     // MARK: - Helpers

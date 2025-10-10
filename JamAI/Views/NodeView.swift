@@ -26,6 +26,8 @@ struct NodeView: View {
     @State private var isResizing = false
     @State private var resizeStartHeight: CGFloat = 0
     @FocusState private var isTitleFocused: Bool
+    @FocusState private var isPromptFocused: Bool
+    @State private var scrollViewID = UUID()
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -41,15 +43,28 @@ struct NodeView: View {
                 // Expanded content with fixed input at bottom
                 VStack(spacing: 0) {
                     // Scrollable conversation area
-                    ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            // Description
-                            descriptionView
-                            
-                            // Conversation thread
-                            conversationView
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 12) {
+                                // Description
+                                descriptionView
+                                
+                                // Conversation thread
+                                conversationView
+                                    .id(scrollViewID)
+                            }
+                            .padding(Node.padding)
                         }
-                        .padding(Node.padding)
+                        .onChange(of: node.conversation.count) { oldCount, newCount in
+                            // Scroll to top when a new response arrives
+                            if newCount > oldCount {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    withAnimation {
+                                        proxy.scrollTo(scrollViewID, anchor: .top)
+                                    }
+                                }
+                            }
+                        }
                     }
                     
                     Divider()
@@ -266,12 +281,13 @@ struct NodeView: View {
                     .background(Color.secondary.opacity(0.1))
                     .cornerRadius(8)
                     .lineLimit(3...6)
+                    .focused($isPromptFocused)
+                    .onSubmit {
+                        submitPrompt()
+                    }
                 
                 Button(action: {
-                    if !promptText.isEmpty {
-                        onPromptSubmit(promptText)
-                        promptText = ""
-                    }
+                    submitPrompt()
                 }) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title2)
@@ -279,6 +295,7 @@ struct NodeView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .disabled(promptText.isEmpty)
+                .keyboardShortcut(.return, modifiers: [])
             }
         }
     }
@@ -331,5 +348,15 @@ struct NodeView: View {
                     NSCursor.pop()
                 }
             }
+    }
+    
+    // MARK: - Actions
+    
+    private func submitPrompt() {
+        if !promptText.isEmpty {
+            onPromptSubmit(promptText)
+            promptText = ""
+            isPromptFocused = true // Keep focus in input
+        }
     }
 }

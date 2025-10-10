@@ -15,6 +15,18 @@ struct EdgeLayer: View {
     
     @Environment(\.colorScheme) var colorScheme
     
+    // Create a computed property that changes when node positions change
+    // This forces the Canvas to redraw
+    private var nodePositionHash: Int {
+        var hasher = Hasher()
+        for (id, node) in nodes {
+            hasher.combine(id)
+            hasher.combine(node.x)
+            hasher.combine(node.y)
+        }
+        return hasher.finalize()
+    }
+    
     var body: some View {
         Canvas { context, size in
             for edge in edges {
@@ -41,6 +53,7 @@ struct EdgeLayer: View {
                 )
             }
         }
+        .id(nodePositionHash) // Force redraw when node positions change
     }
     
     private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint) {
