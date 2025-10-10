@@ -22,14 +22,14 @@ struct EdgeLayer: View {
                     guard let sFrame = frames[edge.sourceId],
                           let tFrame = frames[edge.targetId] else { continue }
                     
-                    // Endpoints from current frames in world coordinates
+                    // Draw in world coordinates; world transform is applied by parent container
                     let start = CGPoint(x: sFrame.maxX, y: sFrame.minY + Node.padding)
                     let end = CGPoint(x: tFrame.minX, y: tFrame.minY + Node.padding)
-                    
                     drawBezierCurve(context: context, from: start, to: end)
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint) {
@@ -43,7 +43,7 @@ struct EdgeLayer: View {
         
         path.addCurve(to: end, control1: control1, control2: control2)
         
-        // Non-scaling stroke: counteract parent scale with 1/zoom
+        // Non-scaling stroke (counteracts parent world scale)
         context.stroke(path, with: .color(edgeColor), lineWidth: 2.0 / max(zoom, 0.001))
         
         // Draw arrow at end

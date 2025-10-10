@@ -30,17 +30,18 @@ struct CanvasView: View {
                 // Background pattern (dots or grid)
                 backgroundLayer
                 
-                // World container: apply pan/zoom once to both edges and nodes
+                // World container: edges + nodes share the same transform
                 WorldLayerView(
                     edges: edgesArray,
                     frames: nodeFrames,
-                    nodes: nodesArray,
                     zoom: viewModel.zoom,
                     positionsVersion: viewModel.positionsVersion,
+                    nodes: nodesArray,
                     nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
                 )
-                    .offset(viewModel.offset)
-                    .scaleEffect(viewModel.zoom)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .offset(viewModel.offset)
+                .scaleEffect(viewModel.zoom)
                 
                 // Toolbar overlay
                 VStack {
@@ -174,12 +175,20 @@ struct CanvasView: View {
             let dotSize: CGFloat = 2
             let spacing = Config.gridSize
             let scaledSpacing = spacing * viewModel.zoom
-            let offsetX = viewModel.offset.width.truncatingRemainder(dividingBy: scaledSpacing)
-            let offsetY = viewModel.offset.height.truncatingRemainder(dividingBy: scaledSpacing)
+            let centerX = size.width / 2
+            let centerY = size.height / 2
+            // Center-anchored transform: screen = C + (world - C) * z + offset * z
+            // Tiled offset shift in screen space:
+            var startX = ((1 - viewModel.zoom) * centerX + viewModel.offset.width * viewModel.zoom)
+                .truncatingRemainder(dividingBy: scaledSpacing)
+            var startY = ((1 - viewModel.zoom) * centerY + viewModel.offset.height * viewModel.zoom)
+                .truncatingRemainder(dividingBy: scaledSpacing)
+            if startX < 0 { startX += scaledSpacing }
+            if startY < 0 { startY += scaledSpacing }
             
-            var y = offsetY
+            var y = startY
             while y < size.height {
-                var x = offsetX
+                var x = startX
                 while x < size.width {
                     let rect = CGRect(x: x - dotSize/2, y: y - dotSize/2, width: dotSize, height: dotSize)
                     context.fill(Path(ellipseIn: rect), with: .color(gridColor))
@@ -194,11 +203,17 @@ struct CanvasView: View {
         Canvas { context, size in
             let gridSize = Config.gridSize
             let scaledGridSize = gridSize * viewModel.zoom
-            let offsetX = viewModel.offset.width.truncatingRemainder(dividingBy: scaledGridSize)
-            let offsetY = viewModel.offset.height.truncatingRemainder(dividingBy: scaledGridSize)
+            let centerX = size.width / 2
+            let centerY = size.height / 2
+            var startX = ((1 - viewModel.zoom) * centerX + viewModel.offset.width * viewModel.zoom)
+                .truncatingRemainder(dividingBy: scaledGridSize)
+            var startY = ((1 - viewModel.zoom) * centerY + viewModel.offset.height * viewModel.zoom)
+                .truncatingRemainder(dividingBy: scaledGridSize)
+            if startX < 0 { startX += scaledGridSize }
+            if startY < 0 { startY += scaledGridSize }
             
             // Vertical lines
-            var x = offsetX
+            var x = startX
             while x < size.width {
                 var path = Path()
                 path.move(to: CGPoint(x: x, y: 0))
@@ -208,7 +223,7 @@ struct CanvasView: View {
             }
             
             // Horizontal lines
-            var y = offsetY
+            var y = startY
             while y < size.height {
                 var path = Path()
                 path.move(to: CGPoint(x: 0, y: y))

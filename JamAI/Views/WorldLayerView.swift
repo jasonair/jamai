@@ -10,13 +10,14 @@ import SwiftUI
 struct WorldLayerView: View {
     let edges: [Edge]
     let frames: [UUID: CGRect]
-    let nodes: [Node]
     let zoom: CGFloat
     let positionsVersion: Int
+    let nodes: [Node]
     let nodeViewBuilder: (Node) -> AnyView
     
     var body: some View {
         ZStack {
+            // Edges below nodes
             EdgeLayer(
                 edges: edges,
                 frames: frames,
