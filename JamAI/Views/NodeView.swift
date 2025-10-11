@@ -107,19 +107,15 @@ struct NodeView: View {
             onTap()
         }
         .onAppear {
-            // Auto-focus title for new empty nodes
-            if node.title.isEmpty && isSelected {
-                editedTitle = node.title
-                isEditingTitle = true
-                isTitleFocused = true
+            if isSelected {
+                isPromptFocused = true
+                isEditingTitle = false
             }
         }
         .onChange(of: isSelected) { oldValue, newValue in
-            // Auto-focus title when selecting an empty node
-            if newValue && node.title.isEmpty {
-                editedTitle = node.title
-                isEditingTitle = true
-                isTitleFocused = true
+            if newValue {
+                isPromptFocused = true
+                isEditingTitle = false
             }
         }
     }

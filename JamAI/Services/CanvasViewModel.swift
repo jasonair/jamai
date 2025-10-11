@@ -151,6 +151,9 @@ class CanvasViewModel: ObservableObject {
             .first else { return }
         let childId = child.id
         
+        // Indicate generation immediately so UI shows spinner
+        generatingNodeId = childId
+        
         // Start tasks in parallel: title generation + TLDR context
         Task { [weak self] in
             guard let self = self else { return }
@@ -236,8 +239,7 @@ class CanvasViewModel: ObservableObject {
             if !title.isEmpty {
                 node.title = String(title.prefix(40))
                 node.titleSource = .ai
-                nodes[nodeId] = node
-                try database.saveNode(node)
+                updateNode(node, immediate: true)
             }
         } catch {
             // Non-fatal if title generation fails
@@ -274,8 +276,7 @@ class CanvasViewModel: ObservableObject {
                 node.descriptionSource = .ai
             }
             
-            nodes[nodeId] = node
-            try database.saveNode(node)
+            updateNode(node, immediate: true)
         } catch {
             print("Failed to auto-generate title/description: \(error)")
         }
