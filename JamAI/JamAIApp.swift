@@ -15,7 +15,7 @@ struct JamAIApp: App {
     @StateObject private var appState = AppState()
     
     var body: some Scene {
-        WindowGroup {
+        WindowGroup(id: "main") {
             if let viewModel = appState.viewModel {
                 CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
                     .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
@@ -26,18 +26,7 @@ struct JamAIApp: App {
             }
         }
         .commands {
-            CommandGroup(replacing: .newItem) {
-                Button("New Project...") {
-                    appState.createNewProject()
-                }
-                .keyboardShortcut("n", modifiers: .command)
-                
-                Button("Open Project...") {
-                    appState.openProjectDialog()
-                }
-                .keyboardShortcut("p", modifiers: .command)
-            }
-            
+            MainAppCommands(appState: appState)
             CommandGroup(replacing: .saveItem) {
                 Button("Save") {
                     appState.save()
@@ -179,34 +168,33 @@ class AppState: ObservableObject {
             panel.nameFieldStringValue = "Untitled Project.\(Config.jamFileExtension)"
             panel.message = "Create a new JamAI project"
             
-            panel.begin { [weak self] response in
+            let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 guard let self = self else { return }
                 guard response == .OK, let url = panel.url else { return }
-                
                 DispatchQueue.main.async {
                     do {
                         let project = Project(name: url.deletingPathExtension().lastPathComponent)
                         try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension())
-                        
                         let (loadedProject, database) = try DocumentManager.shared.openProject(from: url.deletingPathExtension())
                         self.project = loadedProject
                         self.database = database
-                        // Normalize to a .jam URL for consistency
                         self.currentFileURL = (url.pathExtension == Config.jamFileExtension)
                             ? url
                             : url.appendingPathExtension(Config.jamFileExtension)
-                        
-                        // Start security-scoped access for the newly created project
                         if let fileURL = self.currentFileURL, fileURL.startAccessingSecurityScopedResource() {
                             self.isAccessingSecurityScopedResource = true
                         }
-                        
                         self.viewModel = CanvasViewModel(project: loadedProject, database: database)
                         self.recordRecent(url: self.currentFileURL!)
                     } catch {
                         self.showError("Failed to create project: \(error.localizedDescription)")
                     }
                 }
+            }
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+                panel.beginSheetModal(for: window, completionHandler: handler)
+            } else {
+                handler(panel.runModal())
             }
         }
     }
@@ -216,20 +204,25 @@ class AppState: ObservableObject {
             guard let self = self else { return }
             
             let panel = NSOpenPanel()
-            panel.message = "Open a JamAI project (.jam)"
-            panel.allowedContentTypes = [.item, .folder]
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = true
+            // Use the exact same configuration and presentation as WelcomeView.openExistingProject()
+            panel.allowedContentTypes = []
+            panel.allowsOtherFileTypes = true
             panel.allowsMultipleSelection = false
-            panel.treatsFilePackagesAsDirectories = true
+            panel.canChooseDirectories = true
+            panel.canChooseFiles = false
+            panel.message = "Select a JamAI project folder (.jam)"
             
-            panel.begin { [weak self] response in
+            let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 guard let self = self else { return }
                 guard response == .OK, let url = panel.url else { return }
-                
                 DispatchQueue.main.async {
                     self.openProject(url: url)
                 }
+            }
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+                panel.beginSheetModal(for: window, completionHandler: handler)
+            } else {
+                handler(panel.runModal())
             }
         }
     }
