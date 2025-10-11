@@ -381,35 +381,30 @@ struct NodeView: View {
     }
     
     private var inputView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("New Prompt")
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundColor(.secondary)
-            
-            HStack(alignment: .bottom, spacing: 8) {
-                TextField("Ask a question...", text: $promptText, axis: .vertical)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .padding(8)
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(8)
-                    .lineLimit(3...6)
-                    .focused($isPromptFocused)
-                    .onSubmit {
-                        submitPrompt()
-                    }
-                
-                Button(action: {
+        ZStack(alignment: .bottomTrailing) {
+            TextField("Ask a question...", text: $promptText, axis: .vertical)
+                .textFieldStyle(PlainTextFieldStyle())
+                .padding(8)
+                .padding(.trailing, 40) // Make room for the button
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
+                .lineLimit(3...6)
+                .focused($isPromptFocused)
+                .onSubmit {
                     submitPrompt()
-                }) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(promptText.isEmpty ? .secondary : .accentColor)
                 }
-                .buttonStyle(PlainButtonStyle())
-                .disabled(promptText.isEmpty)
-                .keyboardShortcut(.return, modifiers: [])
+            
+            Button(action: {
+                submitPrompt()
+            }) {
+                Image(systemName: "arrow.up.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(promptText.isEmpty ? .secondary : .accentColor)
             }
+            .buttonStyle(PlainButtonStyle())
+            .disabled(promptText.isEmpty)
+            .keyboardShortcut(.return, modifiers: [])
+            .padding(8)
         }
     }
     

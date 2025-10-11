@@ -136,7 +136,10 @@ struct CanvasView: View {
                         guard !isResizingActive else { return }
                         // Cursor-anchored zoom: keep the world point under cursor fixed
                         let oldZoom = viewModel.zoom
-                        let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * value))
+                        // Reduce sensitivity by dampening the zoom factor
+                        let dampingFactor: CGFloat = 0.2
+                        let zoomDelta = (value - 1.0) * dampingFactor
+                        let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * (1.0 + zoomDelta)))
                         let s = mouseLocation
                         // world point under cursor before zoom
                         let wx = (s.x - viewModel.offset.width) / max(oldZoom, 0.001)
