@@ -53,7 +53,7 @@ struct NodeItemWrapper: View {
             }
         }
         .position(
-            x: node.x + Node.nodeWidth / 2,
+            x: node.x + Node.width(for: node.type) / 2,
             y: node.y + (node.isExpanded ? node.height : Node.collapsedHeight) / 2
         )
         .gesture(

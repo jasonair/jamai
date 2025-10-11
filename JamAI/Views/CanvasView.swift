@@ -402,7 +402,8 @@ struct CanvasView: View {
         var map: [UUID: CGRect] = [:]
         for node in viewModel.nodes.values {
             let height = node.isExpanded ? node.height : Node.collapsedHeight
-            map[node.id] = CGRect(x: node.x, y: node.y, width: Node.nodeWidth, height: height)
+            let width = Node.width(for: node.type)
+            map[node.id] = CGRect(x: node.x, y: node.y, width: width, height: height)
         }
         return map
     }

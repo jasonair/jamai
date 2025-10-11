@@ -145,6 +145,7 @@ struct Node: Identifiable, Codable, Equatable {
 // MARK: - Node Display Constants
 extension Node {
     static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
+    static let noteWidth: CGFloat = nodeWidth / 2
     static let collapsedHeight: CGFloat = 120 // Tall enough for title and description
     static let expandedHeight: CGFloat = 400 // Default expanded height
     static let minHeight: CGFloat = 300 // Minimum height when resizing
@@ -152,6 +153,13 @@ extension Node {
     static let padding: CGFloat = 16
     static let cornerRadius: CGFloat = 12
     static let shadowRadius: CGFloat = 8
+    
+    static func width(for type: NodeType) -> CGFloat {
+        switch type {
+        case .note: return noteWidth
+        case .standard: return nodeWidth
+        }
+    }
     
     // Legacy constants for backwards compatibility
     static let collapsedWidth: CGFloat = nodeWidth

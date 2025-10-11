@@ -40,7 +40,7 @@ struct NoteView: View {
                 }
         }
         .padding(12)
-        .frame(width: Node.nodeWidth, height: node.isExpanded ? node.height : Node.collapsedHeight, alignment: .topLeading)
+        .frame(width: Node.width(for: node.type), height: node.isExpanded ? node.height : Node.collapsedHeight, alignment: .topLeading)
         .background(stickyBackground)
         .cornerRadius(Node.cornerRadius)
         .overlay(

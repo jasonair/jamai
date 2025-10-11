@@ -56,7 +56,7 @@ class CanvasViewModel: ObservableObject {
 
     func createNoteFromSelection(parentId: UUID, selectedText: String) {
         guard let parent = nodes[parentId] else { return }
-        let noteX = parent.x + Node.nodeWidth + 50
+        let noteX = parent.x + Node.width(for: parent.type) + 50
         let noteY = parent.y + 40
         var note = Node(
             projectId: project.id,
@@ -169,7 +169,7 @@ class CanvasViewModel: ObservableObject {
         guard let parent = nodes[parentId] else { return }
         
         // Calculate position for child node (offset to the right and down)
-        let childX = parent.x + Node.nodeWidth + 50
+        let childX = parent.x + Node.width(for: parent.type) + 50
         let childY = parent.y + 100
         
         // Create branch without inheriting conversation (inheritContext: false)
@@ -186,7 +186,7 @@ class CanvasViewModel: ObservableObject {
         guard let parent = nodes[parentId] else { return }
         
         // Calculate position for child node (offset to the right and down)
-        let childX = parent.x + Node.nodeWidth + 50
+        let childX = parent.x + Node.width(for: parent.type) + 50
         let childY = parent.y + 100
         
         // Create branch without inheriting conversation
