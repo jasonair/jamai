@@ -25,6 +25,8 @@ struct NodeItemWrapper: View {
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: () -> Void
     let onHeightChange: (CGFloat) -> Void
+    let onResizeActiveChanged: (Bool) -> Void
+    @State private var isResizingActive: Bool = false
     
     var body: some View {
         Group {
@@ -52,7 +54,11 @@ struct NodeItemWrapper: View {
                     onExpandSelection: onExpandSelection,
                     onMakeNote: onMakeNote,
                     onJamWithThis: onJamWithThis,
-                    onHeightChange: onHeightChange
+                    onHeightChange: onHeightChange,
+                    onResizeActiveChanged: { active in
+                        isResizingActive = active
+                        onResizeActiveChanged(active)
+                    }
                 )
             }
         }
@@ -62,7 +68,9 @@ struct NodeItemWrapper: View {
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 3)
-                .onChanged(onDragChanged)
+                .onChanged { value in
+                    if !isResizingActive { onDragChanged(value) }
+                }
                 .onEnded { _ in onDragEnded() }
         )
     }

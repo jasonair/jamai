@@ -22,6 +22,7 @@ struct NodeView: View {
     let onMakeNote: (String) -> Void
     let onJamWithThis: (String) -> Void
     let onHeightChange: (CGFloat) -> Void
+    let onResizeActiveChanged: (Bool) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -474,6 +475,7 @@ struct NodeView: View {
                         if !isResizing {
                             isResizing = true
                             resizeStartHeight = node.height
+                            onResizeActiveChanged(true)
                         }
                         let newHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + value.translation.height))
                         var updatedNode = node
@@ -483,6 +485,7 @@ struct NodeView: View {
                     .onEnded { _ in
                         isResizing = false
                         onHeightChange(node.height)
+                        onResizeActiveChanged(false)
                     }
             )
             .onHover { hovering in

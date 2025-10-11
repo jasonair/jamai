@@ -19,6 +19,7 @@ struct CanvasView: View {
     @State private var showDots = true // true for dots, false for grid
     // No live layout frames; we compute from model
     @State private var mouseLocation: CGPoint = .zero
+    @State private var isResizingActive: Bool = false
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -73,6 +74,7 @@ struct CanvasView: View {
             .overlay(
                 MouseTrackingView(position: $mouseLocation, onScroll: { dx, dy in
                     // Pan the canvas with fingers (Figma-style)
+                    guard !isResizingActive else { return }
                     viewModel.offset.width += dx
                     viewModel.offset.height += dy
                     dragOffset = viewModel.offset
@@ -99,7 +101,7 @@ struct CanvasView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 10)
                     .onChanged { value in
-                        if draggedNodeId == nil {
+                        if draggedNodeId == nil && !isResizingActive {
                             viewModel.offset = CGSize(
                                 width: dragOffset.width + value.translation.width,
                                 height: dragOffset.height + value.translation.height
@@ -113,6 +115,7 @@ struct CanvasView: View {
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
+                        guard !isResizingActive else { return }
                         // Cursor-anchored zoom: keep the world point under cursor fixed
                         let oldZoom = viewModel.zoom
                         let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * value))
@@ -327,7 +330,8 @@ struct CanvasView: View {
             onExpandNote: { handleExpandNote(for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
             onDragEnded: { draggedNodeId = nil },
-            onHeightChange: { height in handleHeightChange(height, for: node.id) }
+            onHeightChange: { height in handleHeightChange(height, for: node.id) },
+            onResizeActiveChanged: { active in isResizingActive = active }
         )
     }
     
