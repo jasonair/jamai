@@ -144,22 +144,29 @@ class CanvasViewModel: ObservableObject {
         // Create branch without inheriting conversation
         createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
-        // Generate TLDR summary asynchronously to provide context for the branch
-        Task {
-            await generateTLDRSummary(for: parent.id)
-            
-            // Get the newly created child node
-            guard let childId = self.nodes.values.first(where: { $0.parentId == parentId && $0.conversation.isEmpty })?.id else {
-                return
-            }
-            
-            // Build context-aware prompt for expansion (this won't be shown to user)
-            let expansionPrompt = "Expand on this: \"\(selectedText)\". Provide a short, concise explanation with additional context."
-            
-            // Generate response without adding the prompt to conversation first
-            await MainActor.run {
-                self.generateExpandedResponse(for: childId, prompt: expansionPrompt, selectedText: selectedText)
-            }
+        // Identify the newly created child deterministically (latest child by createdAt)
+        guard let child = self.nodes.values
+            .filter({ $0.parentId == parentId })
+            .sorted(by: { $0.createdAt > $1.createdAt })
+            .first else { return }
+        let childId = child.id
+        
+        // Start tasks in parallel: title generation + TLDR context
+        Task { [weak self] in
+            guard let self = self else { return }
+            await self.autoGenerateTitleFromSelectedText(for: childId, selectedText: selectedText)
+        }
+        Task { [weak self] in
+            guard let self = self else { return }
+            await self.generateTLDRSummary(for: parent.id)
+        }
+        
+        // Build context-aware prompt for expansion (this won't be shown to user)
+        let expansionPrompt = "Expand on this: \"\(selectedText)\". Provide a short, concise explanation with additional context."
+        
+        // Generate response without adding the prompt to conversation first
+        Task { @MainActor [weak self] in
+            self?.generateExpandedResponse(for: childId, prompt: expansionPrompt, selectedText: selectedText)
         }
     }
     
@@ -168,8 +175,7 @@ class CanvasViewModel: ObservableObject {
         
         generatingNodeId = nodeId
         
-        // Store prompt in legacy field but don't add to conversation
-        node.prompt = prompt
+        // Do not store user prompt; expansions keep the conversation clean
         nodes[nodeId] = node
         
         Task {
@@ -215,6 +221,26 @@ class CanvasViewModel: ObservableObject {
                     }
                 )
             }
+        }
+    }
+    
+    private func autoGenerateTitleFromSelectedText(for nodeId: UUID, selectedText: String) async {
+        guard var node = nodes[nodeId] else { return }
+        do {
+            let prompt = "Create a short, clear title (max 40 chars) based only on this text: \"\(selectedText)\". Return only the title."
+            let result = try await geminiClient.generate(
+                prompt: prompt,
+                systemPrompt: "You are a helpful assistant that writes concise, descriptive titles."
+            )
+            let title = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !title.isEmpty {
+                node.title = String(title.prefix(40))
+                node.titleSource = .ai
+                nodes[nodeId] = node
+                try database.saveNode(node)
+            }
+        } catch {
+            // Non-fatal if title generation fails
         }
     }
     
