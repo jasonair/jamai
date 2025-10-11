@@ -125,7 +125,25 @@ class CanvasViewModel: ObservableObject {
             let loadedEdges = try database.loadEdges(projectId: project.id)
             
             nodes = Dictionary(uniqueKeysWithValues: loadedNodes.map { ($0.id, $0) })
-            edges = Dictionary(uniqueKeysWithValues: loadedEdges.map { ($0.id, $0) })
+            
+            // Filter out orphaned edges (edges that reference non-existent nodes)
+            let validEdges = loadedEdges.filter { edge in
+                nodes[edge.sourceId] != nil && nodes[edge.targetId] != nil
+            }
+            edges = Dictionary(uniqueKeysWithValues: validEdges.map { ($0.id, $0) })
+            
+            // Clean up orphaned edges from database
+            let orphanedEdges = loadedEdges.filter { edge in
+                nodes[edge.sourceId] == nil || nodes[edge.targetId] == nil
+            }
+            if !orphanedEdges.isEmpty {
+                let dbActor = self.dbActor
+                Task { [dbActor, orphanedEdges] in
+                    for edge in orphanedEdges {
+                        try? await dbActor.deleteEdge(id: edge.id)
+                    }
+                }
+            }
             
             // Restore canvas view state
             offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)

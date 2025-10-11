@@ -49,7 +49,8 @@ struct EdgeLayer: View {
         path.move(to: start)
         // Control points based on orientation
         if horizontalPreferred {
-            let dx = abs(end.x - start.x) * 0.5
+            // Horizontal routing: control points extend left/right
+            let dx = (end.x - start.x) * 0.5
             let control1 = CGPoint(x: start.x + dx, y: start.y)
             let control2 = CGPoint(x: end.x - dx, y: end.y)
             path.addCurve(to: end, control1: control1, control2: control2)
@@ -57,7 +58,8 @@ struct EdgeLayer: View {
             drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end), color: color)
             return
         } else {
-            let dy = abs(end.y - start.y) * 0.5
+            // Vertical routing: control points extend up/down
+            let dy = (end.y - start.y) * 0.5
             let control1 = CGPoint(x: start.x, y: start.y + dy)
             let control2 = CGPoint(x: end.x, y: end.y - dy)
             path.addCurve(to: end, control1: control1, control2: control2)
@@ -112,14 +114,32 @@ struct EdgeLayer: View {
         let dy = tc.y - sc.y
         if abs(dx) >= abs(dy) {
             // Prefer horizontal routing
-            let start = dx >= 0 ? CGPoint(x: s.maxX, y: sc.y) : CGPoint(x: s.minX, y: sc.y)
-            let end = dx >= 0 ? CGPoint(x: t.minX, y: tc.y) : CGPoint(x: t.maxX, y: tc.y)
-            return (start, end, true)
+            // Wire exits from source's right/left edge and enters target's left/right edge
+            if dx >= 0 {
+                // Target is to the right: exit from source's right, enter target's left
+                let start = CGPoint(x: s.maxX, y: sc.y)
+                let end = CGPoint(x: t.minX, y: tc.y)
+                return (start, end, true)
+            } else {
+                // Target is to the left: exit from source's left, enter target's right
+                let start = CGPoint(x: s.minX, y: sc.y)
+                let end = CGPoint(x: t.maxX, y: tc.y)
+                return (start, end, true)
+            }
         } else {
             // Prefer vertical routing
-            let start = dy >= 0 ? CGPoint(x: sc.x, y: s.maxY) : CGPoint(x: sc.x, y: s.minY)
-            let end = dy >= 0 ? CGPoint(x: tc.x, y: t.minY) : CGPoint(x: tc.x, y: t.maxY)
-            return (start, end, false)
+            // Wire exits from source's top/bottom edge and enters target's bottom/top edge
+            if dy >= 0 {
+                // Target is below: exit from source's bottom, enter target's top
+                let start = CGPoint(x: sc.x, y: s.maxY)
+                let end = CGPoint(x: tc.x, y: t.minY)
+                return (start, end, false)
+            } else {
+                // Target is above: exit from source's top, enter target's bottom
+                let start = CGPoint(x: sc.x, y: s.minY)
+                let end = CGPoint(x: tc.x, y: t.maxY)
+                return (start, end, false)
+            }
         }
     }
 }
