@@ -29,6 +29,7 @@ struct Project: Identifiable, Codable, Sendable {
     var canvasOffsetX: Double
     var canvasOffsetY: Double
     var canvasZoom: Double
+    var showDots: Bool
     
     nonisolated init(
         id: UUID = UUID(),
@@ -42,7 +43,8 @@ struct Project: Identifiable, Codable, Sendable {
         appearanceMode: AppearanceMode = .system,
         canvasOffsetX: Double = 0,
         canvasOffsetY: Double = 0,
-        canvasZoom: Double = 1.0
+        canvasZoom: Double = 1.0,
+        showDots: Bool = true
     ) {
         self.id = id
         self.name = name
@@ -56,6 +58,7 @@ struct Project: Identifiable, Codable, Sendable {
         self.canvasOffsetX = canvasOffsetX
         self.canvasOffsetY = canvasOffsetY
         self.canvasZoom = canvasZoom
+        self.showDots = showDots
         self.createdAt = Date()
         self.updatedAt = Date()
     }

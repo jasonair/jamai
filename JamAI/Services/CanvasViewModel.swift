@@ -24,6 +24,7 @@ class CanvasViewModel: ObservableObject {
     // Canvas state
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
+    @Published var showDots: Bool = true
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     
     // Services
@@ -129,6 +130,7 @@ class CanvasViewModel: ObservableObject {
             // Restore canvas view state
             offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)
             zoom = project.canvasZoom
+            showDots = project.showDots
         } catch {
             errorMessage = "Failed to load project: \(error.localizedDescription)"
         }
@@ -877,6 +879,7 @@ class CanvasViewModel: ObservableObject {
         project.canvasOffsetX = offset.width
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
+        project.showDots = showDots
         
         let snapshotProject = project
         let snapshotNodes = Array(nodes.values)
@@ -903,6 +906,7 @@ class CanvasViewModel: ObservableObject {
         project.canvasOffsetX = offset.width
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
+        project.showDots = showDots
         let snapshotProject = project
         let snapshotNodes = Array(nodes.values)
         let snapshotEdges = Array(edges.values)

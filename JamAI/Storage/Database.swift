@@ -39,6 +39,7 @@ final class Database: Sendable {
                 t.column("canvas_offset_x", .double).notNull().defaults(to: 0)
                 t.column("canvas_offset_y", .double).notNull().defaults(to: 0)
                 t.column("canvas_zoom", .double).notNull().defaults(to: 1.0)
+                t.column("show_dots", .boolean).notNull().defaults(to: true)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -89,6 +90,13 @@ final class Database: Sendable {
                     t.add(column: "canvas_offset_x", .double).notNull().defaults(to: 0)
                     t.add(column: "canvas_offset_y", .double).notNull().defaults(to: 0)
                     t.add(column: "canvas_zoom", .double).notNull().defaults(to: 1.0)
+                }
+            }
+            
+            // Add show_dots column if it doesn't exist (migration)
+            if try db.columns(in: "projects").first(where: { $0.name == "show_dots" }) == nil {
+                try db.alter(table: "projects") { t in
+                    t.add(column: "show_dots", .boolean).notNull().defaults(to: true)
                 }
             }
             
@@ -157,8 +165,8 @@ final class Database: Sendable {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO projects 
-                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, canvas_offset_x, canvas_offset_y, canvas_zoom, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, canvas_offset_x, canvas_offset_y, canvas_zoom, show_dots, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     project.id.uuidString,
@@ -173,6 +181,7 @@ final class Database: Sendable {
                     project.canvasOffsetX,
                     project.canvasOffsetY,
                     project.canvasZoom,
+                    project.showDots,
                     project.createdAt,
                     project.updatedAt
                 ]
@@ -200,7 +209,8 @@ final class Database: Sendable {
                 appearanceMode: AppearanceMode(rawValue: row["appearance_mode"]) ?? .system,
                 canvasOffsetX: row["canvas_offset_x"] ?? 0,
                 canvasOffsetY: row["canvas_offset_y"] ?? 0,
-                canvasZoom: row["canvas_zoom"] ?? 1.0
+                canvasZoom: row["canvas_zoom"] ?? 1.0,
+                showDots: row["show_dots"] ?? true
             )
         }
     }
@@ -225,7 +235,8 @@ final class Database: Sendable {
                 appearanceMode: AppearanceMode(rawValue: row["appearance_mode"]) ?? .system,
                 canvasOffsetX: row["canvas_offset_x"] ?? 0,
                 canvasOffsetY: row["canvas_offset_y"] ?? 0,
-                canvasZoom: row["canvas_zoom"] ?? 1.0
+                canvasZoom: row["canvas_zoom"] ?? 1.0,
+                showDots: row["show_dots"] ?? true
             )
         }
     }
