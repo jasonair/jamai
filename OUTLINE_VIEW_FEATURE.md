@@ -31,6 +31,15 @@ Added a left floating pane that displays a hierarchical outline of all canvas no
 - Each child level is indented by 16pt
 - Chevron icons (▶/▼) for expanding/collapsing nodes with children
 
+#### Node Reordering (Drag & Drop)
+- **Root-level nodes can be dragged and dropped** to reorder them in the outline
+- Visual drag handle indicator (three horizontal lines) appears on root-level items
+- Drop target shows blue highlight when hovering during drag operation
+- **Sub-bullets (child nodes) cannot be moved** as they are connected to their parent nodes
+- Display order is persisted using `displayOrder` field in the Node model
+- Nodes without custom order fall back to creation date sorting
+- Smooth reordering updates all affected nodes' display order automatically
+
 #### Visual Feedback
 - Selected node is highlighted with accent color background
 - Hovered items show a subtle gray background
@@ -79,10 +88,12 @@ Added a left floating pane that displays a hierarchical outline of all canvas no
 3. Click any node to navigate to it on the canvas (auto-zooms to 100% and centers)
 4. Expand/collapse nodes with children using the chevron button
 5. Hover over items to see subtle highlighting
+6. **Drag and drop root-level nodes** to reorder them for prioritization (look for the three-line drag handle)
 
 ## Future Enhancements
 - Keyboard shortcut for toggling outline (e.g., Cmd+\)
-- Drag-and-drop nodes within outline to change hierarchy
+- Keyboard shortcuts for moving nodes up/down (e.g., Cmd+Up/Down)
+- Drag-and-drop to change hierarchy (reparent nodes)
 - Search/filter nodes in outline
 - Context menu for outline items (delete, duplicate, etc.)
 - Sync scroll position to selected node

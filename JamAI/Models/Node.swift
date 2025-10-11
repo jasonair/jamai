@@ -53,6 +53,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     // Metadata
     var createdAt: Date
     var updatedAt: Date
+    var displayOrder: Int? // Order for display in outline view (nil = use createdAt)
     
     nonisolated init(
         id: UUID = UUID(),
@@ -74,7 +75,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         isExpanded: Bool = true,
         isFrozenContext: Bool = false,
         color: String = "none",
-        type: NodeType = .standard
+        type: NodeType = .standard,
+        displayOrder: Int? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -96,6 +98,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.isFrozenContext = isFrozenContext
         self.color = color
         self.type = type
+        self.displayOrder = displayOrder
         self.createdAt = Date()
         self.updatedAt = Date()
     }

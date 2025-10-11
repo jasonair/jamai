@@ -918,6 +918,48 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Outline Ordering
+    
+    func reorderNode(_ nodeId: UUID, from sourceIndex: Int, to destinationIndex: Int, in nodeIds: [UUID]) {
+        guard sourceIndex != destinationIndex else { return }
+        
+        // Reassign display orders for all affected nodes
+        var updates: [(UUID, Int)] = []
+        
+        if sourceIndex < destinationIndex {
+            // Moving down: shift items between source and destination up
+            for i in 0..<nodeIds.count {
+                let id = nodeIds[i]
+                if i == sourceIndex {
+                    updates.append((id, destinationIndex))
+                } else if i > sourceIndex && i <= destinationIndex {
+                    updates.append((id, i - 1))
+                } else {
+                    updates.append((id, i))
+                }
+            }
+        } else {
+            // Moving up: shift items between destination and source down
+            for i in 0..<nodeIds.count {
+                let id = nodeIds[i]
+                if i == sourceIndex {
+                    updates.append((id, destinationIndex))
+                } else if i >= destinationIndex && i < sourceIndex {
+                    updates.append((id, i + 1))
+                } else {
+                    updates.append((id, i))
+                }
+            }
+        }
+        
+        // Apply all updates
+        for (id, newOrder) in updates {
+            guard var node = nodes[id] else { continue }
+            node.displayOrder = newOrder
+            updateNode(node)
+        }
+    }
+    
     // MARK: - Auto-save
     
     private func setupAutosave() {

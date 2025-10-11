@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct OutlineView: View {
     @ObservedObject var viewModel: CanvasViewModel
@@ -13,6 +14,8 @@ struct OutlineView: View {
     @Environment(\.colorScheme) var colorScheme
     
     @State private var hoveredNodeId: UUID?
+    @State private var draggedNodeId: UUID?
+    @State private var dropTargetIndex: Int?
     
     // Hierarchical node structure for the outline
     fileprivate struct OutlineNode: Identifiable {
@@ -41,13 +44,34 @@ struct OutlineView: View {
             // Outline content
             ScrollView {
                 VStack(alignment: .leading, spacing: 2) {
-                    ForEach(buildOutlineTree()) { outlineNode in
+                    let outlineTree = buildOutlineTree()
+                    ForEach(Array(outlineTree.enumerated()), id: \.element.id) { index, outlineNode in
                         OutlineItemView(
                             outlineNode: outlineNode,
                             selectedNodeId: viewModel.selectedNodeId,
                             hoveredNodeId: $hoveredNodeId,
-                            onNavigate: { navigateToNode($0) }
+                            onNavigate: { navigateToNode($0) },
+                            isDraggable: true,
+                            isDropTarget: dropTargetIndex == index
                         )
+                        .onDrag {
+                            draggedNodeId = outlineNode.id
+                            let provider = NSItemProvider()
+                            provider.suggestedName = outlineNode.node.title.isEmpty ? "Untitled" : outlineNode.node.title
+                            provider.registerDataRepresentation(forTypeIdentifier: UTType.text.identifier, visibility: .all) { completion in
+                                let data = outlineNode.id.uuidString.data(using: .utf8) ?? Data()
+                                completion(data, nil)
+                                return nil
+                            }
+                            return provider
+                        }
+                        .onDrop(of: [.text], delegate: DropViewDelegate(
+                            destinationIndex: index,
+                            outlineNodes: outlineTree.map { $0.node },
+                            draggedNodeId: $draggedNodeId,
+                            dropTargetIndex: $dropTargetIndex,
+                            viewModel: viewModel
+                        ))
                     }
                     
                     if viewModel.nodes.isEmpty {
@@ -58,6 +82,7 @@ struct OutlineView: View {
                     }
                 }
                 .padding(.vertical, 8)
+                .padding(.horizontal, 8)
             }
         }
         .frame(width: 280)
@@ -75,12 +100,40 @@ struct OutlineView: View {
     
     // MARK: - Outline Tree Building
     
+    private func getRootNodeIds() -> [UUID] {
+        let rootNodes = viewModel.nodes.values.filter { node in
+            node.parentId == nil || viewModel.nodes[node.parentId!] == nil
+        }
+        .sorted { node1, node2 in
+            // Sort by displayOrder if both have it, otherwise by createdAt
+            if let order1 = node1.displayOrder, let order2 = node2.displayOrder {
+                return order1 < order2
+            } else if node1.displayOrder != nil {
+                return true
+            } else if node2.displayOrder != nil {
+                return false
+            }
+            return node1.createdAt < node2.createdAt
+        }
+        return rootNodes.map { $0.id }
+    }
+    
     private func buildOutlineTree() -> [OutlineNode] {
         // Find root nodes (nodes without parents or with non-existent parents)
         let rootNodes = viewModel.nodes.values.filter { node in
             node.parentId == nil || viewModel.nodes[node.parentId!] == nil
         }
-        .sorted { $0.createdAt < $1.createdAt }
+        .sorted { node1, node2 in
+            // Sort by displayOrder if both have it, otherwise by createdAt
+            if let order1 = node1.displayOrder, let order2 = node2.displayOrder {
+                return order1 < order2
+            } else if node1.displayOrder != nil {
+                return true
+            } else if node2.displayOrder != nil {
+                return false
+            }
+            return node1.createdAt < node2.createdAt
+        }
         
         return rootNodes.map { buildOutlineNode(from: $0, level: 0) }
     }
@@ -123,6 +176,8 @@ private struct OutlineItemView: View {
     let selectedNodeId: UUID?
     @Binding var hoveredNodeId: UUID?
     let onNavigate: (UUID) -> Void
+    let isDraggable: Bool
+    let isDropTarget: Bool
     
     @State private var isExpanded: Bool = true
     @Environment(\.colorScheme) var colorScheme
@@ -175,6 +230,13 @@ private struct OutlineItemView: View {
                     .foregroundColor(isSelected ? .white : .primary)
                 
                 Spacer()
+                
+                // Drag indicator for root-level draggable items
+                if isDraggable && outlineNode.level == 0 {
+                    Image(systemName: "line.3.horizontal")
+                        .font(.system(size: 10))
+                        .foregroundColor(.secondary.opacity(0.5))
+                }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
@@ -188,14 +250,16 @@ private struct OutlineItemView: View {
                 hoveredNodeId = hovering ? outlineNode.id : nil
             }
             
-            // Children (recursive)
+            // Children (recursive) - not draggable as they're connected
             if isExpanded {
                 ForEach(outlineNode.children) { child in
                     OutlineItemView(
                         outlineNode: child,
                         selectedNodeId: selectedNodeId,
                         hoveredNodeId: $hoveredNodeId,
-                        onNavigate: onNavigate
+                        onNavigate: onNavigate,
+                        isDraggable: false,
+                        isDropTarget: false
                     )
                 }
             }
@@ -224,10 +288,55 @@ private struct OutlineItemView: View {
     private var itemBackground: some View {
         if isSelected {
             Color.accentColor
+        } else if isDropTarget {
+            Color.blue.opacity(0.2)
         } else if isHovered {
             Color.gray.opacity(colorScheme == .dark ? 0.2 : 0.1)
         } else {
             Color.clear
         }
+    }
+}
+
+// MARK: - Drop Delegate
+
+private struct DropViewDelegate: DropDelegate {
+    let destinationIndex: Int
+    let outlineNodes: [Node]
+    @Binding var draggedNodeId: UUID?
+    @Binding var dropTargetIndex: Int?
+    let viewModel: CanvasViewModel
+    
+    func dropEntered(info: DropInfo) {
+        dropTargetIndex = destinationIndex
+    }
+    
+    func dropExited(info: DropInfo) {
+        dropTargetIndex = nil
+    }
+    
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        // Return move operation to prevent the plus icon (copy indicator)
+        return DropProposal(operation: .move)
+    }
+    
+    func performDrop(info: DropInfo) -> Bool {
+        defer {
+            draggedNodeId = nil
+            dropTargetIndex = nil
+        }
+        
+        guard let draggedId = draggedNodeId else { return false }
+        guard let sourceIndex = outlineNodes.firstIndex(where: { $0.id == draggedId }) else { return false }
+        
+        // Don't allow dropping on self
+        if sourceIndex == destinationIndex {
+            return false
+        }
+        
+        // Reorder nodes
+        viewModel.reorderNode(draggedId, from: sourceIndex, to: destinationIndex, in: outlineNodes.map { $0.id })
+        
+        return true
     }
 }
