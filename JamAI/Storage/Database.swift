@@ -8,8 +8,9 @@
 import Foundation
 import GRDB
 
-class Database {
-    private var dbQueue: DatabaseQueue?
+final class Database: Sendable {
+    // GRDB's DatabaseQueue is thread-safe, so we can safely use it across actors
+    nonisolated(unsafe) private var dbQueue: DatabaseQueue?
     
     init() {}
     
@@ -149,7 +150,7 @@ class Database {
     
     // MARK: - Projects
     
-    func saveProject(_ project: Project) throws {
+    nonisolated func saveProject(_ project: Project) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -179,7 +180,7 @@ class Database {
         }
     }
     
-    func loadProject(id: UUID) throws -> Project? {
+    nonisolated func loadProject(id: UUID) throws -> Project? {
         guard let dbQueue = dbQueue else { return nil }
         
         return try dbQueue.read { db in
@@ -204,7 +205,7 @@ class Database {
         }
     }
     
-    func loadAnyProject() throws -> Project? {
+    nonisolated func loadAnyProject() throws -> Project? {
         guard let dbQueue = dbQueue else { return nil }
         
         return try dbQueue.read { db in
@@ -231,7 +232,7 @@ class Database {
     
     // MARK: - Nodes
     
-    func saveNode(_ node: Node) throws {
+    nonisolated func saveNode(_ node: Node) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -270,7 +271,7 @@ class Database {
         }
     }
     
-    func loadNodes(projectId: UUID) throws -> [Node] {
+    nonisolated func loadNodes(projectId: UUID) throws -> [Node] {
         guard let dbQueue = dbQueue else { return [] }
         
         return try dbQueue.read { db in
@@ -303,7 +304,7 @@ class Database {
         }
     }
     
-    func deleteNode(id: UUID) throws {
+    nonisolated func deleteNode(id: UUID) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -313,7 +314,7 @@ class Database {
     
     // MARK: - Edges
     
-    func saveEdge(_ edge: Edge) throws {
+    nonisolated func saveEdge(_ edge: Edge) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -335,7 +336,7 @@ class Database {
         }
     }
     
-    func loadEdges(projectId: UUID) throws -> [Edge] {
+    nonisolated func loadEdges(projectId: UUID) throws -> [Edge] {
         guard let dbQueue = dbQueue else { return [] }
         
         return try dbQueue.read { db in
@@ -353,7 +354,7 @@ class Database {
         }
     }
     
-    func deleteEdge(id: UUID) throws {
+    nonisolated func deleteEdge(id: UUID) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -363,7 +364,7 @@ class Database {
     
     // MARK: - RAG
     
-    func saveRAGDocument(_ document: RAGDocument) throws {
+    nonisolated func saveRAGDocument(_ document: RAGDocument) throws {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
@@ -402,7 +403,7 @@ class Database {
         }
     }
     
-    func loadRAGChunks(projectId: UUID) throws -> [RAGChunk] {
+    nonisolated func loadRAGChunks(projectId: UUID) throws -> [RAGChunk] {
         guard let dbQueue = dbQueue else { return [] }
         
         return try dbQueue.read { db in

@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-struct Project: Identifiable, Codable {
+struct Project: Identifiable, Codable, Sendable {
     let id: UUID
     var name: String
     var systemPrompt: String
@@ -30,7 +30,7 @@ struct Project: Identifiable, Codable {
     var canvasOffsetY: Double
     var canvasZoom: Double
     
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         name: String,
         systemPrompt: String = "You are a helpful AI assistant.",
@@ -61,7 +61,7 @@ struct Project: Identifiable, Codable {
     }
 }
 
-enum AppearanceMode: String, Codable, CaseIterable {
+enum AppearanceMode: String, Codable, CaseIterable, Sendable {
     case system = "System Auto"
     case light = "Light"
     case dark = "Dark"
@@ -76,7 +76,7 @@ enum AppearanceMode: String, Codable, CaseIterable {
 }
 
 // MARK: - RAG Document
-struct RAGDocument: Identifiable, Codable {
+struct RAGDocument: Identifiable, Codable, Sendable {
     let id: UUID
     var projectId: UUID
     var filename: String
@@ -84,7 +84,7 @@ struct RAGDocument: Identifiable, Codable {
     var chunks: [RAGChunk]
     var createdAt: Date
     
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         projectId: UUID,
         filename: String,
@@ -100,14 +100,14 @@ struct RAGDocument: Identifiable, Codable {
     }
 }
 
-struct RAGChunk: Identifiable, Codable {
+struct RAGChunk: Identifiable, Codable, Sendable {
     let id: UUID
     var documentId: UUID
     var content: String
     var embeddingJSON: String // JSON array of floats
     var chunkIndex: Int
     
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         documentId: UUID,
         content: String,

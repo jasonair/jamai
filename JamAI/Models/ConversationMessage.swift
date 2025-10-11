@@ -7,13 +7,13 @@
 
 import Foundation
 
-struct ConversationMessage: Identifiable, Codable, Equatable {
+struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let role: MessageRole
     let content: String
     let timestamp: Date
     
-    init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = Date()) {
+    nonisolated init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = Date()) {
         self.id = id
         self.role = role
         self.content = content
@@ -21,7 +21,7 @@ struct ConversationMessage: Identifiable, Codable, Equatable {
     }
 }
 
-enum MessageRole: String, Codable {
+enum MessageRole: String, Codable, Sendable {
     case user
     case assistant
 }

@@ -8,17 +8,17 @@
 import Foundation
 import SwiftUI
 
-enum TextSource: String, Codable {
+enum TextSource: String, Codable, Sendable {
     case user
     case ai
 }
 
-enum NodeType: String, Codable {
+enum NodeType: String, Codable, Sendable {
     case standard
     case note
 }
 
-struct Node: Identifiable, Codable, Equatable {
+struct Node: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var projectId: UUID
     var parentId: UUID?
@@ -54,7 +54,7 @@ struct Node: Identifiable, Codable, Equatable {
     var createdAt: Date
     var updatedAt: Date
     
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         projectId: UUID,
         parentId: UUID? = nil,
@@ -144,17 +144,17 @@ struct Node: Identifiable, Codable, Equatable {
 
 // MARK: - Node Display Constants
 extension Node {
-    static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
-    static let noteWidth: CGFloat = nodeWidth / 2
-    static let collapsedHeight: CGFloat = 120 // Tall enough for title and description
-    static let expandedHeight: CGFloat = 400 // Default expanded height
-    static let minHeight: CGFloat = 300 // Minimum height when resizing
-    static let maxHeight: CGFloat = 800 // Maximum height when resizing
-    static let padding: CGFloat = 16
-    static let cornerRadius: CGFloat = 12
-    static let shadowRadius: CGFloat = 8
+    nonisolated static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
+    nonisolated static let noteWidth: CGFloat = nodeWidth / 2
+    nonisolated static let collapsedHeight: CGFloat = 120 // Tall enough for title and description
+    nonisolated static let expandedHeight: CGFloat = 400 // Default expanded height
+    nonisolated static let minHeight: CGFloat = 300 // Minimum height when resizing
+    nonisolated static let maxHeight: CGFloat = 800 // Maximum height when resizing
+    nonisolated static let padding: CGFloat = 16
+    nonisolated static let cornerRadius: CGFloat = 12
+    nonisolated static let shadowRadius: CGFloat = 8
     
-    static func width(for type: NodeType) -> CGFloat {
+    nonisolated static func width(for type: NodeType) -> CGFloat {
         switch type {
         case .note: return noteWidth
         case .standard: return nodeWidth
@@ -162,6 +162,6 @@ extension Node {
     }
     
     // Legacy constants for backwards compatibility
-    static let collapsedWidth: CGFloat = nodeWidth
-    static let expandedWidth: CGFloat = nodeWidth
+    nonisolated static let collapsedWidth: CGFloat = nodeWidth
+    nonisolated static let expandedWidth: CGFloat = nodeWidth
 }

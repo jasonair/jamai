@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-struct Edge: Identifiable, Codable, Equatable {
+struct Edge: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var projectId: UUID
     var sourceId: UUID
@@ -16,7 +16,7 @@ struct Edge: Identifiable, Codable, Equatable {
     var color: String?
     var createdAt: Date
     
-    init(
+    nonisolated init(
         id: UUID = UUID(),
         projectId: UUID,
         sourceId: UUID,
