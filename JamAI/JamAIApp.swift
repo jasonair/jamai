@@ -235,28 +235,34 @@ class AppState: ObservableObject {
     }
 
     func closeProject() {
-        // Save only if we have valid state
-        if let project = project, let url = currentFileURL {
-            do {
-                // Let DocumentManager handle the database connection to avoid path mismatches
-                try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: nil)
-                viewModel?.save()
-            } catch {
-                // Log but don't block close
-                print("Warning: Failed to save on close: \(error.localizedDescription)")
+        Task { @MainActor [weak self] in
+            guard let self = self else { return }
+            // Save only if we have valid state
+            if let project = self.project, let url = self.currentFileURL {
+                do {
+                    // Let DocumentManager handle the database connection to avoid path mismatches
+                    try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: self.database)
+                    // Ensure all pending async DB writes complete before releasing permissions
+                    if let vm = self.viewModel {
+                        await vm.saveAndWait()
+                    }
+                } catch {
+                    // Log but don't block close
+                    print("Warning: Failed to save on close: \(error.localizedDescription)")
+                }
             }
+            
+            // Stop security-scoped access AFTER all writes complete
+            if self.isAccessingSecurityScopedResource, let url = self.currentFileURL {
+                url.stopAccessingSecurityScopedResource()
+                self.isAccessingSecurityScopedResource = false
+            }
+            
+            self.viewModel = nil
+            self.project = nil
+            self.currentFileURL = nil
+            self.database = nil
         }
-        
-        // Stop security-scoped access
-        if isAccessingSecurityScopedResource, let url = currentFileURL {
-            url.stopAccessingSecurityScopedResource()
-            isAccessingSecurityScopedResource = false
-        }
-        
-        viewModel = nil
-        project = nil
-        currentFileURL = nil
-        database = nil
     }
     
     func openProject(url: URL) {
@@ -311,7 +317,7 @@ class AppState: ObservableObject {
         do {
             // Security-scoped access is already active from openProject
             // Let DocumentManager handle the database connection to avoid path mismatches
-            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: nil)
+            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: self.database)
             viewModel?.save()
         } catch {
             showError("Failed to save project: \(error.localizedDescription)")

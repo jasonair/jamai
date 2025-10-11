@@ -899,6 +899,39 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    func saveAndWait() async {
+        // Update project's canvas state before saving
+        project.canvasOffsetX = offset.width
+        project.canvasOffsetY = offset.height
+        project.canvasZoom = zoom
+        
+        // Snapshot current state
+        let snapshotProject = project
+        let snapshotNodes = Array(nodes.values)
+        let snapshotEdges = Array(edges.values)
+        
+        // Capture and clear pending debounced writes
+        let nodeIds = pendingNodeWrites
+        let edgeIds = pendingEdgeWrites
+        pendingNodeWrites.removeAll()
+        pendingEdgeWrites.removeAll()
+        let nodesToSave = nodeIds.compactMap { nodes[$0] }
+        let edgesToSave = edgeIds.compactMap { edges[$0] }
+        
+        let dbActor = self.dbActor
+        do {
+            try await dbActor.saveProject(snapshotProject)
+            // Ensure pending items are flushed first
+            for node in nodesToSave { try await dbActor.saveNode(node) }
+            for edge in edgesToSave { try await dbActor.saveEdge(edge) }
+            // Then persist full snapshots
+            for node in snapshotNodes { try await dbActor.saveNode(node) }
+            for edge in snapshotEdges { try await dbActor.saveEdge(edge) }
+        } catch {
+            self.errorMessage = "Save failed: \(error.localizedDescription)"
+        }
+    }
+    
     // MARK: - Debounced Writes
     
     private func scheduleDebouncedWrite(nodeId: UUID) {
