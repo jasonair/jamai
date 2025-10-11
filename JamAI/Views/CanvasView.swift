@@ -39,15 +39,19 @@ struct CanvasView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 
                 // Full-screen edges overlay (renders in screen coords)
-                EdgeLayer(
-                    edges: edgesArray,
-                    frames: nodeFrames,
-                    zoom: viewModel.zoom,
-                    offset: viewModel.offset
-                )
-                .id("edges-\(viewModel.positionsVersion)")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
+                // Hide edges during navigation to prevent visual glitches
+                if !viewModel.isNavigating {
+                    EdgeLayer(
+                        edges: edgesArray,
+                        frames: nodeFrames,
+                        zoom: viewModel.zoom,
+                        offset: viewModel.offset
+                    )
+                    .id("edges-\(viewModel.positionsVersion)")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+                }
                 
                 // World container: edges + nodes share the same transform
                 WorldLayerView(
@@ -159,6 +163,12 @@ struct CanvasView: View {
             dragOffset = viewModel.offset
             lastZoom = viewModel.zoom
         }
+        .onChange(of: viewModel.zoom) { newZoom in
+            lastZoom = newZoom
+        }
+        .onChange(of: viewModel.offset) { newOffset in
+            dragOffset = newOffset
+        }
     }
     
     // MARK: - Subviews
@@ -173,10 +183,11 @@ struct CanvasView: View {
                         showOutline.toggle()
                     }
                 }) {
-                    Image(systemName: showOutline ? "sidebar.left" : "sidebar.left.slash")
+                    Image(systemName: showOutline ? "sidebar.left" : "sidebar.left")
                         .foregroundColor(showOutline ? .accentColor : .secondary)
                 }
                 .help("Toggle Outline")
+                .buttonStyle(PlainButtonStyle())
                 
                 Divider()
                     .frame(height: 20)

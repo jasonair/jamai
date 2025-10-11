@@ -62,9 +62,15 @@ struct OutlineView: View {
         }
         .frame(width: 280)
         .frame(maxHeight: viewportSize.height - 120)
-        .background(panelBackground)
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.15), radius: 8, x: 2, y: 0)
+        .background(
+            panelBackground.opacity(0.88)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 2, y: 0)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+        )
     }
     
     // MARK: - Outline Tree Building

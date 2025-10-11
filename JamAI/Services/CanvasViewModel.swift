@@ -26,6 +26,7 @@ class CanvasViewModel: ObservableObject {
     @Published var zoom: CGFloat = Config.defaultZoom
     @Published var showDots: Bool = true
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
+    @Published var isNavigating: Bool = false // true during animated navigation
     
     // Services
     let geminiClient: GeminiClient
@@ -886,8 +887,8 @@ class CanvasViewModel: ObservableObject {
         // Select the node
         selectedNodeId = nodeId
         
-        // Set zoom to 100%
-        zoom = 1.0
+        // Mark that we're navigating (disables edge updates during animation)
+        isNavigating = true
         
         // Calculate node center in world coordinates
         let nodeWidth = Node.width(for: node.type)
@@ -895,16 +896,26 @@ class CanvasViewModel: ObservableObject {
         let nodeCenterX = node.x + nodeWidth / 2
         let nodeCenterY = node.y + nodeHeight / 2
         
-        // Calculate offset to center the node in viewport
-        // screen_center = world_center * zoom + offset
-        // offset = screen_center - world_center * zoom
-        offset = CGSize(
-            width: viewportSize.width / 2 - nodeCenterX * zoom,
-            height: viewportSize.height / 2 - nodeCenterY * zoom
+        // Calculate target offset to center the node in viewport
+        let targetZoom: CGFloat = 1.0
+        let targetOffset = CGSize(
+            width: viewportSize.width / 2 - nodeCenterX * targetZoom,
+            height: viewportSize.height / 2 - nodeCenterY * targetZoom
         )
         
-        // Increment positions version to trigger connector refresh
-        positionsVersion &+= 1
+        // Animate the navigation
+        withAnimation(.easeInOut(duration: 0.5)) {
+            zoom = targetZoom
+            offset = targetOffset
+        }
+        
+        // Reset isNavigating and update edges after animation completes
+        // Add small buffer to ensure animation finishes
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s (0.5s animation + 0.05s buffer)
+            isNavigating = false
+            positionsVersion &+= 1
+        }
     }
     
     // MARK: - Auto-save

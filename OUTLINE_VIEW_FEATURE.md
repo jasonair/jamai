@@ -43,7 +43,8 @@ Added a left floating pane that displays a hierarchical outline of all canvas no
   - Zoom canvas to 100%
   - Center the node in viewport
   - Highlight the node
-- Smooth transitions with proper viewport size calculation
+- **Smooth animated transitions** (0.5s easeInOut) when navigating
+- Proper viewport size calculation for accurate centering
 
 #### UI/UX
 - Fixed width: 280pt
@@ -51,7 +52,9 @@ Added a left floating pane that displays a hierarchical outline of all canvas no
 - Scrollable content when nodes exceed available space
 - Toggle button in toolbar (left section, before undo/redo)
 - Smooth slide-in/out animation when toggling
-- Shadow and rounded corners for visual separation
+- **Semi-transparent background** (88% opacity) for subtle see-through effect
+- Subtle border stroke (0.5pt) for visual definition
+- Enhanced shadow for depth (12pt radius)
 - Adapts to light/dark mode
 
 ### 4. Node Display
@@ -66,6 +69,9 @@ Added a left floating pane that displays a hierarchical outline of all canvas no
 - Closure-based navigation callback
 - Sorted by creation date for consistent ordering
 - Handles orphaned nodes (parent doesn't exist) as root nodes
+- **Edge synchronization**: Edges are hidden during navigation animation to prevent visual glitches
+- Navigation state flag (`isNavigating`) controls edge visibility during transitions
+- Edges fade back in smoothly after navigation completes (0.55s total)
 
 ## Usage
 1. Click the sidebar icon in the top-left toolbar to toggle outline visibility
