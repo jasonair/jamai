@@ -878,6 +878,35 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    // MARK: - Navigation
+    
+    func navigateToNode(_ nodeId: UUID, viewportSize: CGSize = CGSize(width: 1200, height: 800)) {
+        guard let node = nodes[nodeId] else { return }
+        
+        // Select the node
+        selectedNodeId = nodeId
+        
+        // Set zoom to 100%
+        zoom = 1.0
+        
+        // Calculate node center in world coordinates
+        let nodeWidth = Node.width(for: node.type)
+        let nodeHeight = node.isExpanded ? node.height : Node.collapsedHeight
+        let nodeCenterX = node.x + nodeWidth / 2
+        let nodeCenterY = node.y + nodeHeight / 2
+        
+        // Calculate offset to center the node in viewport
+        // screen_center = world_center * zoom + offset
+        // offset = screen_center - world_center * zoom
+        offset = CGSize(
+            width: viewportSize.width / 2 - nodeCenterX * zoom,
+            height: viewportSize.height / 2 - nodeCenterY * zoom
+        )
+        
+        // Increment positions version to trigger connector refresh
+        positionsVersion &+= 1
+    }
+    
     // MARK: - Auto-save
     
     private func setupAutosave() {

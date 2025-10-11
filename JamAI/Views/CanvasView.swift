@@ -19,6 +19,7 @@ struct CanvasView: View {
     // No live layout frames; we compute from model
     @State private var mouseLocation: CGPoint = .zero
     @State private var isResizingActive: Bool = false
+    @State private var showOutline: Bool = true
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -66,6 +67,20 @@ struct CanvasView: View {
                         gridToggle
                             .padding(.trailing, 20)
                             .padding(.bottom, 20)
+                    }
+                }
+                
+                // Outline panel overlay (left side)
+                if showOutline {
+                    VStack(alignment: .leading) {
+                        Spacer()
+                            .frame(height: 80)
+                        HStack(alignment: .top, spacing: 0) {
+                            OutlineView(viewModel: viewModel, viewportSize: geometry.size)
+                                .padding(.leading, 20)
+                            Spacer()
+                        }
+                        Spacer()
                     }
                 }
             }
@@ -150,8 +165,22 @@ struct CanvasView: View {
     
     private var toolbar: some View {
         HStack(spacing: 16) {
-            // Left section: Undo/Redo and Zoom controls
+            // Left section: Outline, Undo/Redo and Zoom controls
             HStack(spacing: 16) {
+                // Outline toggle
+                Button(action: { 
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showOutline.toggle()
+                    }
+                }) {
+                    Image(systemName: showOutline ? "sidebar.left" : "sidebar.left.slash")
+                        .foregroundColor(showOutline ? .accentColor : .secondary)
+                }
+                .help("Toggle Outline")
+                
+                Divider()
+                    .frame(height: 20)
+                
                 // Undo/Redo
                 Button(action: { viewModel.undo() }) {
                     Image(systemName: "arrow.uturn.backward")
