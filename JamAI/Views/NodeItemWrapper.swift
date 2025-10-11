@@ -39,6 +39,21 @@ struct NodeItemWrapper: View {
                     onDescriptionEdit: onDescriptionEdit,
                     onTap: onTap
                 )
+            } else if node.type == .text {
+                TextLabelView(
+                    node: $node,
+                    isSelected: isSelected,
+                    onTap: onTap,
+                    onDelete: onDelete,
+                    onDescriptionEdit: onDescriptionEdit
+                )
+            } else if node.type == .shape {
+                ShapeItemView(
+                    node: $node,
+                    isSelected: isSelected,
+                    onTap: onTap,
+                    onDelete: onDelete
+                )
             } else {
                 NodeView(
                     node: $node,
@@ -63,8 +78,8 @@ struct NodeItemWrapper: View {
             }
         }
         .position(
-            x: node.x + Node.width(for: node.type) / 2,
-            y: node.y + (node.isExpanded ? node.height : Node.collapsedHeight) / 2
+            x: node.x + displayWidth / 2,
+            y: node.y + displayHeight / 2
         )
         .simultaneousGesture(
             DragGesture(minimumDistance: 3)
@@ -73,5 +88,28 @@ struct NodeItemWrapper: View {
                 }
                 .onEnded { _ in onDragEnded() }
         )
+    }
+
+    private var displayHeight: CGFloat {
+        switch node.type {
+        case .shape:
+            return node.height
+        case .text:
+            return max(40, node.height)
+        case .note:
+            return node.isExpanded ? node.height : Node.collapsedHeight
+        case .standard:
+            return node.isExpanded ? node.height : Node.collapsedHeight
+        }
+    }
+    
+    private var displayWidth: CGFloat {
+        switch node.type {
+        case .text:
+            // Fixed reasonable width for text
+            return 250
+        default:
+            return Node.width(for: node.type)
+        }
     }
 }

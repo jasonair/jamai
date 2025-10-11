@@ -66,6 +66,10 @@ final class Database: Sendable {
                 t.column("is_frozen_context", .boolean).notNull().defaults(to: false)
                 t.column("color", .text).notNull().defaults(to: "none")
                 t.column("type", .text).notNull().defaults(to: "standard")
+                t.column("font_size", .double).notNull().defaults(to: 16)
+                t.column("is_bold", .boolean).notNull().defaults(to: false)
+                t.column("font_family", .text)
+                t.column("shape_kind", .text)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -110,6 +114,27 @@ final class Database: Sendable {
             if try db.columns(in: "nodes").first(where: { $0.name == "type" }) == nil {
                 try db.alter(table: "nodes") { t in
                     t.add(column: "type", .text).notNull().defaults(to: "standard")
+                }
+            }
+            // Add text/shape formatting columns if they don't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "font_size" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "font_size", .double).notNull().defaults(to: 16)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "is_bold" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "is_bold", .boolean).notNull().defaults(to: false)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "font_family" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "font_family", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "shape_kind" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "shape_kind", .text)
                 }
             }
             
@@ -251,8 +276,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -275,6 +300,10 @@ final class Database: Sendable {
                     node.isFrozenContext,
                     node.color,
                     node.type.rawValue,
+                    node.fontSize,
+                    node.isBold,
+                    node.fontFamily,
+                    node.shapeKind?.rawValue,
                     node.createdAt,
                     node.updatedAt
                 ]
@@ -309,7 +338,11 @@ final class Database: Sendable {
                     isExpanded: row["is_expanded"],
                     isFrozenContext: row["is_frozen_context"],
                     color: row["color"] ?? "none",
-                    type: NodeType(rawValue: row["type"]) ?? .standard
+                    type: NodeType(rawValue: row["type"]) ?? .standard,
+                    fontSize: row["font_size"] ?? 16,
+                    isBold: row["is_bold"] ?? false,
+                    fontFamily: row["font_family"] as String?,
+                    shapeKind: (row["shape_kind"] as String?).flatMap { ShapeKind(rawValue: $0) }
                 )
             }
         }

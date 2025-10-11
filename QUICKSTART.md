@@ -45,6 +45,12 @@ open JamAI.xcodeproj
 - **Type prompt** and press Enter
 - **Watch AI respond** in real-time!
 
+### 8. Add Text Labels
+- **Click Text tool** in bottom dock
+- **Click canvas** to place text
+- **Type your text** (auto-focused)
+- **Press Enter** or click away to finish
+
 ## 🎯 First 5 Minutes
 
 ### Create Your First Thought Map
@@ -66,10 +72,12 @@ open JamAI.xcodeproj
    - Ask follow-up: "What features should it have?"
    - Repeat for different aspects
 
-4. **Navigate**
+4. **### Navigate & Annotate
    - **Drag canvas** to pan
    - **Pinch** to zoom
    - **Select node** to highlight
+   - **Click Text tool** to add labels
+   - **Double-click text** to edit
 
 5. **Save your work**
    - Press **Cmd+S**
@@ -80,6 +88,7 @@ open JamAI.xcodeproj
 
 ### Keyboard Shortcuts
 ```
+# Project
 Cmd+N           New Project
 Cmd+S           Save
 Cmd+Z           Undo
@@ -88,6 +97,9 @@ Cmd+C           Copy Node
 Cmd+V           Paste Node
 Cmd+,           Settings
 Cmd+Shift+E     Export JSON
+
+# Tools
+ESC             Cancel tool / Deselect
 ```
 
 ### Context Settings
@@ -157,7 +169,19 @@ Each branch inherits context from its parent!
 ### Organize Your Canvas
 - **Vertical layout**: Parent → Child flows down
 - **Horizontal layout**: Alternatives side-by-side
-- **Color coding**: Use titles to categorize
+- **Color coding**: Use node colors
+- **Text labels**: Add notes, titles, section headers
+
+### Working with Text Labels
+- **Create**: Click Text tool → Click canvas
+- **Edit**: Double-click any text label
+- **Format**: Select text to show formatting bar
+  - Bold toggle
+  - Font size (8-96pt)
+  - Font family (Default/Serif/Mono)
+  - Color picker
+- **Drag**: Click and drag to reposition
+- **Delete**: Select and click trash icon
 
 ### Context Management
 - **Freeze Context**: Lock specific conversation state

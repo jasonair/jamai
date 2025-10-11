@@ -27,6 +27,7 @@ class CanvasViewModel: ObservableObject {
     @Published var showDots: Bool = true
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
+    @Published var selectedTool: CanvasTool = .select
     
     // Services
     let geminiClient: GeminiClient
@@ -60,52 +61,64 @@ class CanvasViewModel: ObservableObject {
 
     func createNoteFromSelection(parentId: UUID, selectedText: String) {
         guard let parent = nodes[parentId] else { return }
-        let noteX = parent.x + Node.width(for: parent.type) + 50
-        let noteY = parent.y + 40
-        var note = Node(
-            projectId: project.id,
-            parentId: parentId,
-            x: noteX,
-            y: noteY,
-            height: Node.collapsedHeight + 120,
-            title: "Note",
-            titleSource: .user,
-            description: selectedText,
-            descriptionSource: .user,
-            isExpanded: true,
-            isFrozenContext: false,
-            color: "lightYellow",
-            type: .note
-        )
-        var ancestry = parent.ancestry
-        ancestry.append(parentId)
-        note.setAncestry(ancestry)
-        note.systemPromptSnapshot = project.systemPrompt
-        nodes[note.id] = note
-        selectedNodeId = note.id
-        undoManager.record(.createNode(note))
-        let dbActor = self.dbActor
-        Task { [weak self, dbActor, note] in
-            do {
-                try await dbActor.saveNode(note)
-            } catch {
-                await MainActor.run {
-                    self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
+        
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            let taskQoS = qos_class_self()
+            print("🔍 [ViewModel] createNoteFromSelection Task QoS: \(Self.qosName(taskQoS))")
+            
+            let noteX = parent.x + Node.width(for: parent.type) + 50
+            let noteY = parent.y + 40
+            var note = Node(
+                projectId: project.id,
+                parentId: parentId,
+                x: noteX,
+                y: noteY,
+                height: Node.collapsedHeight + 120,
+                title: "Note",
+                titleSource: .user,
+                description: selectedText,
+                descriptionSource: .user,
+                isExpanded: true,
+                isFrozenContext: false,
+                color: "lightYellow",
+                type: .note
+            )
+            var ancestry = parent.ancestry
+            ancestry.append(parentId)
+            note.setAncestry(ancestry)
+            note.systemPromptSnapshot = self.project.systemPrompt
+            
+            self.nodes[note.id] = note
+            self.selectedNodeId = note.id
+            self.undoManager.record(.createNode(note))
+            
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, note] in
+                do {
+                    try await dbActor.saveNode(note)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
+                    }
                 }
             }
-        }
-        // Create edge with parent's color
-        let parentColor = nodes[parentId]?.color
-        let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
-        let edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
-        edges[edge.id] = edge
-        undoManager.record(.createEdge(edge))
-        Task { [weak self, dbActor, edge] in
-            do {
-                try await dbActor.saveEdge(edge)
-            } catch {
-                await MainActor.run {
-                    self?.errorMessage = "Failed to save note edge: \(error.localizedDescription)"
+            
+            // Create edge with parent's color
+            let parentColor = self.nodes[parentId]?.color
+            let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
+            let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
+            self.edges[edge.id] = edge
+            self.undoManager.record(.createEdge(edge))
+            
+            Task { [weak self, dbActor, edge] in
+                do {
+                    try await dbActor.saveEdge(edge)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save note edge: \(error.localizedDescription)"
+                    }
                 }
             }
         }
@@ -158,52 +171,127 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Node Operations
     
     func createNode(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) {
-        var node = Node(
-            projectId: project.id,
-            parentId: parentId,
-            x: position.x,
-            y: position.y
-        )
-        
-        // Set up ancestry and context
-        if let parentId = parentId, let parent = nodes[parentId] {
-            var ancestry = parent.ancestry
-            ancestry.append(parentId)
-            node.setAncestry(ancestry)
-            node.systemPromptSnapshot = project.systemPrompt
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            var node = Node(
+                projectId: self.project.id,
+                parentId: parentId,
+                x: position.x,
+                y: position.y
+            )
             
-            // Don't inherit conversation for branches - just use parent summary as hidden context
-            // This gives a clean slate while maintaining context through the summary
+            // Set up ancestry and context
+            if let parentId = parentId, let parent = self.nodes[parentId] {
+                var ancestry = parent.ancestry
+                ancestry.append(parentId)
+                node.setAncestry(ancestry)
+                node.systemPromptSnapshot = self.project.systemPrompt
+                
+                // Don't inherit conversation for branches - just use parent summary as hidden context
+                // This gives a clean slate while maintaining context through the summary
+                
+                // Create edge to parent with parent's color
+                let parentColor = parent.color != "none" ? parent.color : nil
+                let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
+                self.edges[edge.id] = edge
+                self.undoManager.record(.createEdge(edge))
+                let dbActor = self.dbActor
+                Task { [weak self, dbActor, edge] in
+                    do {
+                        try await dbActor.saveEdge(edge)
+                    } catch {
+                        await MainActor.run {
+                            self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
+                        }
+                    }
+                }
+            }
             
-            // Create edge to parent with parent's color
-            let parentColor = parent.color != "none" ? parent.color : nil
-            let edge = Edge(projectId: project.id, sourceId: parentId, targetId: node.id, color: parentColor)
-            edges[edge.id] = edge
-            undoManager.record(.createEdge(edge))
+            self.nodes[node.id] = node
+            
+            // Auto-select newly created node
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
             let dbActor = self.dbActor
-            Task { [weak self, dbActor, edge] in
+            Task { [weak self, dbActor, node] in
                 do {
-                    try await dbActor.saveEdge(edge)
+                    try await dbActor.saveNode(node)
                 } catch {
                     await MainActor.run {
-                        self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
+                        self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
                     }
                 }
             }
         }
-        
-        nodes[node.id] = node
-        
-        // Auto-select newly created node
-        selectedNodeId = node.id
-        undoManager.record(.createNode(node))
-        let dbActor = self.dbActor
-        Task { [weak self, dbActor, node] in
-            do {
-                try await dbActor.saveNode(node)
-            } catch {
-                await MainActor.run {
-                    self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
+    }
+
+    // MARK: - Annotation Creation
+    func createTextLabel(at position: CGPoint) {
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            let node = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                x: position.x,
+                y: position.y,
+                height: 60,
+                title: "",
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: false,
+                color: "none",
+                type: .text,
+                fontSize: 24,
+                isBold: false,
+                fontFamily: nil,
+                shapeKind: nil
+            )
+            self.nodes[node.id] = node
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do { try await dbActor.saveNode(node) }
+                catch {
+                    await MainActor.run { self?.errorMessage = "Failed to save text: \(error.localizedDescription)" }
+                }
+            }
+        }
+    }
+
+    func createShape(at position: CGPoint, kind: ShapeKind) {
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            let node = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                x: position.x,
+                y: position.y,
+                height: 120,
+                title: "",
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: false,
+                color: "lightGray",
+                type: .shape,
+                fontSize: 16,
+                isBold: false,
+                fontFamily: nil,
+                shapeKind: kind
+            )
+            self.nodes[node.id] = node
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do { try await dbActor.saveNode(node) }
+                catch {
+                    await MainActor.run { self?.errorMessage = "Failed to save shape: \(error.localizedDescription)" }
                 }
             }
         }
@@ -1094,5 +1182,26 @@ class CanvasViewModel: ObservableObject {
         
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
+    }
+    
+    // MARK: - Debugging Helpers
+    
+    private static func qosName(_ qos: qos_class_t) -> String {
+        switch qos {
+        case QOS_CLASS_USER_INTERACTIVE:
+            return "User Interactive"
+        case QOS_CLASS_USER_INITIATED:
+            return "User Initiated"
+        case QOS_CLASS_DEFAULT:
+            return "Default"
+        case QOS_CLASS_UTILITY:
+            return "Utility"
+        case QOS_CLASS_BACKGROUND:
+            return "Background"
+        case QOS_CLASS_UNSPECIFIED:
+            return "Unspecified"
+        default:
+            return "Unknown (\(qos.rawValue))"
+        }
     }
 }

@@ -13,9 +13,17 @@ enum TextSource: String, Codable, Sendable {
     case ai
 }
 
+// MARK: - Shapes
+enum ShapeKind: String, Codable, Sendable {
+    case rectangle
+    case ellipse
+}
+
 enum NodeType: String, Codable, Sendable {
     case standard
     case note
+    case text
+    case shape
 }
 
 struct Node: Identifiable, Codable, Equatable, Sendable {
@@ -49,6 +57,11 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var isFrozenContext: Bool
     var color: String // Node color for organization (e.g., "blue", "red", "none")
     var type: NodeType
+    // Annotation formatting
+    var fontSize: CGFloat
+    var isBold: Bool
+    var fontFamily: String?
+    var shapeKind: ShapeKind?
     
     // Metadata
     var createdAt: Date
@@ -76,6 +89,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         isFrozenContext: Bool = false,
         color: String = "none",
         type: NodeType = .standard,
+        fontSize: CGFloat = 16,
+        isBold: Bool = false,
+        fontFamily: String? = nil,
+        shapeKind: ShapeKind? = nil,
         displayOrder: Int? = nil
     ) {
         self.id = id
@@ -98,6 +115,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.isFrozenContext = isFrozenContext
         self.color = color
         self.type = type
+        self.fontSize = fontSize
+        self.isBold = isBold
+        self.fontFamily = fontFamily
+        self.shapeKind = shapeKind
         self.displayOrder = displayOrder
         self.createdAt = Date()
         self.updatedAt = Date()
@@ -149,6 +170,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
 extension Node {
     nonisolated static let nodeWidth: CGFloat = 400 // Same width for both collapsed and expanded
     nonisolated static let noteWidth: CGFloat = nodeWidth / 2
+    nonisolated static let textWidth: CGFloat = 200
+    nonisolated static let shapeWidth: CGFloat = 160
     nonisolated static let collapsedHeight: CGFloat = 200 // Tall enough for title and full description
     nonisolated static let expandedHeight: CGFloat = 400 // Default expanded height
     nonisolated static let minHeight: CGFloat = 300 // Minimum height when resizing
@@ -160,6 +183,8 @@ extension Node {
     nonisolated static func width(for type: NodeType) -> CGFloat {
         switch type {
         case .note: return noteWidth
+        case .text: return textWidth
+        case .shape: return shapeWidth
         case .standard: return nodeWidth
         }
     }

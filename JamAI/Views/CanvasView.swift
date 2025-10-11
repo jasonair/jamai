@@ -12,11 +12,9 @@ struct CanvasView: View {
     var onCommandClose: (() -> Void)? = nil
     
     @State private var dragOffset: CGSize = .zero
-    @State private var isDragging = false
-    @State private var draggedNodeId: UUID?
-    @State private var dragStartPosition: CGPoint = .zero
     @State private var lastZoom: CGFloat = 1.0
-    // No live layout frames; we compute from model
+    @State private var draggedNodeId: UUID? = nil
+    @State private var dragStartPosition: CGPoint = .zero
     @State private var mouseLocation: CGPoint = .zero
     @State private var isResizingActive: Bool = false
     @State private var showOutline: Bool = true
@@ -28,66 +26,19 @@ struct CanvasView: View {
     private var nodesArray: [Node] { Array(viewModel.nodes.values) }
 
     var body: some View {
+        canvasContent
+    }
+    
+    private var canvasContent: some View {
         GeometryReader { geometry in
-            ZStack {
-                // Background (screen space, world-aligned tiling)
-                WorldBackgroundLayer(
-                    zoom: viewModel.zoom,
-                    offset: viewModel.offset,
-                    showDots: viewModel.showDots
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                
-                // Full-screen edges overlay (renders in screen coords)
-                // Hide edges during navigation to prevent visual glitches
-                if !viewModel.isNavigating {
-                    EdgeLayer(
-                        edges: edgesArray,
-                        frames: nodeFrames,
-                        zoom: viewModel.zoom,
-                        offset: viewModel.offset
-                    )
-                    .id("edges-\(viewModel.positionsVersion)")
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
-                    .transition(.opacity)
-                }
-                
-                // World container: edges + nodes share the same transform
-                WorldLayerView(
-                    nodes: nodesArray,
-                    nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .scaleEffect(viewModel.zoom, anchor: .topLeading)
-                .offset(viewModel.offset)
-                
-                // Toolbar overlay
-                VStack {
-                    toolbar
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        gridToggle
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 20)
-                    }
-                }
-                
-                // Outline panel overlay (left side)
-                if showOutline {
-                    VStack(alignment: .leading) {
-                        Spacer()
-                            .frame(height: 80)
-                        HStack(alignment: .top, spacing: 0) {
-                            OutlineView(viewModel: viewModel, viewportSize: geometry.size)
-                                .padding(.leading, 20)
-                            Spacer()
-                        }
-                        Spacer()
-                    }
-                }
-            }
+            canvasWithInteractions(geometry: geometry)
+        }
+        .canvasKeyboardHandlers(viewModel)
+    }
+    
+    @ViewBuilder
+    private func canvasWithInteractions(geometry: GeometryProxy) -> some View {
+        canvasLayers(geometry: geometry)
             // Track mouse and capture two-finger pan scrolling
             .overlay(
                 MouseTrackingView(position: $mouseLocation, onScroll: { dx, dy in
@@ -106,8 +57,15 @@ struct CanvasView: View {
             .background(canvasBackground)
             .contentShape(Rectangle())
             .onTapGesture {
-                // Tap on background to deselect all nodes
-                viewModel.selectedNodeId = nil
+                // Place annotation if a tool is active; otherwise deselect
+                switch viewModel.selectedTool {
+                case .text:
+                    let canvasPos = screenToCanvas(mouseLocation, in: geometry.size)
+                    viewModel.createTextLabel(at: canvasPos)
+                    viewModel.selectedTool = .select
+                case .select:
+                    viewModel.selectedNodeId = nil
+                }
             }
             .contextMenu {
                 Button("New Node Here") {
@@ -164,20 +122,104 @@ struct CanvasView: View {
                 let canvasPos = screenToCanvas(location, in: geometry.size)
                 viewModel.createNode(at: canvasPos)
             }
-        }
-        .onAppear {
-            dragOffset = viewModel.offset
-            lastZoom = viewModel.zoom
-        }
-        .onChange(of: viewModel.zoom) { oldValue, newValue in
-            lastZoom = newValue
-        }
-        .onChange(of: viewModel.offset) { oldValue, newValue in
-            dragOffset = newValue
-        }
+            .onAppear {
+                dragOffset = viewModel.offset
+                lastZoom = viewModel.zoom
+            }
+            .onChange(of: viewModel.zoom) { oldValue, newValue in
+                lastZoom = newValue
+            }
+            .onChange(of: viewModel.offset) { oldValue, newValue in
+                dragOffset = newValue
+            }
     }
     
     // MARK: - Subviews
+    
+    @ViewBuilder
+    private func canvasLayers(geometry: GeometryProxy) -> some View {
+        ZStack {
+            // Background
+            WorldBackgroundLayer(
+                zoom: viewModel.zoom,
+                offset: viewModel.offset,
+                showDots: viewModel.showDots
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            
+            // Edges
+            if !viewModel.isNavigating {
+                EdgeLayer(
+                    edges: edgesArray,
+                    frames: nodeFrames,
+                    zoom: viewModel.zoom,
+                    offset: viewModel.offset
+                )
+                .id("edges-\(viewModel.positionsVersion)")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+            }
+            
+            // Nodes
+            WorldLayerView(
+                nodes: nodesArray,
+                nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .scaleEffect(viewModel.zoom, anchor: .topLeading)
+            .offset(viewModel.offset)
+            
+            // Toolbar overlay
+            overlayControls
+            
+            // Outline
+            if showOutline {
+                VStack(alignment: .leading) {
+                    Spacer().frame(height: 80)
+                    HStack(alignment: .top, spacing: 0) {
+                        OutlineView(viewModel: viewModel, viewportSize: geometry.size)
+                            .padding(.leading, 20)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+            }
+        }
+    }
+    
+    private var overlayControls: some View {
+        VStack {
+            toolbar
+                .allowsHitTesting(true)
+            Spacer()
+            // Contextual formatting bar for text/shape
+            if let binding = formattingBinding {
+                HStack {
+                    Spacer()
+                    FormattingBarView(node: binding)
+                        .allowsHitTesting(true)
+                    Spacer()
+                }
+                .padding(.bottom, 72)
+            }
+            // Bottom controls
+            HStack {
+                // Bottom center tool dock
+                Spacer()
+                ToolDockView(selectedTool: $viewModel.selectedTool)
+                    .allowsHitTesting(true)
+                    .padding(.bottom, 16)
+                Spacer()
+                // Bottom right grid toggle
+                gridToggle
+                    .allowsHitTesting(true)
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
+            }
+        }
+        .allowsHitTesting(true)
+    }
     
     private var toolbar: some View {
         HStack(spacing: 16) {
@@ -351,6 +393,12 @@ struct CanvasView: View {
             get: { viewModel.nodes[nodeId] ?? Node(projectId: viewModel.project.id) },
             set: { viewModel.updateNode($0) }
         )
+    }
+
+    private var formattingBinding: Binding<Node>? {
+        guard let id = viewModel.selectedNodeId, let node = viewModel.nodes[id] else { return nil }
+        guard node.type == .text else { return nil }
+        return binding(for: id)
     }
 
     private var backgroundLayer: AnyView {
@@ -529,5 +577,18 @@ struct CanvasView: View {
         colorScheme == .dark
             ? Color.white.opacity(0.05)
             : Color.black.opacity(0.05)
+    }
+}
+
+// MARK: - View Extensions
+extension View {
+    @ViewBuilder
+    func canvasKeyboardHandlers(_ viewModel: CanvasViewModel) -> some View {
+        self
+            .onKeyPress(.escape) {
+                viewModel.selectedTool = .select
+                viewModel.selectedNodeId = nil
+                return .handled
+            }
     }
 }
