@@ -129,10 +129,46 @@ class AppState: ObservableObject {
         for data in datas {
             var stale = false
             if let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale) {
-                urls.append(url)
+                // Validate that the file/folder still exists and is accessible
+                if isValidProjectURL(url) {
+                    urls.append(url)
+                }
             }
         }
         self.recentProjects = urls
+        // Save the cleaned list back if items were removed
+        if urls.count != datas.count {
+            saveRecents()
+        }
+    }
+    
+    private func isValidProjectURL(_ url: URL) -> Bool {
+        var accessed = false
+        if url.startAccessingSecurityScopedResource() {
+            accessed = true
+        }
+        defer {
+            if accessed {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        
+        // Check if file exists
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
+            return false
+        }
+        
+        // For .jam packages/directories, check for required files
+        if isDirectory.boolValue || url.pathExtension == Config.jamFileExtension {
+            let baseURL = url.pathExtension == Config.jamFileExtension ? url : url
+            let metadataPath = baseURL.appendingPathComponent("metadata.json").path
+            let databasePath = baseURL.appendingPathComponent("data.db").path
+            return FileManager.default.fileExists(atPath: metadataPath) &&
+                   FileManager.default.fileExists(atPath: databasePath)
+        }
+        
+        return false
     }
     
     private func saveRecents() {
@@ -148,6 +184,15 @@ class AppState: ObservableObject {
         if list.count > 10 { list = Array(list.prefix(10)) }
         recentProjects = list
         saveRecents()
+    }
+    
+    func clearRecentProjects() {
+        recentProjects = []
+        UserDefaults.standard.removeObject(forKey: recentKey)
+    }
+    
+    func refreshRecentProjects() {
+        loadRecents()
     }
     
     func openRecent(url: URL) {

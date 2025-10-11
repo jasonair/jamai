@@ -51,7 +51,7 @@ final class TapThroughView: NSView {
     private func setupMonitors() {
         // Monitor for clicks to activate scrolling
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
-            guard let self = self, let window = self.window else { return event }
+            guard let self = self else { return event }
             
             // Check if event is within our bounds
             let locationInWindow = event.locationInWindow
@@ -86,7 +86,7 @@ final class TapThroughView: NSView {
             guard let self = self else { return event }
             
             // Check if scroll is happening over our bounds
-            guard let window = self.window else { return event }
+            guard self.window != nil else { return event }
             let locationInWindow = event.locationInWindow
             let locationInSelf = self.convert(locationInWindow, from: nil)
             

@@ -122,6 +122,10 @@ struct WelcomeView: View {
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onAppear {
+            // Refresh the recent projects list to ensure only valid projects are shown
+            appState.refreshRecentProjects()
+        }
     }
     
     private func openExistingProject() {
