@@ -19,6 +19,7 @@ struct NodeView: View {
     let onCreateChild: () -> Void
     let onColorChange: (String) -> Void
     let onExpandSelection: (String) -> Void
+    let onMakeNote: (String) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -311,7 +312,7 @@ struct NodeView: View {
                 .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
                 .cornerRadius(8)
                 .overlay(
-                    RightClickExpandOverlay(onExpand: onExpandSelection)
+                    RightClickExpandOverlay(onExpand: onExpandSelection, onMakeNote: onMakeNote)
                 )
         }
     }

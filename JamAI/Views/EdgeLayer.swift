@@ -36,14 +36,15 @@ struct EdgeLayer: View {
                         y: endW.y * zoom + offset.height
                     )
                     
-                    drawBezierCurve(context: context, from: start, to: end, horizontalPreferred: isHorizontal)
+                    let stroke = strokeColor(for: edge)
+                    drawBezierCurve(context: context, from: start, to: end, color: stroke, horizontalPreferred: isHorizontal)
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint, horizontalPreferred: Bool) {
+    private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint, color: Color, horizontalPreferred: Bool) {
         var path = Path()
         path.move(to: start)
         // Control points based on orientation
@@ -52,21 +53,21 @@ struct EdgeLayer: View {
             let control1 = CGPoint(x: start.x + dx, y: start.y)
             let control2 = CGPoint(x: end.x - dx, y: end.y)
             path.addCurve(to: end, control1: control1, control2: control2)
-            context.stroke(path, with: .color(edgeColor), lineWidth: 2.0)
-            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
+            context.stroke(path, with: .color(color), lineWidth: 2.0)
+            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end), color: color)
             return
         } else {
             let dy = abs(end.y - start.y) * 0.5
             let control1 = CGPoint(x: start.x, y: start.y + dy)
             let control2 = CGPoint(x: end.x, y: end.y - dy)
             path.addCurve(to: end, control1: control1, control2: control2)
-            context.stroke(path, with: .color(edgeColor), lineWidth: 2.0)
-            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end))
+            context.stroke(path, with: .color(color), lineWidth: 2.0)
+            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end), color: color)
             return
         }
     }
     
-    private func drawArrowHead(context: GraphicsContext, at point: CGPoint, angle: Double) {
+    private func drawArrowHead(context: GraphicsContext, at point: CGPoint, angle: Double, color: Color) {
         // Fixed screen-space arrow head size
         let arrowSize: CGFloat = 10.0
         
@@ -82,11 +83,7 @@ struct EdgeLayer: View {
             y: point.y - arrowSize * sin(angle + .pi / 6)
         ))
         
-        context.stroke(
-            path,
-            with: .color(edgeColor),
-            lineWidth: 2.0
-        )
+        context.stroke(path, with: .color(color), lineWidth: 2.0)
     }
     
     private func getAngle(from: CGPoint, to: CGPoint) -> Double {
@@ -97,6 +94,13 @@ struct EdgeLayer: View {
         colorScheme == .dark
             ? Color.white.opacity(0.3)
             : Color.black.opacity(0.2)
+    }
+    
+    private func strokeColor(for edge: Edge) -> Color {
+        if let id = edge.color, let c = NodeColor.color(for: id) {
+            return c.color
+        }
+        return edgeColor
     }
 
     // Choose best side ports (left/right/top/bottom) based on relative positions

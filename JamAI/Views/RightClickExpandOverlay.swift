@@ -11,21 +11,25 @@ import AppKit
 
 struct RightClickExpandOverlay: NSViewRepresentable {
     let onExpand: (String) -> Void
+    let onMakeNote: (String) -> Void
     
     func makeNSView(context: Context) -> RightClickMonitorView {
         let view = RightClickMonitorView()
         view.onExpand = onExpand
+        view.onMakeNote = onMakeNote
         view.wantsLayer = false
         return view
     }
     
     func updateNSView(_ nsView: RightClickMonitorView, context: Context) {
         nsView.onExpand = onExpand
+        nsView.onMakeNote = onMakeNote
     }
 }
 
 final class RightClickMonitorView: NSView {
     var onExpand: ((String) -> Void)?
+    var onMakeNote: ((String) -> Void)?
     private var eventMonitor: Any?
     
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -59,10 +63,14 @@ final class RightClickMonitorView: NSView {
             if let text = selectedText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
                 if event.type == .rightMouseDown {
                     let menu = NSMenu()
-                    let item = NSMenuItem(title: "Expand on Selection", action: #selector(self.handleExpand(_:)), keyEquivalent: "")
-                    item.target = self
-                    item.representedObject = text
-                    menu.addItem(item)
+                    let expandItem = NSMenuItem(title: "Expand on Selection", action: #selector(self.handleExpand(_:)), keyEquivalent: "")
+                    expandItem.target = self
+                    expandItem.representedObject = text
+                    menu.addItem(expandItem)
+                    let noteItem = NSMenuItem(title: "Make a Note", action: #selector(self.handleMakeNote(_:)), keyEquivalent: "")
+                    noteItem.target = self
+                    noteItem.representedObject = text
+                    menu.addItem(noteItem)
                     NSMenu.popUpContextMenu(menu, with: event, for: self)
                     // Swallow to avoid duplicate default menu popping
                     return nil
@@ -79,6 +87,12 @@ final class RightClickMonitorView: NSView {
     @objc private func handleExpand(_ sender: NSMenuItem) {
         if let text = sender.representedObject as? String {
             onExpand?(text)
+        }
+    }
+    
+    @objc private func handleMakeNote(_ sender: NSMenuItem) {
+        if let text = sender.representedObject as? String {
+            onMakeNote?(text)
         }
     }
     

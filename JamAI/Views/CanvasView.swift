@@ -324,6 +324,8 @@ struct CanvasView: View {
             onCreateChild: { handleCreateChildNode(node.id) },
             onColorChange: { colorId in handleColorChange(colorId, for: node.id) },
             onExpandSelection: { selectedText in handleExpandSelection(selectedText, for: node.id) },
+            onMakeNote: { selectedText in handleMakeNote(selectedText, for: node.id) },
+            onExpandNote: { handleExpandNote(for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
             onDragEnded: { draggedNodeId = nil }
         )
@@ -385,6 +387,14 @@ struct CanvasView: View {
     
     private func handleExpandSelection(_ selectedText: String, for nodeId: UUID) {
         viewModel.expandSelectedText(parentId: nodeId, selectedText: selectedText)
+    }
+
+    private func handleMakeNote(_ selectedText: String, for nodeId: UUID) {
+        viewModel.createNoteFromSelection(parentId: nodeId, selectedText: selectedText)
+    }
+
+    private func handleExpandNote(for nodeId: UUID) {
+        viewModel.expandFromNote(noteId: nodeId)
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)

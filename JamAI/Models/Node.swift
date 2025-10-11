@@ -13,6 +13,11 @@ enum TextSource: String, Codable {
     case ai
 }
 
+enum NodeType: String, Codable {
+    case standard
+    case note
+}
+
 struct Node: Identifiable, Codable, Equatable {
     let id: UUID
     var projectId: UUID
@@ -43,6 +48,7 @@ struct Node: Identifiable, Codable, Equatable {
     var isExpanded: Bool
     var isFrozenContext: Bool
     var color: String // Node color for organization (e.g., "blue", "red", "none")
+    var type: NodeType
     
     // Metadata
     var createdAt: Date
@@ -67,7 +73,8 @@ struct Node: Identifiable, Codable, Equatable {
         systemPromptSnapshot: String? = nil,
         isExpanded: Bool = true,
         isFrozenContext: Bool = false,
-        color: String = "none"
+        color: String = "none",
+        type: NodeType = .standard
     ) {
         self.id = id
         self.projectId = projectId
@@ -88,6 +95,7 @@ struct Node: Identifiable, Codable, Equatable {
         self.isExpanded = isExpanded
         self.isFrozenContext = isFrozenContext
         self.color = color
+        self.type = type
         self.createdAt = Date()
         self.updatedAt = Date()
     }

@@ -53,6 +53,54 @@ class CanvasViewModel: ObservableObject {
         loadProjectData()
         setupAutosave()
     }
+
+    func createNoteFromSelection(parentId: UUID, selectedText: String) {
+        guard let parent = nodes[parentId] else { return }
+        let noteX = parent.x + Node.nodeWidth + 50
+        let noteY = parent.y + 40
+        var note = Node(
+            projectId: project.id,
+            parentId: parentId,
+            x: noteX,
+            y: noteY,
+            height: Node.collapsedHeight + 120,
+            title: "Note",
+            titleSource: .user,
+            description: selectedText,
+            descriptionSource: .user,
+            isExpanded: true,
+            isFrozenContext: false,
+            color: "lightYellow",
+            type: .note
+        )
+        var ancestry = parent.ancestry
+        ancestry.append(parentId)
+        note.setAncestry(ancestry)
+        note.systemPromptSnapshot = project.systemPrompt
+        nodes[note.id] = note
+        selectedNodeId = note.id
+        do {
+            try database.saveNode(note)
+            undoManager.record(.createNode(note))
+        } catch {
+            errorMessage = "Failed to save note: \(error.localizedDescription)"
+        }
+        var edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: "yellow")
+        edges[edge.id] = edge
+        do {
+            try database.saveEdge(edge)
+            undoManager.record(.createEdge(edge))
+        } catch {
+            errorMessage = "Failed to save note edge: \(error.localizedDescription)"
+        }
+    }
+
+    func expandFromNote(noteId: UUID) {
+        guard let note = nodes[noteId] else { return }
+        let text = note.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        expandSelectedText(parentId: noteId, selectedText: text)
+    }
     
     // MARK: - Data Loading
     

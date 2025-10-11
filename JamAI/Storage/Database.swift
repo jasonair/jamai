@@ -63,6 +63,7 @@ class Database {
                 t.column("is_expanded", .boolean).notNull().defaults(to: true)
                 t.column("is_frozen_context", .boolean).notNull().defaults(to: false)
                 t.column("color", .text).notNull().defaults(to: "none")
+                t.column("type", .text).notNull().defaults(to: "standard")
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -96,6 +97,12 @@ class Database {
                     t.add(column: "color", .text).notNull().defaults(to: "none")
                 }
             }
+            // Add type column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "type" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "type", .text).notNull().defaults(to: "standard")
+                }
+            }
             
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
@@ -103,7 +110,14 @@ class Database {
                 t.column("project_id", .text).notNull().references("projects", onDelete: .cascade)
                 t.column("source_id", .text).notNull().references("nodes", onDelete: .cascade)
                 t.column("target_id", .text).notNull().references("nodes", onDelete: .cascade)
+                t.column("color", .text)
                 t.column("created_at", .datetime).notNull()
+            }
+            // Add color column to edges if it doesn't exist (migration)
+            if try db.columns(in: "edges").first(where: { $0.name == "color" }) == nil {
+                try db.alter(table: "edges") { t in
+                    t.add(column: "color", .text)
+                }
             }
             
             // RAG Documents table
@@ -200,8 +214,8 @@ class Database {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -223,6 +237,7 @@ class Database {
                     node.isExpanded,
                     node.isFrozenContext,
                     node.color,
+                    node.type.rawValue,
                     node.createdAt,
                     node.updatedAt
                 ]
@@ -256,7 +271,8 @@ class Database {
                     systemPromptSnapshot: row["system_prompt_snapshot"],
                     isExpanded: row["is_expanded"],
                     isFrozenContext: row["is_frozen_context"],
-                    color: row["color"] ?? "none"
+                    color: row["color"] ?? "none",
+                    type: NodeType(rawValue: row["type"]) ?? .standard
                 )
             }
         }
@@ -279,14 +295,15 @@ class Database {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO edges 
-                (id, project_id, source_id, target_id, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                (id, project_id, source_id, target_id, color, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     edge.id.uuidString,
                     edge.projectId.uuidString,
                     edge.sourceId.uuidString,
                     edge.targetId.uuidString,
+                    edge.color,
                     edge.createdAt
                 ]
             )
@@ -304,7 +321,8 @@ class Database {
                     id: UUID(uuidString: row["id"])!,
                     projectId: UUID(uuidString: row["project_id"])!,
                     sourceId: UUID(uuidString: row["source_id"])!,
-                    targetId: UUID(uuidString: row["target_id"])!
+                    targetId: UUID(uuidString: row["target_id"])!,
+                    color: row["color"] as String?
                 )
             }
         }
