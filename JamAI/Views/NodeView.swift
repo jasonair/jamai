@@ -175,8 +175,8 @@ struct NodeView: View {
         HStack {
             // Drag handle icon
             Image(systemName: "line.3.horizontal")
-                .foregroundColor(headerTextColor.opacity(0.5))
-                .font(.system(size: 14))
+                .foregroundColor(headerTextColor)
+                .font(.system(size: 16))
                 .help("Drag to move node")
             
             // Color button
@@ -196,7 +196,7 @@ struct NodeView: View {
                             .frame(width: 24, height: 24)
                             .overlay(
                                 Circle()
-                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                                    .strokeBorder(headerTextColor, lineWidth: 1.5)
                             )
                     } else if let nodeColor = NodeColor.color(for: node.color) {
                         Circle()
@@ -204,7 +204,7 @@ struct NodeView: View {
                             .frame(width: 24, height: 24)
                             .overlay(
                                 Circle()
-                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                                    .strokeBorder(headerTextColor, lineWidth: 1.5)
                             )
                     } else {
                         Circle()
@@ -212,7 +212,7 @@ struct NodeView: View {
                             .frame(width: 24, height: 24)
                             .overlay(
                                 Circle()
-                                    .strokeBorder(Color.primary.opacity(0.3), lineWidth: 1.5)
+                                    .strokeBorder(headerTextColor, lineWidth: 1.5)
                             )
                     }
                 }
@@ -259,7 +259,8 @@ struct NodeView: View {
             // Delete button
             Button(action: onDelete) {
                 Image(systemName: "trash")
-                    .foregroundColor(.red.opacity(0.9))
+                    .foregroundColor(headerTextColor)
+                    .font(.system(size: 16))
             }
             .buttonStyle(PlainButtonStyle())
             .help("Delete Node")
@@ -267,7 +268,8 @@ struct NodeView: View {
             // Create child node button
             Button(action: onCreateChild) {
                 Image(systemName: "plus.square.on.square")
-                    .foregroundColor(.green.opacity(0.9))
+                    .foregroundColor(headerTextColor)
+                    .font(.system(size: 16))
             }
             .buttonStyle(PlainButtonStyle())
             .help("Create Child Node")
@@ -281,6 +283,7 @@ struct NodeView: View {
             }) {
                 Image(systemName: node.isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
                     .foregroundColor(headerTextColor)
+                    .font(.system(size: 16))
             }
             .buttonStyle(PlainButtonStyle())
             .help("Toggle Expand/Collapse")
