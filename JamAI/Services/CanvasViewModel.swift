@@ -30,6 +30,7 @@ class CanvasViewModel: ObservableObject {
     let geminiClient: GeminiClient
     let ragService: RAGService
     let database: Database
+    let dbActor: DatabaseActor
     let undoManager: CanvasUndoManager
     
     private var cancellables = Set<AnyCancellable>()
@@ -48,6 +49,7 @@ class CanvasViewModel: ObservableObject {
         self.database = database
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
+        self.dbActor = DatabaseActor(db: database)
         self.undoManager = CanvasUndoManager()
         
         loadProjectData()
@@ -79,22 +81,31 @@ class CanvasViewModel: ObservableObject {
         note.systemPromptSnapshot = project.systemPrompt
         nodes[note.id] = note
         selectedNodeId = note.id
-        do {
-            try database.saveNode(note)
-            undoManager.record(.createNode(note))
-        } catch {
-            errorMessage = "Failed to save note: \(error.localizedDescription)"
+        undoManager.record(.createNode(note))
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, note] in
+            do {
+                try await dbActor.saveNode(note)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
+                }
+            }
         }
         // Create edge with parent's color
         let parentColor = nodes[parentId]?.color
         let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
         let edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
         edges[edge.id] = edge
-        do {
-            try database.saveEdge(edge)
-            undoManager.record(.createEdge(edge))
-        } catch {
-            errorMessage = "Failed to save note edge: \(error.localizedDescription)"
+        undoManager.record(.createEdge(edge))
+        Task { [weak self, dbActor, edge] in
+            do {
+                try await dbActor.saveEdge(edge)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save note edge: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
@@ -147,12 +158,16 @@ class CanvasViewModel: ObservableObject {
             let parentColor = parent.color != "none" ? parent.color : nil
             let edge = Edge(projectId: project.id, sourceId: parentId, targetId: node.id, color: parentColor)
             edges[edge.id] = edge
-            
-            do {
-                try database.saveEdge(edge)
-                undoManager.record(.createEdge(edge))
-            } catch {
-                errorMessage = "Failed to save edge: \(error.localizedDescription)"
+            undoManager.record(.createEdge(edge))
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, edge] in
+                do {
+                    try await dbActor.saveEdge(edge)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
+                    }
+                }
             }
         }
         
@@ -160,12 +175,16 @@ class CanvasViewModel: ObservableObject {
         
         // Auto-select newly created node
         selectedNodeId = node.id
-        
-        do {
-            try database.saveNode(node)
-            undoManager.record(.createNode(node))
-        } catch {
-            errorMessage = "Failed to save node: \(error.localizedDescription)"
+        undoManager.record(.createNode(node))
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, node] in
+            do {
+                try await dbActor.saveNode(node)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
+                }
+            }
         }
     }
     
@@ -298,8 +317,11 @@ class CanvasViewModel: ObservableObject {
                                 finalNode.response = fullResponse
                                 finalNode.updatedAt = Date()
                                 self?.nodes[nodeId] = finalNode
-                                
-                                try? self?.database.saveNode(finalNode)
+                                if let dbActor = self?.dbActor {
+                                    Task { [dbActor, finalNode] in
+                                        try? await dbActor.saveNode(finalNode)
+                                    }
+                                }
                                 
                                 // Auto-generate title based on selected text
                                 await self?.autoGenerateTitleForExpansion(for: nodeId, selectedText: selectedText)
@@ -402,7 +424,16 @@ class CanvasViewModel: ObservableObject {
             
             parent.summary = summary
             nodes[parentId] = parent
-            try database.saveNode(parent)
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, parent] in
+                do {
+                    try await dbActor.saveNode(parent)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save summary: \(error.localizedDescription)"
+                    }
+                }
+            }
         } catch {
             print("Failed to generate TLDR summary: \(error)")
         }
@@ -422,10 +453,15 @@ class CanvasViewModel: ObservableObject {
         
         // Debounce database write unless immediate
         if immediate {
-            do {
-                try database.saveNode(updatedNode)
-            } catch {
-                errorMessage = "Failed to update node: \(error.localizedDescription)"
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, updatedNode] in
+                do {
+                    try await dbActor.saveNode(updatedNode)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to update node: \(error.localizedDescription)"
+                    }
+                }
             }
         } else {
             scheduleDebouncedWrite(nodeId: node.id)
@@ -441,10 +477,15 @@ class CanvasViewModel: ObservableObject {
         
         // Debounce database write unless immediate
         if immediate {
-            do {
-                try database.saveEdge(edge)
-            } catch {
-                errorMessage = "Failed to update edge: \(error.localizedDescription)"
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, edge] in
+                do {
+                    try await dbActor.saveEdge(edge)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to update edge: \(error.localizedDescription)"
+                    }
+                }
             }
         } else {
             scheduleDebouncedWrite(edgeId: edge.id)
@@ -458,16 +499,24 @@ class CanvasViewModel: ObservableObject {
         let connectedEdges = edges.values.filter { $0.sourceId == nodeId || $0.targetId == nodeId }
         for edge in connectedEdges {
             edges.removeValue(forKey: edge.id)
-            try? database.deleteEdge(id: edge.id)
+            let dbActor = self.dbActor
+            Task { [dbActor, edgeId = edge.id] in
+                try? await dbActor.deleteEdge(id: edgeId)
+            }
         }
         
         nodes.removeValue(forKey: nodeId)
         
-        do {
-            try database.deleteNode(id: nodeId)
-            undoManager.record(.deleteNode(node))
-        } catch {
-            errorMessage = "Failed to delete node: \(error.localizedDescription)"
+        undoManager.record(.deleteNode(node))
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, nodeId] in
+            do {
+                try await dbActor.deleteNode(id: nodeId)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to delete node: \(error.localizedDescription)"
+                }
+            }
         }
     }
     
@@ -534,8 +583,11 @@ class CanvasViewModel: ObservableObject {
                                 finalNode.response = fullResponse
                                 finalNode.updatedAt = Date()
                                 self?.nodes[nodeId] = finalNode
-                                
-                                try? self?.database.saveNode(finalNode)
+                                if let dbActor = self?.dbActor {
+                                    Task { [dbActor, finalNode] in
+                                        try? await dbActor.saveNode(finalNode)
+                                    }
+                                }
                                 
                                 // Auto-generate title and description if empty
                                 await self?.autoGenerateTitleAndDescription(for: nodeId)
@@ -629,7 +681,16 @@ class CanvasViewModel: ObservableObject {
             }
             
             nodes[nodeId] = node
-            try database.saveNode(node)
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do {
+                    try await dbActor.saveNode(node)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to auto-save node: \(error.localizedDescription)"
+                    }
+                }
+            }
         } catch {
             print("Failed to auto-generate title/description: \(error)")
         }
@@ -680,11 +741,16 @@ class CanvasViewModel: ObservableObject {
             
             nodes[newNode.id] = newNode
             
-            do {
-                try database.saveNode(newNode)
-                undoManager.record(.createNode(newNode))
-            } catch {
-                errorMessage = "Failed to paste node: \(error.localizedDescription)"
+            let dbActor = self.dbActor
+            undoManager.record(.createNode(newNode))
+            Task { [weak self, dbActor, newNode] in
+                do {
+                    try await dbActor.saveNode(newNode)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to paste node: \(error.localizedDescription)"
+                    }
+                }
             }
         }
     }
@@ -706,25 +772,40 @@ class CanvasViewModel: ObservableObject {
         case .createNode(let node):
             if reverse {
                 nodes.removeValue(forKey: node.id)
-                try? database.deleteNode(id: node.id)
+                let dbActor = self.dbActor
+                Task { [dbActor, nodeId = node.id] in
+                    try? await dbActor.deleteNode(id: nodeId)
+                }
             } else {
                 nodes[node.id] = node
-                try? database.saveNode(node)
+                let dbActor = self.dbActor
+                Task { [dbActor, node] in
+                    try? await dbActor.saveNode(node)
+                }
             }
             
         case .deleteNode(let node):
             if reverse {
                 nodes[node.id] = node
-                try? database.saveNode(node)
+                let dbActor = self.dbActor
+                Task { [dbActor, node] in
+                    try? await dbActor.saveNode(node)
+                }
             } else {
                 nodes.removeValue(forKey: node.id)
-                try? database.deleteNode(id: node.id)
+                let dbActor = self.dbActor
+                Task { [dbActor, nodeId = node.id] in
+                    try? await dbActor.deleteNode(id: nodeId)
+                }
             }
             
         case .updateNode(let oldNode, let newNode):
             let nodeToApply = reverse ? oldNode : newNode
             nodes[nodeToApply.id] = nodeToApply
-            try? database.saveNode(nodeToApply)
+            let dbActor = self.dbActor
+            Task { [dbActor, nodeToApply] in
+                try? await dbActor.saveNode(nodeToApply)
+            }
             
         case .moveNode(let id, let oldPos, let newPos):
             guard var node = nodes[id] else { return }
@@ -732,29 +813,48 @@ class CanvasViewModel: ObservableObject {
             node.x = position.x
             node.y = position.y
             nodes[id] = node
-            try? database.saveNode(node)
+            let dbActor = self.dbActor
+            Task { [dbActor, node] in
+                try? await dbActor.saveNode(node)
+            }
             
         case .createEdge(let edge):
             if reverse {
                 edges.removeValue(forKey: edge.id)
-                try? database.deleteEdge(id: edge.id)
+                let dbActor = self.dbActor
+                Task { [dbActor, edgeId = edge.id] in
+                    try? await dbActor.deleteEdge(id: edgeId)
+                }
             } else {
                 edges[edge.id] = edge
-                try? database.saveEdge(edge)
+                let dbActor = self.dbActor
+                Task { [dbActor, edge] in
+                    try? await dbActor.saveEdge(edge)
+                }
             }
             
         case .deleteEdge(let edge):
             if reverse {
                 edges[edge.id] = edge
-                try? database.saveEdge(edge)
+                let dbActor = self.dbActor
+                Task { [dbActor, edge] in
+                    try? await dbActor.saveEdge(edge)
+                }
             } else {
                 edges.removeValue(forKey: edge.id)
-                try? database.deleteEdge(id: edge.id)
+                let dbActor = self.dbActor
+                Task { [dbActor, edgeId = edge.id] in
+                    try? await dbActor.deleteEdge(id: edgeId)
+                }
             }
             
         case .updateProject(let oldProj, let newProj):
             project = reverse ? oldProj : newProj
-            try? database.saveProject(project)
+            let snapshotProject = project
+            let dbActor = self.dbActor
+            Task { [dbActor, snapshotProject] in
+                try? await dbActor.saveProject(snapshotProject)
+            }
         }
     }
     
@@ -778,18 +878,24 @@ class CanvasViewModel: ObservableObject {
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
         
-        do {
-            try database.saveProject(project)
-            // Save all nodes
-            for node in nodes.values {
-                try database.saveNode(node)
+        let snapshotProject = project
+        let snapshotNodes = Array(nodes.values)
+        let snapshotEdges = Array(edges.values)
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, snapshotProject, snapshotNodes, snapshotEdges] in
+            do {
+                try await dbActor.saveProject(snapshotProject)
+                for node in snapshotNodes {
+                    try await dbActor.saveNode(node)
+                }
+                for edge in snapshotEdges {
+                    try await dbActor.saveEdge(edge)
+                }
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Auto-save failed: \(error.localizedDescription)"
+                }
             }
-            // Save all edges
-            for edge in edges.values {
-                try database.saveEdge(edge)
-            }
-        } catch {
-            errorMessage = "Auto-save failed: \(error.localizedDescription)"
         }
     }
     
@@ -830,29 +936,32 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func flushPendingWrites() {
-        // Write all pending nodes
-        for nodeId in pendingNodeWrites {
-            if let node = nodes[nodeId] {
-                do {
-                    try database.saveNode(node)
-                } catch {
-                    errorMessage = "Failed to save node: \(error.localizedDescription)"
-                }
-            }
-        }
+        // Snapshot pending IDs and clear sets on main actor
+        let nodeIds = pendingNodeWrites
+        let edgeIds = pendingEdgeWrites
         pendingNodeWrites.removeAll()
+        pendingEdgeWrites.removeAll()
         
-        // Write all pending edges
-        for edgeId in pendingEdgeWrites {
-            if let edge = edges[edgeId] {
-                do {
-                    try database.saveEdge(edge)
-                } catch {
-                    errorMessage = "Failed to save edge: \(error.localizedDescription)"
+        // Capture models to save
+        let nodesToSave = nodeIds.compactMap { nodes[$0] }
+        let edgesToSave = edgeIds.compactMap { edges[$0] }
+        let dbActor = self.dbActor
+        
+        // Perform I/O off the main actor
+        Task { [weak self, dbActor, nodesToSave, edgesToSave] in
+            do {
+                for node in nodesToSave {
+                    try await dbActor.saveNode(node)
+                }
+                for edge in edgesToSave {
+                    try await dbActor.saveEdge(edge)
+                }
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save pending changes: \(error.localizedDescription)"
                 }
             }
         }
-        pendingEdgeWrites.removeAll()
         
         debounceWorkItem?.cancel()
         debounceWorkItem = nil
