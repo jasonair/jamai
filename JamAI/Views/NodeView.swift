@@ -61,6 +61,9 @@ struct NodeView: View {
                             }
                             .padding(Node.padding)
                         }
+                        .overlay(
+                            TapThroughOverlay(onTap: onTap)
+                        )
                         .onAppear {
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                 withAnimation {
@@ -123,6 +126,9 @@ struct NodeView: View {
                     // Input area - always visible at bottom
                     inputView
                         .padding(Node.padding)
+                        .overlay(
+                            TapThroughOverlay(onTap: onTap)
+                        )
                 }
                 .frame(height: node.height - 60)
             } else {

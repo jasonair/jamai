@@ -44,6 +44,9 @@ struct NoteView: View {
                 .onChange(of: text) { _, newValue in
                     onDescriptionEdit(newValue)
                 }
+                .overlay(
+                    TapThroughOverlay(onTap: onTap)
+                )
         }
         .padding(12)
         .frame(width: Node.width(for: node.type), height: node.isExpanded ? node.height : Node.collapsedHeight, alignment: .topLeading)
