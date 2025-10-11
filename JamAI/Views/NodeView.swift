@@ -303,12 +303,11 @@ struct NodeView: View {
                     isEditingDescription = false
                 })
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.caption)
+                .font(.body)
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .lineLimit(node.isExpanded ? nil : 2)
+                    .font(.body)
+                    .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
                         if node.isExpanded {
                             editedDescription = node.description
@@ -322,19 +321,6 @@ struct NodeView: View {
     private var collapsedContentView: some View {
         VStack(alignment: .leading, spacing: 8) {
             descriptionView
-            
-            // Show last message from conversation or legacy prompt/response
-            if let lastMessage = node.conversation.last {
-                Text(lastMessage.content)
-                    .font(.body)
-                    .lineLimit(3)
-                    .foregroundColor(.primary)
-            } else if !node.prompt.isEmpty || !node.response.isEmpty {
-                Text(node.response.isEmpty ? node.prompt : node.response)
-                    .font(.body)
-                    .lineLimit(3)
-                    .foregroundColor(.primary)
-            }
         }
         .frame(maxHeight: .infinity, alignment: .topLeading)
     }
