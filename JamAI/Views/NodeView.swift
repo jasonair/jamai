@@ -322,7 +322,7 @@ struct NodeView: View {
         VStack(alignment: .leading, spacing: 8) {
             descriptionView
         }
-        .frame(maxHeight: .infinity, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     private var conversationView: some View {
