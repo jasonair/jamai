@@ -85,7 +85,10 @@ class CanvasViewModel: ObservableObject {
         } catch {
             errorMessage = "Failed to save note: \(error.localizedDescription)"
         }
-        var edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: "yellow")
+        // Create edge with parent's color
+        let parentColor = nodes[parentId]?.color
+        let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
+        var edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
         edges[edge.id] = edge
         do {
             try database.saveEdge(edge)
@@ -140,8 +143,9 @@ class CanvasViewModel: ObservableObject {
             // Don't inherit conversation for branches - just use parent summary as hidden context
             // This gives a clean slate while maintaining context through the summary
             
-            // Create edge to parent
-            let edge = Edge(projectId: project.id, sourceId: parentId, targetId: node.id)
+            // Create edge to parent with parent's color
+            let parentColor = parent.color != "none" ? parent.color : nil
+            let edge = Edge(projectId: project.id, sourceId: parentId, targetId: node.id, color: parentColor)
             edges[edge.id] = edge
             
             do {
@@ -390,6 +394,25 @@ class CanvasViewModel: ObservableObject {
             }
         } else {
             scheduleDebouncedWrite(nodeId: node.id)
+        }
+    }
+    
+    func updateEdge(_ edge: Edge, immediate: Bool = false) {
+        guard edges[edge.id] != nil else { return }
+        
+        // Explicitly trigger objectWillChange before mutation
+        objectWillChange.send()
+        edges[edge.id] = edge
+        
+        // Debounce database write unless immediate
+        if immediate {
+            do {
+                try database.saveEdge(edge)
+            } catch {
+                errorMessage = "Failed to update edge: \(error.localizedDescription)"
+            }
+        } else {
+            scheduleDebouncedWrite(edgeId: edge.id)
         }
     }
     
@@ -739,6 +762,23 @@ class CanvasViewModel: ObservableObject {
     
     private func scheduleDebouncedWrite(nodeId: UUID) {
         pendingNodeWrites.insert(nodeId)
+        
+        // Cancel previous debounce
+        debounceWorkItem?.cancel()
+        
+        // Schedule new debounce
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.flushPendingWrites()
+            }
+        }
+        debounceWorkItem = workItem
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + debounceInterval, execute: workItem)
+    }
+    
+    private func scheduleDebouncedWrite(edgeId: UUID) {
+        pendingEdgeWrites.insert(edgeId)
         
         // Cancel previous debounce
         debounceWorkItem?.cancel()

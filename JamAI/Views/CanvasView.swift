@@ -383,6 +383,13 @@ struct CanvasView: View {
         guard var node = viewModel.nodes[nodeId] else { return }
         node.color = colorId
         viewModel.updateNode(node)
+        
+        // Update all outgoing edges to match the new node color
+        let edgeColor = colorId != "none" ? colorId : nil
+        for (edgeId, var edge) in viewModel.edges where edge.sourceId == nodeId {
+            edge.color = edgeColor
+            viewModel.updateEdge(edge)
+        }
     }
     
     private func handleExpandSelection(_ selectedText: String, for nodeId: UUID) {
