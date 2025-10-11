@@ -48,10 +48,26 @@ final class TapThroughView: NSView {
             if self.bounds.contains(locationInSelf) {
                 // Trigger the tap callback
                 self.onTap?()
+                
+                // Find and focus the scroll view to enable immediate scrolling
+                self.findAndFocusScrollView()
             }
             
             // Always return the event to allow text selection and other interactions
             return event
+        }
+    }
+    
+    private func findAndFocusScrollView() {
+        // Walk up the view hierarchy to find an NSScrollView
+        var currentView: NSView? = self.superview
+        while let view = currentView {
+            if let scrollView = view as? NSScrollView {
+                // Make the scroll view accept first responder status
+                window?.makeFirstResponder(scrollView)
+                return
+            }
+            currentView = view.superview
         }
     }
     
