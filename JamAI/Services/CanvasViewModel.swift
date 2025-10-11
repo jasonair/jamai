@@ -88,7 +88,7 @@ class CanvasViewModel: ObservableObject {
         // Create edge with parent's color
         let parentColor = nodes[parentId]?.color
         let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
-        var edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
+        let edge = Edge(projectId: project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
         edges[edge.id] = edge
         do {
             try database.saveEdge(edge)
@@ -226,12 +226,11 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
-        guard var node = nodes[nodeId] else { return }
+        guard let node = nodes[nodeId] else { return }
         
         generatingNodeId = nodeId
         
         // Do not store user prompt; expansions keep the conversation clean
-        nodes[nodeId] = node
         
         Task {
             do {

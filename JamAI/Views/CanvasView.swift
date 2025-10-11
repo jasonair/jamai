@@ -386,7 +386,7 @@ struct CanvasView: View {
         
         // Update all outgoing edges to match the new node color
         let edgeColor = colorId != "none" ? colorId : nil
-        for (edgeId, var edge) in viewModel.edges where edge.sourceId == nodeId {
+        for (_, var edge) in viewModel.edges where edge.sourceId == nodeId {
             edge.color = edgeColor
             viewModel.updateEdge(edge)
         }
