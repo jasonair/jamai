@@ -163,11 +163,11 @@ struct CanvasView: View {
             dragOffset = viewModel.offset
             lastZoom = viewModel.zoom
         }
-        .onChange(of: viewModel.zoom) { newZoom in
-            lastZoom = newZoom
+        .onChange(of: viewModel.zoom) { oldValue, newValue in
+            lastZoom = newValue
         }
-        .onChange(of: viewModel.offset) { newOffset in
-            dragOffset = newOffset
+        .onChange(of: viewModel.offset) { oldValue, newValue in
+            dragOffset = newValue
         }
     }
     
