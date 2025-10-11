@@ -171,6 +171,12 @@ struct NodeView: View {
     
     private var headerView: some View {
         HStack {
+            // Drag handle icon
+            Image(systemName: "line.3.horizontal")
+                .foregroundColor(headerTextColor.opacity(0.5))
+                .font(.system(size: 14))
+                .help("Drag to move node")
+            
             // Color button
             Button(action: { showingColorPicker = true }) {
                 ZStack {

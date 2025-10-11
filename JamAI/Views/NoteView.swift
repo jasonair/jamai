@@ -14,6 +14,12 @@ struct NoteView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
+                // Drag handle icon
+                Image(systemName: "line.3.horizontal")
+                    .foregroundColor(.black.opacity(0.4))
+                    .font(.system(size: 14))
+                    .help("Drag to move note")
+                
                 Text(node.title.isEmpty ? "Note" : node.title)
                     .font(.headline)
                     .foregroundColor(.black.opacity(0.9))

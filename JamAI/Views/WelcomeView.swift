@@ -101,9 +101,16 @@ struct WelcomeView: View {
             Spacer()
             
             // Footer
-            Text("Powered by Gemini 2.0 Flash")
-                .font(.caption)
-                .foregroundColor(.secondary)
+            VStack(spacing: 4) {
+                Text("v0.0.1")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .fontWeight(.medium)
+                
+                Text("Powered by Gemini 2.0 Flash")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)

@@ -148,45 +148,53 @@ struct CanvasView: View {
     
     private var toolbar: some View {
         HStack(spacing: 16) {
-            // Undo/Redo
-            Button(action: { viewModel.undo() }) {
-                Image(systemName: "arrow.uturn.backward")
-            }
-            .disabled(!viewModel.undoManager.canUndo)
-            
-            Button(action: { viewModel.redo() }) {
-                Image(systemName: "arrow.uturn.forward")
-            }
-            .disabled(!viewModel.undoManager.canRedo)
-            
-            Divider()
-                .frame(height: 20)
-            
-            // Zoom controls
-            Button(action: { viewModel.zoom = max(Config.minZoom, viewModel.zoom - 0.1) }) {
-                Image(systemName: "minus.magnifyingglass")
-            }
-            
-            Text("\(Int(viewModel.zoom * 100))%")
-                .font(.caption)
-                .frame(width: 50)
-            
-            Button(action: { viewModel.zoom = min(Config.maxZoom, viewModel.zoom + 0.1) }) {
-                Image(systemName: "plus.magnifyingglass")
-            }
-            
-            Button(action: {
-                viewModel.zoom = Config.defaultZoom
-                lastZoom = viewModel.zoom
-            }) {
-                Label("Reset", systemImage: "arrow.counterclockwise")
+            // Left section: Undo/Redo and Zoom controls
+            HStack(spacing: 16) {
+                // Undo/Redo
+                Button(action: { viewModel.undo() }) {
+                    Image(systemName: "arrow.uturn.backward")
+                }
+                .disabled(!viewModel.undoManager.canUndo)
+                
+                Button(action: { viewModel.redo() }) {
+                    Image(systemName: "arrow.uturn.forward")
+                }
+                .disabled(!viewModel.undoManager.canRedo)
+                
+                Divider()
+                    .frame(height: 20)
+                
+                // Zoom controls
+                Button(action: { viewModel.zoom = max(Config.minZoom, viewModel.zoom - 0.1) }) {
+                    Image(systemName: "minus.magnifyingglass")
+                }
+                
+                Text("\(Int(viewModel.zoom * 100))%")
                     .font(.caption)
+                    .frame(width: 50)
+                
+                Button(action: { viewModel.zoom = min(Config.maxZoom, viewModel.zoom + 0.1) }) {
+                    Image(systemName: "plus.magnifyingglass")
+                }
+                
+                Button(action: {
+                    viewModel.zoom = Config.defaultZoom
+                    lastZoom = viewModel.zoom
+                }) {
+                    Label("Reset", systemImage: "arrow.counterclockwise")
+                        .font(.caption)
+                }
             }
             
-            Divider()
-                .frame(height: 20)
+            Spacer()
             
-            // New node
+            // Center: Project name
+            Text(viewModel.project.name)
+                .font(.headline)
+            
+            Spacer()
+            
+            // Right section: New node button
             Button(action: {
                 // Create node at canvas origin (0,0) - user can drag to reposition
                 // Or we estimate viewport center without needing geometry
@@ -196,16 +204,6 @@ struct CanvasView: View {
             }) {
                 Label("New Node", systemImage: "plus.circle.fill")
             }
-            
-            Spacer()
-            
-            // Project name
-            Text(viewModel.project.name)
-                .font(.headline)
-            
-            Spacer()
-            
-            // Status indicator removed - now shown in individual nodes
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
