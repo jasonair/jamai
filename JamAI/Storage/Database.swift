@@ -204,6 +204,31 @@ class Database {
         }
     }
     
+    func loadAnyProject() throws -> Project? {
+        guard let dbQueue = dbQueue else { return nil }
+        
+        return try dbQueue.read { db in
+            guard let row = try Row.fetchOne(db, sql: "SELECT * FROM projects LIMIT 1") else {
+                return nil
+            }
+            
+            return Project(
+                id: UUID(uuidString: row["id"])!,
+                name: row["name"],
+                systemPrompt: row["system_prompt"],
+                kTurns: row["k_turns"],
+                includeSummaries: row["include_summaries"],
+                includeRAG: row["include_rag"],
+                ragK: row["rag_k"],
+                ragMaxChars: row["rag_max_chars"],
+                appearanceMode: AppearanceMode(rawValue: row["appearance_mode"]) ?? .system,
+                canvasOffsetX: row["canvas_offset_x"] ?? 0,
+                canvasOffsetY: row["canvas_offset_y"] ?? 0,
+                canvasZoom: row["canvas_zoom"] ?? 1.0
+            )
+        }
+    }
+    
     // MARK: - Nodes
     
     func saveNode(_ node: Node) throws {

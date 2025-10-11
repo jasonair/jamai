@@ -78,34 +78,69 @@ class DocumentManager {
             throw DocumentError.invalidProjectStructure
         }
         
-        // Load database
         let dbURL = bundleURL.appendingPathComponent("data.db")
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw DocumentError.databaseNotFound
         }
-        
         let database = Database()
         try database.setup(at: dbURL)
-        
-        // Load metadata to get project ID
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
-        guard FileManager.default.fileExists(atPath: metadataURL.path) else {
-            throw DocumentError.metadataNotFound
+        var loadedProject: Project?
+        if FileManager.default.fileExists(atPath: metadataURL.path) {
+            let data = try Data(contentsOf: metadataURL)
+            if let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                let idString = (dict["projectId"] as? String) ?? (dict["id"] as? String)
+                if let idString, let pid = UUID(uuidString: idString) {
+                    loadedProject = try database.loadProject(id: pid)
+                }
+            }
         }
-        
-        let metadataData = try Data(contentsOf: metadataURL)
-        guard let metadata = try JSONSerialization.jsonObject(with: metadataData) as? [String: Any],
-              let projectIdString = metadata["projectId"] as? String,
-              let projectId = UUID(uuidString: projectIdString) else {
-            throw DocumentError.invalidMetadata
+        if loadedProject == nil {
+            if let anyProject = try database.loadAnyProject() {
+                loadedProject = anyProject
+                let formatter = ISO8601DateFormatter()
+                let metadata: [String: Any] = [
+                    "version": "1.0",
+                    "projectId": anyProject.id.uuidString,
+                    "projectName": anyProject.name,
+                    "createdAt": formatter.string(from: anyProject.createdAt),
+                    "updatedAt": formatter.string(from: anyProject.updatedAt)
+                ]
+                let data = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
+                try data.write(to: metadataURL)
+            } else {
+                throw DocumentError.projectNotFound
+            }
         }
-        
-        // Load project from database
-        guard let project = try database.loadProject(id: projectId) else {
-            throw DocumentError.projectNotFound
+        return (loadedProject!, database)
+    }
+
+    func repairMetadata(at url: URL) throws {
+        var bundleURL = url
+        if url.pathExtension != Config.jamFileExtension {
+            let withExtension = url.appendingPathExtension(Config.jamFileExtension)
+            if FileManager.default.fileExists(atPath: withExtension.path) {
+                bundleURL = withExtension
+            }
         }
-        
-        return (project, database)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: bundleURL.path, isDirectory: &isDirectory), isDirectory.boolValue else { return }
+        let dbURL = bundleURL.appendingPathComponent("data.db")
+        guard FileManager.default.fileExists(atPath: dbURL.path) else { return }
+        let database = Database()
+        try database.setup(at: dbURL)
+        guard let project = try database.loadAnyProject() else { return }
+        let formatter = ISO8601DateFormatter()
+        let metadata: [String: Any] = [
+            "version": "1.0",
+            "projectId": project.id.uuidString,
+            "projectName": project.name,
+            "createdAt": formatter.string(from: project.createdAt),
+            "updatedAt": formatter.string(from: project.updatedAt)
+        ]
+        let metadataURL = bundleURL.appendingPathComponent("metadata.json")
+        let data = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
+        try data.write(to: metadataURL)
     }
     
     func exportJSON(project: Project, nodes: [Node], edges: [Edge], to url: URL) throws {
