@@ -20,6 +20,7 @@ struct NodeItemWrapper: View {
     let onColorChange: (String) -> Void
     let onExpandSelection: (String) -> Void
     let onMakeNote: (String) -> Void
+    let onJamWithThis: (String) -> Void
     let onExpandNote: () -> Void
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: () -> Void
@@ -48,7 +49,8 @@ struct NodeItemWrapper: View {
                     onCreateChild: onCreateChild,
                     onColorChange: onColorChange,
                     onExpandSelection: onExpandSelection,
-                    onMakeNote: onMakeNote
+                    onMakeNote: onMakeNote,
+                    onJamWithThis: onJamWithThis
                 )
             }
         }

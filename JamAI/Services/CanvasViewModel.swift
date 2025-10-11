@@ -224,6 +224,42 @@ class CanvasViewModel: ObservableObject {
             self?.generateExpandedResponse(for: childId, prompt: expansionPrompt, selectedText: selectedText)
         }
     }
+
+    func jamWithSelectedText(parentId: UUID, selectedText: String) {
+        guard let parent = nodes[parentId] else { return }
+        
+        // Calculate position for child node (offset to the right and down)
+        let childX = parent.x + Node.width(for: parent.type) + 50
+        let childY = parent.y + 100
+        
+        // Create branch without inheriting conversation
+        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
+        
+        // Identify the newly created child deterministically (latest child by createdAt)
+        guard var child = self.nodes.values
+            .filter({ $0.parentId == parentId })
+            .sorted(by: { $0.createdAt > $1.createdAt })
+            .first else { return }
+        
+        // Set selected text as description; no auto response
+        child.description = selectedText
+        child.descriptionSource = .user
+        child.prompt = ""
+        child.response = ""
+        updateNode(child, immediate: true)
+        
+        let childId = child.id
+        
+        // Auto-generate a concise title from the selected text
+        Task { [weak self] in
+            await self?.autoGenerateTitleFromSelectedText(for: childId, selectedText: selectedText)
+        }
+        
+        // Prepare context for future conversations: TLDR parent
+        Task { [weak self] in
+            await self?.generateTLDRSummary(for: parentId)
+        }
+    }
     
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
         guard let node = nodes[nodeId] else { return }

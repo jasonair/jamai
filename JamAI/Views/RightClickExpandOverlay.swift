@@ -12,11 +12,13 @@ import AppKit
 struct RightClickExpandOverlay: NSViewRepresentable {
     let onExpand: (String) -> Void
     let onMakeNote: (String) -> Void
+    let onJamWithThis: (String) -> Void
     
     func makeNSView(context: Context) -> RightClickMonitorView {
         let view = RightClickMonitorView()
         view.onExpand = onExpand
         view.onMakeNote = onMakeNote
+        view.onJamWithThis = onJamWithThis
         view.wantsLayer = false
         return view
     }
@@ -24,12 +26,14 @@ struct RightClickExpandOverlay: NSViewRepresentable {
     func updateNSView(_ nsView: RightClickMonitorView, context: Context) {
         nsView.onExpand = onExpand
         nsView.onMakeNote = onMakeNote
+        nsView.onJamWithThis = onJamWithThis
     }
 }
 
 final class RightClickMonitorView: NSView {
     var onExpand: ((String) -> Void)?
     var onMakeNote: ((String) -> Void)?
+    var onJamWithThis: ((String) -> Void)?
     private var eventMonitor: Any?
     
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -67,6 +71,10 @@ final class RightClickMonitorView: NSView {
                     expandItem.target = self
                     expandItem.representedObject = text
                     menu.addItem(expandItem)
+                    let jamItem = NSMenuItem(title: "Jam with this", action: #selector(self.handleJamWithThis(_:)), keyEquivalent: "")
+                    jamItem.target = self
+                    jamItem.representedObject = text
+                    menu.addItem(jamItem)
                     let noteItem = NSMenuItem(title: "Make a Note", action: #selector(self.handleMakeNote(_:)), keyEquivalent: "")
                     noteItem.target = self
                     noteItem.representedObject = text
@@ -93,6 +101,12 @@ final class RightClickMonitorView: NSView {
     @objc private func handleMakeNote(_ sender: NSMenuItem) {
         if let text = sender.representedObject as? String {
             onMakeNote?(text)
+        }
+    }
+    
+    @objc private func handleJamWithThis(_ sender: NSMenuItem) {
+        if let text = sender.representedObject as? String {
+            onJamWithThis?(text)
         }
     }
     
