@@ -137,7 +137,7 @@ struct CanvasView: View {
                         // Cursor-anchored zoom: keep the world point under cursor fixed
                         let oldZoom = viewModel.zoom
                         // Reduce sensitivity by dampening the zoom factor
-                        let dampingFactor: CGFloat = 0.2
+                        let dampingFactor: CGFloat = 0.1
                         let zoomDelta = (value - 1.0) * dampingFactor
                         let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * (1.0 + zoomDelta)))
                         let s = mouseLocation
@@ -148,9 +148,12 @@ struct CanvasView: View {
                             width: s.x - wx * newZoom,
                             height: s.y - wy * newZoom
                         )
-                        viewModel.zoom = newZoom
-                        viewModel.offset = newOffset
-                        dragOffset = newOffset
+                        // Add smooth animation for zoom
+                        withAnimation(.linear(duration: 0.05)) {
+                            viewModel.zoom = newZoom
+                            viewModel.offset = newOffset
+                            dragOffset = newOffset
+                        }
                     }
                     .onEnded { _ in
                         lastZoom = viewModel.zoom
@@ -210,17 +213,19 @@ struct CanvasView: View {
                     .frame(height: 20)
                 
                 // Zoom controls
-                Button(action: { viewModel.zoom = max(Config.minZoom, viewModel.zoom - 0.1) }) {
+                Button(action: { zoomOut() }) {
                     Image(systemName: "minus.magnifyingglass")
                 }
+                .keyboardShortcut("-", modifiers: .command)
                 
                 Text("\(Int(viewModel.zoom * 100))%")
                     .font(.caption)
                     .frame(width: 50)
                 
-                Button(action: { viewModel.zoom = min(Config.maxZoom, viewModel.zoom + 0.1) }) {
+                Button(action: { zoomIn() }) {
                     Image(systemName: "plus.magnifyingglass")
                 }
+                .keyboardShortcut("+", modifiers: .command)
                 
                 Button(action: {
                     viewModel.zoom = Config.defaultZoom
@@ -490,6 +495,20 @@ struct CanvasView: View {
         viewModel.zoom = newZoom
         lastZoom = newZoom
         dragOffset = viewModel.offset
+    }
+    
+    private func zoomIn() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            viewModel.zoom = min(Config.maxZoom, viewModel.zoom + 0.1)
+            lastZoom = viewModel.zoom
+        }
+    }
+    
+    private func zoomOut() {
+        withAnimation(.easeOut(duration: 0.2)) {
+            viewModel.zoom = max(Config.minZoom, viewModel.zoom - 0.1)
+            lastZoom = viewModel.zoom
+        }
     }
     
     // MARK: - Styling
