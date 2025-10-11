@@ -59,12 +59,57 @@ struct NodeView: View {
                             }
                             .padding(Node.padding)
                         }
+                        .onAppear {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                withAnimation {
+                                    if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                        proxy.scrollTo(lastAssistantId, anchor: .bottom)
+                                    } else if let lastMessageId = node.conversation.last?.id {
+                                        proxy.scrollTo(lastMessageId, anchor: .bottom)
+                                    } else if !node.response.isEmpty {
+                                        proxy.scrollTo("legacy-assistant", anchor: .bottom)
+                                    } else if !node.prompt.isEmpty {
+                                        proxy.scrollTo("legacy-user", anchor: .bottom)
+                                    }
+                                }
+                            }
+                        }
                         .onChange(of: node.conversation.count) { oldCount, newCount in
-                            // Scroll to top when a new response arrives
                             if newCount > oldCount {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                     withAnimation {
-                                        proxy.scrollTo(scrollViewID, anchor: .top)
+                                        if let last = node.conversation.last {
+                                            switch last.role {
+                                            case .user:
+                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                    proxy.scrollTo(lastUserId, anchor: .top)
+                                                } else {
+                                                    proxy.scrollTo(scrollViewID, anchor: .top)
+                                                }
+                                            case .assistant:
+                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                    proxy.scrollTo(lastUserId, anchor: .top)
+                                                } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                    proxy.scrollTo(lastAssistantId, anchor: .top)
+                                                } else {
+                                                    proxy.scrollTo(scrollViewID, anchor: .top)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        .onChange(of: isGenerating) { oldValue, newValue in
+                            if newValue {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                    withAnimation {
+                                        if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                            proxy.scrollTo(lastUserId, anchor: .top)
+                                        } else if node.conversation.isEmpty && !node.response.isEmpty {
+                                            // Expansion streaming without a user bubble
+                                            proxy.scrollTo("legacy-assistant", anchor: .top)
+                                        }
                                     }
                                 }
                             }
@@ -286,14 +331,17 @@ struct NodeView: View {
                 // Show legacy prompt/response for backwards compatibility
                 if !node.prompt.isEmpty {
                     messageView(role: .user, content: node.prompt)
+                        .id("legacy-user")
                 }
                 if !node.response.isEmpty {
                     messageView(role: .assistant, content: node.response)
+                        .id("legacy-assistant")
                 }
             } else {
                 // Show conversation thread
                 ForEach(node.conversation) { message in
                     messageView(role: message.role, content: message.content)
+                        .id(message.id)
                 }
             }
         }
