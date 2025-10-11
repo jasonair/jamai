@@ -10,38 +10,50 @@ import AppKit
 
 struct TapThroughOverlay: NSViewRepresentable {
     let onTap: () -> Void
+    let shouldFocusOnTap: Bool
+    
+    init(onTap: @escaping () -> Void, shouldFocusOnTap: Bool = true) {
+        self.onTap = onTap
+        self.shouldFocusOnTap = shouldFocusOnTap
+    }
     
     func makeNSView(context: Context) -> TapThroughView {
         let view = TapThroughView()
         view.onTap = onTap
+        view.shouldFocusOnTap = shouldFocusOnTap
         return view
     }
     
     func updateNSView(_ nsView: TapThroughView, context: Context) {
         nsView.onTap = onTap
+        nsView.shouldFocusOnTap = shouldFocusOnTap
     }
 }
 
 final class TapThroughView: NSView {
     var onTap: (() -> Void)?
+    var shouldFocusOnTap: Bool = true
     private var clickMonitor: Any?
+    private var scrollMonitor: Any?
+    private var scrollView: NSScrollView?
+    private var isActive: Bool = false
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
-        setupMonitor()
+        setupMonitors()
     }
     
     required init?(coder: NSCoder) {
         super.init(coder: coder)
-        setupMonitor()
+        setupMonitors()
     }
     
-    private func setupMonitor() {
-        // Use local event monitor to catch mouse down events
+    private func setupMonitors() {
+        // Monitor for clicks to activate scrolling
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self, let window = self.window else { return event }
             
-            // Check if click is within our bounds
+            // Check if event is within our bounds
             let locationInWindow = event.locationInWindow
             let locationInSelf = self.convert(locationInWindow, from: nil)
             
@@ -49,50 +61,113 @@ final class TapThroughView: NSView {
                 // Trigger the tap callback
                 self.onTap?()
                 
-                // Find and focus the scroll view to enable immediate scrolling
-                self.findAndFocusScrollView()
+                // Activate scroll capturing and ensure scroll view is found
+                if self.shouldFocusOnTap {
+                    self.isActive = true
+                    print("Click detected - isActive set to true")
+                    // Find scroll view immediately on click
+                    if self.scrollView == nil {
+                        self.scrollView = self.findScrollView()
+                        print("Scroll view cached: \(self.scrollView != nil)")
+                    }
+                }
+            } else {
+                // Deactivate if clicking outside
+                self.isActive = false
+                print("Click outside - isActive set to false")
             }
             
             // Always return the event to allow text selection and other interactions
             return event
         }
+        
+        // Monitor for scroll wheel events and forward them when active
+        scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            guard let self = self else { return event }
+            
+            // Check if scroll is happening over our bounds
+            guard let window = self.window else { return event }
+            let locationInWindow = event.locationInWindow
+            let locationInSelf = self.convert(locationInWindow, from: nil)
+            
+            print("Scroll event - isActive: \(self.isActive), contains: \(self.bounds.contains(locationInSelf))")
+            
+            // Only intercept if we're active AND the scroll is over our bounds
+            if self.isActive && self.bounds.contains(locationInSelf) {
+                print("Trying to forward scroll event")
+                // Forward to scroll view - find it fresh if needed
+                if let scrollView = self.scrollView ?? self.findScrollView() {
+                    self.scrollView = scrollView
+                    print("Forwarding to scroll view: \(scrollView)")
+                    scrollView.scrollWheel(with: event)
+                    return nil // Consume the event
+                } else {
+                    print("No scroll view found to forward to")
+                }
+            }
+            
+            return event
+        }
     }
     
-    private func findAndFocusScrollView() {
-        // Walk up the view hierarchy to find an NSScrollView
+    private func findScrollView() -> NSScrollView? {
+        // Try to find any NSScrollView in the view hierarchy
         var currentView: NSView? = self.superview
         while let view = currentView {
+            // Check if this view is a scroll view
             if let scrollView = view as? NSScrollView {
-                // Make the scroll view accept first responder status
-                window?.makeFirstResponder(scrollView)
-                return
+                print("Found NSScrollView: \(scrollView)")
+                return scrollView
+            }
+            // Also check subviews recursively
+            if let scrollView = findScrollViewInSubviews(of: view) {
+                print("Found NSScrollView in subviews: \(scrollView)")
+                return scrollView
             }
             currentView = view.superview
         }
+        print("No NSScrollView found!")
+        return nil
+    }
+    
+    private func findScrollViewInSubviews(of view: NSView) -> NSScrollView? {
+        for subview in view.subviews {
+            if let scrollView = subview as? NSScrollView {
+                return scrollView
+            }
+            if let scrollView = findScrollViewInSubviews(of: subview) {
+                return scrollView
+            }
+        }
+        return nil
     }
     
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
         if window == nil {
-            removeMonitor()
+            removeMonitors()
         } else if clickMonitor == nil {
-            setupMonitor()
+            setupMonitors()
         }
     }
     
     deinit {
-        removeMonitor()
+        removeMonitors()
     }
     
-    private func removeMonitor() {
+    private func removeMonitors() {
         if let monitor = clickMonitor {
             NSEvent.removeMonitor(monitor)
             clickMonitor = nil
         }
+        if let monitor = scrollMonitor {
+            NSEvent.removeMonitor(monitor)
+            scrollMonitor = nil
+        }
     }
     
     override func hitTest(_ point: NSPoint) -> NSView? {
-        // Never intercept hit testing - allow underlying views to handle events
+        // Never intercept hit testing - stay transparent
         return nil
     }
 }
