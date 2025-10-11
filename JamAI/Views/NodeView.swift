@@ -21,6 +21,7 @@ struct NodeView: View {
     let onExpandSelection: (String) -> Void
     let onMakeNote: (String) -> Void
     let onJamWithThis: (String) -> Void
+    let onHeightChange: (CGFloat) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -467,8 +468,8 @@ struct NodeView: View {
                     .frame(width: 40, height: 4)
             )
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture()
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0)
                     .onChanged { value in
                         if !isResizing {
                             isResizing = true
@@ -481,6 +482,7 @@ struct NodeView: View {
                     }
                     .onEnded { _ in
                         isResizing = false
+                        onHeightChange(node.height)
                     }
             )
             .onHover { hovering in

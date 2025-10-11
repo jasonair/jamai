@@ -326,7 +326,8 @@ struct CanvasView: View {
             onJamWithThis: { selectedText in handleJamWithThis(selectedText, for: node.id) },
             onExpandNote: { handleExpandNote(for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
-            onDragEnded: { draggedNodeId = nil }
+            onDragEnded: { draggedNodeId = nil },
+            onHeightChange: { height in handleHeightChange(height, for: node.id) }
         )
     }
     
@@ -405,6 +406,12 @@ struct CanvasView: View {
 
     private func handleJamWithThis(_ selectedText: String, for nodeId: UUID) {
         viewModel.jamWithSelectedText(parentId: nodeId, selectedText: selectedText)
+    }
+    
+    private func handleHeightChange(_ height: CGFloat, for nodeId: UUID) {
+        guard var node = viewModel.nodes[nodeId] else { return }
+        node.height = height
+        viewModel.updateNode(node, immediate: true)
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)

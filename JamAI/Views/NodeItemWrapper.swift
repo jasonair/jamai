@@ -24,6 +24,7 @@ struct NodeItemWrapper: View {
     let onExpandNote: () -> Void
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: () -> Void
+    let onHeightChange: (CGFloat) -> Void
     
     var body: some View {
         Group {
@@ -50,7 +51,8 @@ struct NodeItemWrapper: View {
                     onColorChange: onColorChange,
                     onExpandSelection: onExpandSelection,
                     onMakeNote: onMakeNote,
-                    onJamWithThis: onJamWithThis
+                    onJamWithThis: onJamWithThis,
+                    onHeightChange: onHeightChange
                 )
             }
         }
@@ -58,8 +60,8 @@ struct NodeItemWrapper: View {
             x: node.x + Node.width(for: node.type) / 2,
             y: node.y + (node.isExpanded ? node.height : Node.collapsedHeight) / 2
         )
-        .gesture(
-            DragGesture()
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 3)
                 .onChanged(onDragChanged)
                 .onEnded { _ in onDragEnded() }
         )
