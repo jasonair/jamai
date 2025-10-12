@@ -45,7 +45,18 @@ struct NodeItemWrapper: View {
                     isSelected: isSelected,
                     onTap: onTap,
                     onDelete: onDelete,
-                    onDescriptionEdit: onDescriptionEdit
+                    onDescriptionEdit: onDescriptionEdit,
+                    onHeightChange: onHeightChange,
+                    onWidthChange: { width in
+                        var updatedNode = node
+                        updatedNode.width = width
+                        node = updatedNode
+                        onHeightChange(node.height) // Trigger save
+                    },
+                    onResizeActiveChanged: { active in
+                        isResizingActive = active
+                        onResizeActiveChanged(active)
+                    }
                 )
             } else if node.type == .shape {
                 ShapeItemView(
@@ -106,8 +117,8 @@ struct NodeItemWrapper: View {
     private var displayWidth: CGFloat {
         switch node.type {
         case .text:
-            // Fixed reasonable width for text
-            return 250
+            // Use custom width if set, otherwise use default
+            return node.width ?? 250
         default:
             return Node.width(for: node.type)
         }

@@ -35,6 +35,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var x: CGFloat
     var y: CGFloat
     var height: CGFloat // Custom height when expanded
+    var width: CGFloat? // Custom width for text/shape nodes (nil = use default)
     
     // Content
     var title: String
@@ -75,6 +76,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         x: CGFloat = 0,
         y: CGFloat = 0,
         height: CGFloat = Node.expandedHeight,
+        width: CGFloat? = nil,
         title: String = "",
         titleSource: TextSource = .user,
         description: String = "",
@@ -101,6 +103,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.x = x
         self.y = y
         self.height = height
+        self.width = width
         self.title = title
         self.titleSource = titleSource
         self.description = description

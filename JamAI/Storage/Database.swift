@@ -137,6 +137,11 @@ final class Database: Sendable {
                     t.add(column: "shape_kind", .text)
                 }
             }
+            if try db.columns(in: "nodes").first(where: { $0.name == "width" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "width", .double)
+                }
+            }
             
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
@@ -275,9 +280,9 @@ final class Database: Sendable {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO nodes 
-                (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
+                (id, project_id, parent_id, x, y, height, width, title, title_source, description, description_source, 
                  conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -286,6 +291,7 @@ final class Database: Sendable {
                     node.x,
                     node.y,
                     node.height,
+                    node.width,
                     node.title,
                     node.titleSource.rawValue,
                     node.description,
@@ -325,6 +331,7 @@ final class Database: Sendable {
                     x: row["x"],
                     y: row["y"],
                     height: row["height"] ?? 400,
+                    width: row["width"],
                     title: row["title"],
                     titleSource: TextSource(rawValue: row["title_source"]) ?? .user,
                     description: row["description"],
