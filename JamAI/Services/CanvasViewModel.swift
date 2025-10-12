@@ -655,7 +655,8 @@ class CanvasViewModel: ObservableObject {
         
         nodes.removeValue(forKey: nodeId)
         
-        undoManager.record(.deleteNode(node))
+        // Record node deletion with connected edges for proper undo
+        undoManager.record(.deleteNode(node, connectedEdges: Array(connectedEdges)))
         let dbActor = self.dbActor
         Task { [weak self, dbActor, nodeId] in
             do {
@@ -932,18 +933,34 @@ class CanvasViewModel: ObservableObject {
                 }
             }
             
-        case .deleteNode(let node):
+        case .deleteNode(let node, let connectedEdges):
             if reverse {
+                // Undo: restore node and all connected edges
                 nodes[node.id] = node
                 let dbActor = self.dbActor
                 Task { [dbActor, node] in
                     try? await dbActor.saveNode(node)
                 }
+                // Restore all connected edges
+                for edge in connectedEdges {
+                    edges[edge.id] = edge
+                    Task { [dbActor, edge] in
+                        try? await dbActor.saveEdge(edge)
+                    }
+                }
             } else {
+                // Redo: delete node and connected edges
                 nodes.removeValue(forKey: node.id)
                 let dbActor = self.dbActor
                 Task { [dbActor, nodeId = node.id] in
                     try? await dbActor.deleteNode(id: nodeId)
+                }
+                // Delete all connected edges
+                for edge in connectedEdges {
+                    edges.removeValue(forKey: edge.id)
+                    Task { [dbActor, edgeId = edge.id] in
+                        try? await dbActor.deleteEdge(id: edgeId)
+                    }
                 }
             }
             

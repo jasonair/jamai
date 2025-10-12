@@ -11,7 +11,7 @@ import Combine
 
 enum CanvasAction: Equatable {
     case createNode(Node)
-    case deleteNode(Node)
+    case deleteNode(Node, connectedEdges: [Edge])
     case updateNode(oldNode: Node, newNode: Node)
     case moveNode(id: UUID, oldPosition: CGPoint, newPosition: CGPoint)
     case createEdge(Edge)
@@ -22,7 +22,7 @@ enum CanvasAction: Equatable {
         switch (lhs, rhs) {
         case (.createNode(let a), .createNode(let b)):
             return a.id == b.id
-        case (.deleteNode(let a), .deleteNode(let b)):
+        case (.deleteNode(let a, _), .deleteNode(let b, _)):
             return a.id == b.id
         case (.updateNode(let a1, let b1), .updateNode(let a2, let b2)):
             return a1.id == a2.id && b1.id == b2.id
