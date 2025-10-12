@@ -21,14 +21,15 @@ struct Edge: Identifiable, Codable, Equatable, Sendable {
         projectId: UUID,
         sourceId: UUID,
         targetId: UUID,
-        color: String? = nil
+        color: String? = nil,
+        createdAt: Date = Date()
     ) {
         self.id = id
         self.projectId = projectId
         self.sourceId = sourceId
         self.targetId = targetId
         self.color = color
-        self.createdAt = Date()
+        self.createdAt = createdAt
     }
     
     static func == (lhs: Edge, rhs: Edge) -> Bool {

@@ -93,7 +93,9 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         isBold: Bool = false,
         fontFamily: String? = nil,
         shapeKind: ShapeKind? = nil,
-        displayOrder: Int? = nil
+        displayOrder: Int? = nil,
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
     ) {
         self.id = id
         self.projectId = projectId
@@ -120,8 +122,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.fontFamily = fontFamily
         self.shapeKind = shapeKind
         self.displayOrder = displayOrder
-        self.createdAt = Date()
-        self.updatedAt = Date()
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
     }
     
     // Computed properties

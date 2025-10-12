@@ -137,6 +137,12 @@ final class Database: Sendable {
                     t.add(column: "shape_kind", .text)
                 }
             }
+            // Add display_order column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "display_order" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "display_order", .integer)
+                }
+            }
             
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
@@ -276,8 +282,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -304,6 +310,7 @@ final class Database: Sendable {
                     node.isBold,
                     node.fontFamily,
                     node.shapeKind?.rawValue,
+                    node.displayOrder,
                     node.createdAt,
                     node.updatedAt
                 ]
@@ -342,7 +349,10 @@ final class Database: Sendable {
                     fontSize: row["font_size"] ?? 16,
                     isBold: row["is_bold"] ?? false,
                     fontFamily: row["font_family"] as String?,
-                    shapeKind: (row["shape_kind"] as String?).flatMap { ShapeKind(rawValue: $0) }
+                    shapeKind: (row["shape_kind"] as String?).flatMap { ShapeKind(rawValue: $0) },
+                    displayOrder: row["display_order"] as Int?,
+                    createdAt: row["created_at"],
+                    updatedAt: row["updated_at"]
                 )
             }
         }
@@ -392,7 +402,8 @@ final class Database: Sendable {
                     projectId: UUID(uuidString: row["project_id"])!,
                     sourceId: UUID(uuidString: row["source_id"])!,
                     targetId: UUID(uuidString: row["target_id"])!,
-                    color: row["color"] as String?
+                    color: row["color"] as String?,
+                    createdAt: row["created_at"]
                 )
             }
         }
