@@ -226,6 +226,57 @@ class CanvasViewModel: ObservableObject {
         }
     }
 
+    @discardableResult
+    private func createNodeImmediate(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) -> UUID {
+        var node = Node(
+            projectId: self.project.id,
+            parentId: parentId,
+            x: position.x,
+            y: position.y
+        )
+        // Set up ancestry and context
+        if let parentId = parentId, let parent = self.nodes[parentId] {
+            var ancestry = parent.ancestry
+            ancestry.append(parentId)
+            node.setAncestry(ancestry)
+            node.systemPromptSnapshot = self.project.systemPrompt
+
+            // Create edge to parent with parent's color
+            let parentColor = parent.color != "none" ? parent.color : nil
+            let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
+            self.edges[edge.id] = edge
+            self.undoManager.record(.createEdge(edge))
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, edge] in
+                do {
+                    try await dbActor.saveEdge(edge)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+
+        self.nodes[node.id] = node
+        // Auto-select newly created node
+        self.selectedNodeId = node.id
+        self.undoManager.record(.createNode(node))
+
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, node] in
+            do {
+                try await dbActor.saveNode(node)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
+                }
+            }
+        }
+
+        return node.id
+    }
+
     // MARK: - Annotation Creation
     func createTextLabel(at position: CGPoint) {
         // Defer state changes to avoid publishing during view updates
@@ -321,15 +372,8 @@ class CanvasViewModel: ObservableObject {
         let childX = parent.x + Node.width(for: parent.type) + 50
         let childY = parent.y + 100
         
-        // Create branch without inheriting conversation
-        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
-        
-        // Identify the newly created child deterministically (latest child by createdAt)
-        guard let child = self.nodes.values
-            .filter({ $0.parentId == parentId })
-            .sorted(by: { $0.createdAt > $1.createdAt })
-            .first else { return }
-        let childId = child.id
+        // Create branch without inheriting conversation immediately to avoid race with async creation
+        let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
         // Indicate generation immediately so UI shows spinner
         generatingNodeId = childId
@@ -360,14 +404,11 @@ class CanvasViewModel: ObservableObject {
         let childX = parent.x + Node.width(for: parent.type) + 50
         let childY = parent.y + 100
         
-        // Create branch without inheriting conversation
-        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
+        // Create branch immediately to avoid race; do not inherit conversation
+        let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
-        // Identify the newly created child deterministically (latest child by createdAt)
-        guard var child = self.nodes.values
-            .filter({ $0.parentId == parentId })
-            .sorted(by: { $0.createdAt > $1.createdAt })
-            .first else { return }
+        // Get the newly created child
+        guard var child = self.nodes[childId] else { return }
         
         // Set selected text as description; no auto response
         child.description = selectedText
@@ -375,8 +416,6 @@ class CanvasViewModel: ObservableObject {
         child.prompt = ""
         child.response = ""
         updateNode(child, immediate: true)
-        
-        let childId = child.id
         
         // Auto-generate a concise title from the selected text
         Task { [weak self] in
