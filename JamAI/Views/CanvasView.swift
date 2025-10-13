@@ -125,6 +125,24 @@ struct CanvasView: View {
             .onAppear {
                 dragOffset = viewModel.offset
                 lastZoom = viewModel.zoom
+                // Create a centered node for new projects once the canvas is laid out
+                if viewModel.nodes.isEmpty {
+                    // Outline occupies ~280pt width and is inset by 20pt when visible
+                    let leftObstruction: CGFloat = showOutline ? (280 + 20) : 0
+                    // Center of the visible canvas area in screen coordinates
+                    let screenCenter = CGPoint(
+                        x: leftObstruction + (geometry.size.width - leftObstruction) / 2,
+                        y: geometry.size.height / 2
+                    )
+                    // Convert to world/canvas coordinates
+                    let worldCenter = screenToCanvas(screenCenter, in: geometry.size)
+                    // Adjust so that the node's center lands at the visible center
+                    let topLeft = CGPoint(
+                        x: worldCenter.x - Node.nodeWidth / 2,
+                        y: worldCenter.y - Node.expandedHeight / 2
+                    )
+                    viewModel.createNode(at: topLeft)
+                }
             }
             .onChange(of: viewModel.zoom) { oldValue, newValue in
                 lastZoom = newValue

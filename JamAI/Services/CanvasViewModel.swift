@@ -170,6 +170,14 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - Node Operations
     
+    func calculateCenterPosition(viewportSize: CGSize = CGSize(width: 1200, height: 800)) -> CGPoint {
+        // Calculate the canvas center position accounting for offset and zoom
+        // Formula from CanvasView contextMenu
+        let centerX = (viewportSize.width / 2 - offset.width) / zoom
+        let centerY = (viewportSize.height / 2 - offset.height) / zoom
+        return CGPoint(x: centerX, y: centerY)
+    }
+    
     func createNode(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) {
         // Defer state changes to avoid publishing during view updates
         // Use .userInitiated QoS to match the calling context and avoid priority inversion
