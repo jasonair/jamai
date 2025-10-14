@@ -114,85 +114,33 @@ class AppState: ObservableObject {
     @Published var currentFileURL: URL?
     @Published var recentProjects: [URL] = []
     
+    // Delegate recent projects management to dedicated manager
+    private let recentProjectsManager = RecentProjectsManager.shared
+    private var cancellables = Set<AnyCancellable>()
+    
     private var database: Database?
-    private let recentKey = "recentProjectBookmarks"
     private var isAccessingSecurityScopedResource = false
     
     init() {
-        loadRecents()
-    }
-    
-    private func loadRecents() {
-        let defaults = UserDefaults.standard
-        guard let datas = defaults.array(forKey: recentKey) as? [Data] else { return }
-        var urls: [URL] = []
-        for data in datas {
-            var stale = false
-            if let url = try? URL(resolvingBookmarkData: data, options: [.withSecurityScope], relativeTo: nil, bookmarkDataIsStale: &stale) {
-                // Validate that the file/folder still exists and is accessible
-                if isValidProjectURL(url) {
-                    urls.append(url)
-                }
+        // Sync published property with manager to ensure SwiftUI reactivity
+        recentProjectsManager.$recentProjects
+            .sink { [weak self] projects in
+                print("🔄 AppState: Received \(projects.count) recent projects from manager")
+                self?.recentProjects = projects
             }
-        }
-        self.recentProjects = urls
-        // Save the cleaned list back if items were removed
-        if urls.count != datas.count {
-            saveRecents()
-        }
-    }
-    
-    private func isValidProjectURL(_ url: URL) -> Bool {
-        var accessed = false
-        if url.startAccessingSecurityScopedResource() {
-            accessed = true
-        }
-        defer {
-            if accessed {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        
-        // Check if file exists
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else {
-            return false
-        }
-        
-        // For .jam packages/directories, check for required files
-        if isDirectory.boolValue || url.pathExtension == Config.jamFileExtension {
-            let baseURL = url.pathExtension == Config.jamFileExtension ? url : url
-            let metadataPath = baseURL.appendingPathComponent("metadata.json").path
-            let databasePath = baseURL.appendingPathComponent("data.db").path
-            return FileManager.default.fileExists(atPath: metadataPath) &&
-                   FileManager.default.fileExists(atPath: databasePath)
-        }
-        
-        return false
-    }
-    
-    private func saveRecents() {
-        let datas: [Data] = recentProjects.compactMap { url in
-            return try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
-        }
-        UserDefaults.standard.set(datas, forKey: recentKey)
+            .store(in: &cancellables)
     }
     
     func recordRecent(url: URL) {
-        var list = recentProjects.filter { $0.standardizedFileURL != url.standardizedFileURL }
-        list.insert(url, at: 0)
-        if list.count > 10 { list = Array(list.prefix(10)) }
-        recentProjects = list
-        saveRecents()
+        recentProjectsManager.recordRecent(url: url)
     }
     
     func clearRecentProjects() {
-        recentProjects = []
-        UserDefaults.standard.removeObject(forKey: recentKey)
+        recentProjectsManager.clearRecentProjects()
     }
     
     func refreshRecentProjects() {
-        loadRecents()
+        recentProjectsManager.refreshRecentProjects()
     }
     
     func openRecent(url: URL) {

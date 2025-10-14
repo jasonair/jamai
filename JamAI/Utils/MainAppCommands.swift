@@ -28,13 +28,7 @@ struct MainAppCommands: Commands {
                         .disabled(true)
                 } else {
                     ForEach(Array(appState.recentProjects.enumerated()), id: \.element) { index, url in
-                        Button(action: {
-                            ensureWindow()
-                            appState.openRecent(url: url)
-                        }) {
-                            Text(url.deletingPathExtension().lastPathComponent)
-                        }
-                        .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+                        recentProjectButton(url: url, index: index)
                     }
                     
                     Divider()
@@ -48,6 +42,27 @@ struct MainAppCommands: Commands {
         }
     }
 
+    @ViewBuilder
+    private func recentProjectButton(url: URL, index: Int) -> some View {
+        // Only add keyboard shortcuts for first 9 items (Cmd+1 through Cmd+9)
+        if index < 9 {
+            Button(action: {
+                ensureWindow()
+                appState.openRecent(url: url)
+            }) {
+                Text(url.deletingPathExtension().lastPathComponent)
+            }
+            .keyboardShortcut(KeyEquivalent(Character(String(index + 1))), modifiers: .command)
+        } else {
+            Button(action: {
+                ensureWindow()
+                appState.openRecent(url: url)
+            }) {
+                Text(url.deletingPathExtension().lastPathComponent)
+            }
+        }
+    }
+    
     private func ensureWindow() {
         if NSApp.keyWindow == nil && NSApp.mainWindow == nil {
             openWindow(id: "main")

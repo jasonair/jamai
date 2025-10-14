@@ -79,28 +79,43 @@ struct WelcomeView: View {
             // Recent Projects
             if !appState.recentProjects.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Recent Projects")
-                        .font(.headline)
-                        .padding(.top, 8)
-                    ForEach(Array(appState.recentProjects.prefix(10)), id: \.self) { url in
-                        Button(action: {
-                            appState.openRecent(url: url)
-                        }) {
-                            HStack {
-                                Image(systemName: "folder")
-                                Text(url.lastPathComponent)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                                Spacer()
-                                Text(url.deletingPathExtension().path)
-                                    .foregroundColor(.secondary)
-                                    .font(.caption)
-                                    .lineLimit(1)
-                                    .truncationMode(.middle)
-                            }
-                        }
-                        .buttonStyle(LinkButtonStyle())
+                    HStack {
+                        Text("Recent Projects")
+                            .font(.headline)
+                        Text("(\(appState.recentProjects.count))")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
+                    .padding(.top, 8)
+                    
+                    VStack(spacing: 4) {
+                        ForEach(appState.recentProjects, id: \.self) { url in
+                            Button(action: {
+                                appState.openRecent(url: url)
+                            }) {
+                                HStack(spacing: 8) {
+                                    Image(systemName: "folder")
+                                        .foregroundColor(.secondary)
+                                    Text(url.deletingPathExtension().lastPathComponent)
+                                        .font(.body)
+                                        .lineLimit(1)
+                                        .truncationMode(.middle)
+                                    Spacer()
+                                    Text(url.deletingPathExtension().path)
+                                        .foregroundColor(.secondary)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                        .truncationMode(.tail)
+                                }
+                                .padding(.vertical, 6)
+                                .padding(.horizontal, 12)
+                                .background(Color.secondary.opacity(0.1))
+                                .cornerRadius(6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(.horizontal, 40)
                 .frame(maxWidth: 700)
@@ -123,6 +138,7 @@ struct WelcomeView: View {
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
+            print("👁️ WelcomeView appeared: \(appState.recentProjects.count) recent projects")
             // Refresh the recent projects list to ensure only valid projects are shown
             appState.refreshRecentProjects()
         }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 struct TextLabelView: View {
     @Binding var node: Node
