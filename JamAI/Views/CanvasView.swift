@@ -193,12 +193,11 @@ struct CanvasView: View {
             
             // Outline
             VStack(alignment: .leading) {
-                Spacer().frame(height: 0)
+                Spacer().frame(height: 56)  // Space for tab bar (36) + padding (20)
                 HStack(alignment: .top, spacing: 0) {
                     if showOutline {
                         OutlineView(viewModel: viewModel, viewportSize: geometry.size, isCollapsed: $showOutline)
                             .padding(.leading, 20)
-                            .padding(.top, 20)
                     } else {
                         // Collapsed state - show expand button
                         Button(action: {
@@ -221,7 +220,6 @@ struct CanvasView: View {
                         }
                         .buttonStyle(PlainButtonStyle())
                         .padding(.leading, 20)
-                        .padding(.top, 20)
                         .help("Show Outline")
                     }
                     Spacer()
@@ -534,9 +532,28 @@ extension View {
             .onKeyPress("n") {
                 // Only create new node when no nodes are selected
                 guard viewModel.selectedNodeId == nil else { return .ignored }
-                let centerX = -viewModel.offset.width / viewModel.zoom
-                let centerY = -viewModel.offset.height / viewModel.zoom
-                viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
+                
+                // Calculate center of visible canvas area (accounting for outline if shown)
+                // Note: We can't access geometry or showOutline here, so we approximate
+                // Default window is 1200x800, tab bar is ~36, outline is ~300 when visible
+                let viewportWidth: CGFloat = 1200
+                let viewportHeight: CGFloat = 800
+                let tabBarHeight: CGFloat = 36
+                let outlineWidth: CGFloat = 0  // Approximate, we don't know if it's shown
+                
+                // Screen center
+                let screenCenterX = outlineWidth + (viewportWidth - outlineWidth) / 2
+                let screenCenterY = tabBarHeight + (viewportHeight - tabBarHeight) / 2
+                
+                // Convert screen to canvas coordinates
+                let canvasCenterX = (screenCenterX - viewModel.offset.width) / viewModel.zoom
+                let canvasCenterY = (screenCenterY - viewModel.offset.height) / viewModel.zoom
+                
+                // Adjust for node size so it appears centered
+                let nodeX = canvasCenterX - Node.nodeWidth / 2
+                let nodeY = canvasCenterY - Node.expandedHeight / 2
+                
+                viewModel.createNode(at: CGPoint(x: nodeX, y: nodeY))
                 return .handled
             }
     }

@@ -98,7 +98,11 @@ struct JamAIApp: App {
                 .disabled(appState.viewModel == nil)
             }
             
-            CommandGroup(replacing: .undoRedo) {
+            // Empty replacing group to remove default undo/redo
+            CommandGroup(replacing: .undoRedo) {}
+            
+            // Add our custom undo/redo after the empty group
+            CommandGroup(after: .undoRedo) {
                 Button("Undo") {
                     appState.viewModel?.undo()
                 }
