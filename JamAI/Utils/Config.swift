@@ -34,6 +34,10 @@ enum Config {
     static let maxZoom: CGFloat = 3.0
     static let defaultZoom: CGFloat = 1.0
     
+    // Note: SwiftUI Canvas has inherent clipping limitations
+    // Edges may not render correctly when nodes exceed ~10,000 pixels from origin
+    // See CANVAS_LIMITATIONS.md for details
+    
     // Undo/Redo
     static let maxUndoSteps = 200
     

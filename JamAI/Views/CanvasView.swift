@@ -167,6 +167,8 @@ struct CanvasView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Edges - transformed the same way as nodes
+            // Note: Canvas may clip edges when nodes are very far from origin
+            // This is a known SwiftUI limitation - consider keeping nodes within ~10000x10000 range
             EdgeLayer(
                 edges: edgesArray,
                 frames: nodeFrames

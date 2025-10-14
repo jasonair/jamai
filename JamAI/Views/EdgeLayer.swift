@@ -14,71 +14,28 @@ struct EdgeLayer: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        // Use TimelineView for real-time updates at 60fps
-        TimelineView(.animation) { _ in
-            Canvas { context, _ in
-                for edge in edges {
-                    guard let sFrame = frames[edge.sourceId],
-                          let tFrame = frames[edge.targetId] else { continue }
-                    
-                    // World-space endpoints using best side ports
+        // Use Shape-based rendering instead of Canvas to avoid clipping issues
+        // Shapes don't clip at coordinate boundaries like Canvas does
+        ZStack {
+            ForEach(edges, id: \.id) { edge in
+                if let sFrame = frames[edge.sourceId],
+                   let tFrame = frames[edge.targetId] {
                     let (start, end, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
                     
-                    let stroke = strokeColor(for: edge)
-                    drawBezierCurve(context: context, from: start, to: end, color: stroke, horizontalPreferred: isHorizontal)
+                    ZStack {
+                        // The bezier curve edge
+                        EdgeShape(from: start, to: end, horizontalPreferred: isHorizontal)
+                            .stroke(strokeColor(for: edge), lineWidth: 2.0)
+                        
+                        // The arrow head
+                        EdgeArrowShape(from: start, to: end, horizontalPreferred: isHorizontal)
+                            .stroke(strokeColor(for: edge), lineWidth: 2.0)
+                    }
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
-    private func drawBezierCurve(context: GraphicsContext, from start: CGPoint, to end: CGPoint, color: Color, horizontalPreferred: Bool) {
-        var path = Path()
-        path.move(to: start)
-        // Control points based on orientation
-        if horizontalPreferred {
-            // Horizontal routing: control points extend left/right
-            let dx = (end.x - start.x) * 0.5
-            let control1 = CGPoint(x: start.x + dx, y: start.y)
-            let control2 = CGPoint(x: end.x - dx, y: end.y)
-            path.addCurve(to: end, control1: control1, control2: control2)
-            context.stroke(path, with: .color(color), lineWidth: 2.0)
-            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end), color: color)
-            return
-        } else {
-            // Vertical routing: control points extend up/down
-            let dy = (end.y - start.y) * 0.5
-            let control1 = CGPoint(x: start.x, y: start.y + dy)
-            let control2 = CGPoint(x: end.x, y: end.y - dy)
-            path.addCurve(to: end, control1: control1, control2: control2)
-            context.stroke(path, with: .color(color), lineWidth: 2.0)
-            drawArrowHead(context: context, at: end, angle: getAngle(from: control2, to: end), color: color)
-            return
-        }
-    }
-    
-    private func drawArrowHead(context: GraphicsContext, at point: CGPoint, angle: Double, color: Color) {
-        // Fixed screen-space arrow head size
-        let arrowSize: CGFloat = 10.0
-        
-        var path = Path()
-        path.move(to: point)
-        path.addLine(to: CGPoint(
-            x: point.x - arrowSize * cos(angle - .pi / 6),
-            y: point.y - arrowSize * sin(angle - .pi / 6)
-        ))
-        path.move(to: point)
-        path.addLine(to: CGPoint(
-            x: point.x - arrowSize * cos(angle + .pi / 6),
-            y: point.y - arrowSize * sin(angle + .pi / 6)
-        ))
-        
-        context.stroke(path, with: .color(color), lineWidth: 2.0)
-    }
-    
-    private func getAngle(from: CGPoint, to: CGPoint) -> Double {
-        return atan2(to.y - from.y, to.x - from.x)
-    }
     
     private var edgeColor: Color {
         colorScheme == .dark
@@ -129,5 +86,69 @@ struct EdgeLayer: View {
                 return (start, end, false)
             }
         }
+    }
+}
+
+// MARK: - Edge Shapes
+
+struct EdgeShape: Shape {
+    let from: CGPoint
+    let to: CGPoint
+    let horizontalPreferred: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: from)
+        
+        if horizontalPreferred {
+            // Horizontal routing: control points extend left/right
+            let dx = (to.x - from.x) * 0.5
+            let control1 = CGPoint(x: from.x + dx, y: from.y)
+            let control2 = CGPoint(x: to.x - dx, y: to.y)
+            path.addCurve(to: to, control1: control1, control2: control2)
+        } else {
+            // Vertical routing: control points extend up/down
+            let dy = (to.y - from.y) * 0.5
+            let control1 = CGPoint(x: from.x, y: from.y + dy)
+            let control2 = CGPoint(x: to.x, y: to.y - dy)
+            path.addCurve(to: to, control1: control1, control2: control2)
+        }
+        
+        return path
+    }
+}
+
+struct EdgeArrowShape: Shape {
+    let from: CGPoint
+    let to: CGPoint
+    let horizontalPreferred: Bool
+    
+    func path(in rect: CGRect) -> Path {
+        // Calculate the angle from the control point to the end point
+        let control2: CGPoint
+        if horizontalPreferred {
+            let dx = (to.x - from.x) * 0.5
+            control2 = CGPoint(x: to.x - dx, y: to.y)
+        } else {
+            let dy = (to.y - from.y) * 0.5
+            control2 = CGPoint(x: to.x, y: to.y - dy)
+        }
+        
+        let angle = atan2(to.y - control2.y, to.x - control2.x)
+        let arrowSize: CGFloat = 10.0
+        
+        var path = Path()
+        path.move(to: to)
+        path.addLine(to: CGPoint(
+            x: to.x - arrowSize * cos(angle - .pi / 6),
+            y: to.y - arrowSize * sin(angle - .pi / 6)
+        ))
+        path.move(to: to)
+        path.addLine(to: CGPoint(
+            x: to.x - arrowSize * cos(angle + .pi / 6),
+            y: to.y - arrowSize * sin(angle + .pi / 6)
+        ))
+        
+        return path
     }
 }
