@@ -62,63 +62,51 @@ class CanvasViewModel: ObservableObject {
     func createNoteFromSelection(parentId: UUID, selectedText: String) {
         guard let parent = nodes[parentId] else { return }
         
-        // Defer state changes to avoid publishing during view updates
-        // Use .userInitiated QoS to match the calling context and avoid priority inversion
-        Task(priority: .userInitiated) { @MainActor in
-            let taskQoS = qos_class_self()
-            print("🔍 [ViewModel] createNoteFromSelection Task QoS: \(Self.qosName(taskQoS))")
-            
-            let noteX = parent.x + Node.width(for: parent.type) + 50
-            let noteY = parent.y + 40
-            var note = Node(
-                projectId: project.id,
-                parentId: parentId,
-                x: noteX,
-                y: noteY,
-                height: Node.collapsedHeight + 120,
-                title: "Note",
-                titleSource: .user,
-                description: selectedText,
-                descriptionSource: .user,
-                isExpanded: true,
-                isFrozenContext: false,
-                color: "lightYellow",
-                type: .note
-            )
-            var ancestry = parent.ancestry
-            ancestry.append(parentId)
-            note.setAncestry(ancestry)
-            note.systemPromptSnapshot = self.project.systemPrompt
-            
-            self.nodes[note.id] = note
-            self.selectedNodeId = note.id
-            self.undoManager.record(.createNode(note))
-            
-            let dbActor = self.dbActor
-            Task { [weak self, dbActor, note] in
-                do {
-                    try await dbActor.saveNode(note)
-                } catch {
-                    await MainActor.run {
-                        self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
-                    }
-                }
-            }
-            
-            // Create edge with parent's color
-            let parentColor = self.nodes[parentId]?.color
-            let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
-            let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
-            self.edges[edge.id] = edge
-            self.undoManager.record(.createEdge(edge))
-            
-            Task { [weak self, dbActor, edge] in
-                do {
-                    try await dbActor.saveEdge(edge)
-                } catch {
-                    await MainActor.run {
-                        self?.errorMessage = "Failed to save note edge: \(error.localizedDescription)"
-                    }
+        let noteX = parent.x + Node.width(for: parent.type) + 50
+        let noteY = parent.y + 40
+        var note = Node(
+            projectId: project.id,
+            parentId: parentId,
+            x: noteX,
+            y: noteY,
+            height: Node.collapsedHeight + 120,
+            title: "Note",
+            titleSource: .user,
+            description: selectedText,
+            descriptionSource: .user,
+            isExpanded: true,
+            isFrozenContext: false,
+            color: "lightYellow",
+            type: .note
+        )
+        var ancestry = parent.ancestry
+        ancestry.append(parentId)
+        note.setAncestry(ancestry)
+        note.systemPromptSnapshot = self.project.systemPrompt
+        
+        self.nodes[note.id] = note
+        self.selectedNodeId = note.id
+        self.undoManager.record(.createNode(note))
+        
+        // Create edge with parent's color
+        let parentColor = self.nodes[parentId]?.color
+        let edgeColor = (parentColor != nil && parentColor != "none") ? parentColor : nil
+        let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
+        self.edges[edge.id] = edge
+        self.undoManager.record(.createEdge(edge))
+        
+        // Force edge refresh immediately to ensure wire appears
+        positionsVersion &+= 1
+        
+        // Save to database asynchronously
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, note, edge] in
+            do {
+                try await dbActor.saveNode(note)
+                try await dbActor.saveEdge(edge)
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
                 }
             }
         }
@@ -163,6 +151,9 @@ class CanvasViewModel: ObservableObject {
             offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)
             zoom = project.canvasZoom
             showDots = project.showDots
+            
+            // Force edge refresh to ensure wires render correctly on load
+            positionsVersion &+= 1
         } catch {
             errorMessage = "Failed to load project: \(error.localizedDescription)"
         }
