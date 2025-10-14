@@ -18,6 +18,7 @@ struct CanvasView: View {
     @State private var mouseLocation: CGPoint = .zero
     @State private var isResizingActive: Bool = false
     @State private var showOutline: Bool = true
+    @State private var viewportSize: CGSize = .zero
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -38,6 +39,7 @@ struct CanvasView: View {
     
     @ViewBuilder
     private func canvasWithInteractions(geometry: GeometryProxy) -> some View {
+        let _ = DispatchQueue.main.async { self.viewportSize = geometry.size }
         canvasLayers(geometry: geometry)
             // Track mouse and capture two-finger pan scrolling
             .overlay(
@@ -287,8 +289,7 @@ struct CanvasView: View {
                 .keyboardShortcut("+", modifiers: .command)
                 
                 Button(action: {
-                    viewModel.zoom = Config.defaultZoom
-                    lastZoom = viewModel.zoom
+                    zoomToCenter(newZoom: Config.defaultZoom)
                 }) {
                     Label("Reset", systemImage: "arrow.counterclockwise")
                         .font(.caption)
@@ -452,7 +453,6 @@ struct CanvasView: View {
             draggedNodeId = nodeId
             if let node = viewModel.nodes[nodeId] {
                 dragStartPosition = CGPoint(x: node.x, y: node.y)
-                print("Node drag START - world pos: \(dragStartPosition), zoom: \(viewModel.zoom)")
             }
         }
         
@@ -465,7 +465,6 @@ struct CanvasView: View {
                 x: dragStartPosition.x + worldDelta.width,
                 y: dragStartPosition.y + worldDelta.height
             )
-            print("Node drag - screen translation: \(value.translation), zoom: \(viewModel.zoom), world delta: \(worldDelta), new world pos: \(newPosition)")
             // Update position optimistically - UI updates immediately, DB write is debounced
             viewModel.moveNode(nodeId, to: newPosition)
         }
@@ -568,16 +567,31 @@ struct CanvasView: View {
     }
     
     private func zoomIn() {
-        withAnimation(.easeOut(duration: 0.2)) {
-            viewModel.zoom = min(Config.maxZoom, viewModel.zoom + 0.1)
-            lastZoom = viewModel.zoom
-        }
+        zoomToCenter(newZoom: min(Config.maxZoom, viewModel.zoom + 0.1))
     }
     
     private func zoomOut() {
+        zoomToCenter(newZoom: max(Config.minZoom, viewModel.zoom - 0.1))
+    }
+    
+    private func zoomToCenter(newZoom: CGFloat) {
+        let oldZoom = viewModel.zoom
+        // Calculate viewport center
+        let centerX = viewportSize.width / 2
+        let centerY = viewportSize.height / 2
+        // Calculate world point at viewport center before zoom
+        let worldX = (centerX - viewModel.offset.width) / max(oldZoom, 0.001)
+        let worldY = (centerY - viewModel.offset.height) / max(oldZoom, 0.001)
+        // Calculate new offset to keep that world point at viewport center after zoom
+        let newOffset = CGSize(
+            width: centerX - worldX * newZoom,
+            height: centerY - worldY * newZoom
+        )
+        
         withAnimation(.easeOut(duration: 0.2)) {
-            viewModel.zoom = max(Config.minZoom, viewModel.zoom - 0.1)
-            lastZoom = viewModel.zoom
+            viewModel.zoom = newZoom
+            viewModel.offset = newOffset
+            lastZoom = newZoom
         }
     }
     
