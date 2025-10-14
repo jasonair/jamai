@@ -10,8 +10,6 @@ import SwiftUI
 struct EdgeLayer: View {
     let edges: [Edge]
     let frames: [UUID: CGRect]
-    let zoom: CGFloat
-    let offset: CGSize
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -24,17 +22,7 @@ struct EdgeLayer: View {
                           let tFrame = frames[edge.targetId] else { continue }
                     
                     // World-space endpoints using best side ports
-                    let (startW, endW, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
-                    
-                    // Map to screen (top-left anchor): screen = world * zoom + offset
-                    let start = CGPoint(
-                        x: startW.x * zoom + offset.width,
-                        y: startW.y * zoom + offset.height
-                    )
-                    let end = CGPoint(
-                        x: endW.x * zoom + offset.width,
-                        y: endW.y * zoom + offset.height
-                    )
+                    let (start, end, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
                     
                     let stroke = strokeColor(for: edge)
                     drawBezierCurve(context: context, from: start, to: end, color: stroke, horizontalPreferred: isHorizontal)

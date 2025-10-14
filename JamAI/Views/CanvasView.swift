@@ -166,19 +166,16 @@ struct CanvasView: View {
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
-            // Edges
-            if !viewModel.isNavigating {
-                EdgeLayer(
-                    edges: edgesArray,
-                    frames: nodeFrames,
-                    zoom: viewModel.zoom,
-                    offset: viewModel.offset
-                )
-                .id("edges-\(viewModel.positionsVersion)")
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .allowsHitTesting(false)
-                .transition(.opacity)
-            }
+            // Edges - transformed the same way as nodes
+            EdgeLayer(
+                edges: edgesArray,
+                frames: nodeFrames
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .scaleEffect(viewModel.zoom, anchor: .topLeading)
+            .offset(viewModel.offset)
+            .id("edges-\(viewModel.positionsVersion)")
+            .allowsHitTesting(false)
             
             // Nodes
             WorldLayerView(

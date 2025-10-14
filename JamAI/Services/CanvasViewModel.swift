@@ -1039,9 +1039,6 @@ class CanvasViewModel: ObservableObject {
         // Select the node
         selectedNodeId = nodeId
         
-        // Mark that we're navigating (disables edge updates during animation)
-        isNavigating = true
-        
         // Calculate node center in world coordinates
         let nodeWidth = Node.width(for: node.type)
         let nodeHeight = node.isExpanded ? node.height : Node.collapsedHeight
@@ -1061,11 +1058,9 @@ class CanvasViewModel: ObservableObject {
             offset = targetOffset
         }
         
-        // Reset isNavigating and update edges after animation completes
-        // Add small buffer to ensure animation finishes
+        // Update edges after animation completes to ensure they're correctly positioned
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s (0.5s animation + 0.05s buffer)
-            isNavigating = false
             positionsVersion &+= 1
         }
     }
