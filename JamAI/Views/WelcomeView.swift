@@ -155,7 +155,7 @@ struct WelcomeView: View {
         panel.begin { [weak appState] response in
             guard let appState = appState else { return }
             guard response == .OK, let url = panel.url else { return }
-            appState.openProject(url: url)
+            appState.openProjectInNewTab(url: url)
         }
     }
 }

@@ -16,13 +16,33 @@ struct JamAIApp: App {
     
     var body: some Scene {
         WindowGroup(id: "main") {
-            if let viewModel = appState.viewModel {
-                CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
-                    .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
-                    .frame(minWidth: 1200, minHeight: 800)
-            } else {
+            if appState.tabs.isEmpty {
                 WelcomeView(appState: appState)
                     .frame(width: 600, height: 400)
+            } else {
+                VStack(spacing: 0) {
+                    // Tab bar
+                    TabBarView(
+                        tabs: appState.tabs,
+                        activeTabId: appState.activeTabId,
+                        onTabSelect: { tabId in
+                            appState.selectTab(tabId)
+                        },
+                        onTabClose: { tabId in
+                            appState.closeTab(tabId)
+                        }
+                    )
+                    
+                    Divider()
+                    
+                    // Active project canvas
+                    if let viewModel = appState.viewModel {
+                        CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
+                            .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
+                            .id(appState.activeTabId) // Force refresh when tab changes
+                    }
+                }
+                .frame(minWidth: 1200, minHeight: 800)
             }
         }
         .commands {
@@ -109,17 +129,34 @@ struct JamAIApp: App {
 
 @MainActor
 class AppState: ObservableObject {
-    @Published var viewModel: CanvasViewModel?
-    @Published var project: Project?
-    @Published var currentFileURL: URL?
+    // Multi-tab support
+    @Published var tabs: [ProjectTab] = []
+    @Published var activeTabId: UUID?
     @Published var recentProjects: [URL] = []
+    
+    // Convenience computed properties for backward compatibility
+    var viewModel: CanvasViewModel? {
+        activeTab?.viewModel
+    }
+    
+    var project: Project? {
+        activeTab?.viewModel?.project
+    }
+    
+    var currentFileURL: URL? {
+        activeTab?.projectURL
+    }
+    
+    private var activeTab: ProjectTab? {
+        tabs.first { $0.id == activeTabId }
+    }
     
     // Delegate recent projects management to dedicated manager
     private let recentProjectsManager = RecentProjectsManager.shared
     private var cancellables = Set<AnyCancellable>()
     
-    private var database: Database?
-    private var isAccessingSecurityScopedResource = false
+    // Track security-scoped resources per tab
+    private var accessingResources: Set<URL> = []
     
     init() {
         // Sync published property with manager to ensure SwiftUI reactivity
@@ -143,10 +180,85 @@ class AppState: ObservableObject {
     }
     
     func openRecent(url: URL) {
-        var accessed = false
-        if url.startAccessingSecurityScopedResource() { accessed = true }
-        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        openProject(url: url)
+        openProjectInNewTab(url: url)
+    }
+    
+    // MARK: - Tab Management
+    
+    func selectTab(_ id: UUID) {
+        activeTabId = id
+    }
+    
+    func closeTab(_ id: UUID) {
+        guard let tabIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
+        let tab = tabs[tabIndex]
+        
+        // Save project before closing
+        if let viewModel = tab.viewModel, let database = tab.database {
+            Task {
+                try? DocumentManager.shared.saveProject(
+                    viewModel.project,
+                    to: tab.projectURL.deletingPathExtension(),
+                    database: database
+                )
+                await viewModel.saveAndWait()
+            }
+        }
+        
+        // Stop security-scoped access
+        if accessingResources.contains(tab.projectURL) {
+            tab.projectURL.stopAccessingSecurityScopedResource()
+            accessingResources.remove(tab.projectURL)
+        }
+        
+        // Remove tab
+        tabs.remove(at: tabIndex)
+        
+        // Update active tab
+        if activeTabId == id {
+            if !tabs.isEmpty {
+                activeTabId = tabs.first?.id
+            } else {
+                activeTabId = nil
+            }
+        }
+    }
+    
+    func closeProject() {
+        if let activeId = activeTabId {
+            closeTab(activeId)
+        }
+    }
+    
+    func openProjectInNewTab(url: URL) {
+        // Check if project is already open in a tab
+        if let existingTab = tabs.first(where: { $0.projectURL == url }) {
+            activeTabId = existingTab.id
+            return
+        }
+        
+        do {
+            // Start security-scoped access
+            if url.startAccessingSecurityScopedResource() {
+                accessingResources.insert(url)
+            }
+            
+            let (project, database) = try DocumentManager.shared.openProject(from: url)
+            let viewModel = CanvasViewModel(project: project, database: database)
+            
+            let newTab = ProjectTab(
+                projectURL: url,
+                projectName: url.deletingPathExtension().lastPathComponent,
+                viewModel: viewModel,
+                database: database
+            )
+            
+            tabs.append(newTab)
+            activeTabId = newTab.id
+            recordRecent(url: url)
+        } catch {
+            showError("Failed to open project: \(error.localizedDescription)")
+        }
     }
     
     func createNewProject() {
@@ -167,17 +279,12 @@ class AppState: ObservableObject {
                     do {
                         let project = Project(name: url.deletingPathExtension().lastPathComponent)
                         try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension())
-                        let (loadedProject, database) = try DocumentManager.shared.openProject(from: url.deletingPathExtension())
-                        self.project = loadedProject
-                        self.database = database
-                        self.currentFileURL = (url.pathExtension == Config.jamFileExtension)
+                        
+                        // Open in new tab
+                        let finalURL = (url.pathExtension == Config.jamFileExtension)
                             ? url
                             : url.appendingPathExtension(Config.jamFileExtension)
-                        if let fileURL = self.currentFileURL, fileURL.startAccessingSecurityScopedResource() {
-                            self.isAccessingSecurityScopedResource = true
-                        }
-                        self.viewModel = CanvasViewModel(project: loadedProject, database: database)
-                        self.recordRecent(url: self.currentFileURL!)
+                        self.openProjectInNewTab(url: finalURL)
                     } catch {
                         self.showError("Failed to create project: \(error.localizedDescription)")
                     }
@@ -208,7 +315,7 @@ class AppState: ObservableObject {
                 guard let self = self else { return }
                 guard response == .OK, let url = panel.url else { return }
                 DispatchQueue.main.async {
-                    self.openProject(url: url)
+                    self.openProjectInNewTab(url: url)
                 }
             }
             if let window = NSApp.keyWindow ?? NSApp.mainWindow {
@@ -219,91 +326,21 @@ class AppState: ObservableObject {
         }
     }
 
-    func closeProject() {
-        Task { @MainActor [weak self] in
-            guard let self = self else { return }
-            // Save only if we have valid state
-            if let project = self.project, let url = self.currentFileURL {
-                do {
-                    // Let DocumentManager handle the database connection to avoid path mismatches
-                    try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: self.database)
-                    // Ensure all pending async DB writes complete before releasing permissions
-                    if let vm = self.viewModel {
-                        await vm.saveAndWait()
-                    }
-                } catch {
-                    // Log but don't block close
-                    print("Warning: Failed to save on close: \(error.localizedDescription)")
-                }
-            }
-            
-            // Stop security-scoped access AFTER all writes complete
-            if self.isAccessingSecurityScopedResource, let url = self.currentFileURL {
-                url.stopAccessingSecurityScopedResource()
-                self.isAccessingSecurityScopedResource = false
-            }
-            
-            self.viewModel = nil
-            self.project = nil
-            self.currentFileURL = nil
-            self.database = nil
-        }
-    }
-    
-    func openProject(url: URL) {
-        do {
-            // If the user selected a file inside the package, or the base folder, resolve to nearest .jam
-            var candidate = (url.pathExtension == Config.jamFileExtension) ? url : url
-            let maxAscend = 5
-            var steps = 0
-            while candidate.pathExtension != Config.jamFileExtension && steps < maxAscend {
-                let parent = candidate.deletingLastPathComponent()
-                if parent == candidate { break }
-                candidate = parent
-                steps += 1
-            }
-            // If no .jam ancestor found, allow folder if it looks like a JamAI bundle (contains metadata.json & data.db)
-            if candidate.pathExtension != Config.jamFileExtension {
-                var isDir: ObjCBool = false
-                if FileManager.default.fileExists(atPath: candidate.path, isDirectory: &isDir), isDir.boolValue {
-                    let meta = candidate.appendingPathComponent("metadata.json")
-                    let db = candidate.appendingPathComponent("data.db")
-                    if FileManager.default.fileExists(atPath: meta.path), FileManager.default.fileExists(atPath: db.path) {
-                        // looks good; proceed
-                    } else {
-                        // try adding .jam next to it
-                        let withExt = candidate.appendingPathExtension(Config.jamFileExtension)
-                        if FileManager.default.fileExists(atPath: withExt.path) {
-                            candidate = withExt
-                        }
-                    }
-                }
-            }
-            
-            // Start security-scoped access for the project file
-            if candidate.startAccessingSecurityScopedResource() {
-                isAccessingSecurityScopedResource = true
-            }
-            
-            let (project, database) = try DocumentManager.shared.openProject(from: candidate)
-            self.project = project
-            self.database = database
-            self.currentFileURL = candidate
-            self.viewModel = CanvasViewModel(project: project, database: database)
-            self.recordRecent(url: candidate)
-        } catch {
-            self.showError("Failed to open project: \(error.localizedDescription)")
-        }
-    }
     
     func save() {
-        guard let project = project, let url = currentFileURL else { return }
+        guard let tab = activeTab,
+              let viewModel = tab.viewModel,
+              let database = tab.database else { return }
         
         do {
-            // Security-scoped access is already active from openProject
+            // Security-scoped access is already active from openProjectInNewTab
             // Let DocumentManager handle the database connection to avoid path mismatches
-            try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension(), database: self.database)
-            viewModel?.save()
+            try DocumentManager.shared.saveProject(
+                viewModel.project,
+                to: tab.projectURL.deletingPathExtension(),
+                database: database
+            )
+            viewModel.save()
         } catch {
             showError("Failed to save project: \(error.localizedDescription)")
         }
