@@ -82,7 +82,7 @@ struct NodeItemWrapper: View {
             y: node.y + displayHeight / 2
         )
         .simultaneousGesture(
-            DragGesture(minimumDistance: 3)
+            DragGesture(minimumDistance: 3, coordinateSpace: .global)
                 .onChanged { value in
                     if !isResizingActive { onDragChanged(value) }
                 }

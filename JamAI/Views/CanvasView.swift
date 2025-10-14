@@ -452,14 +452,20 @@ struct CanvasView: View {
             draggedNodeId = nodeId
             if let node = viewModel.nodes[nodeId] {
                 dragStartPosition = CGPoint(x: node.x, y: node.y)
+                print("Node drag START - world pos: \(dragStartPosition), zoom: \(viewModel.zoom)")
             }
         }
         
         if draggedNodeId == nodeId {
-            let newPosition = CGPoint(
-                x: dragStartPosition.x + value.translation.width / viewModel.zoom,
-                y: dragStartPosition.y + value.translation.height / viewModel.zoom
+            let worldDelta = CGSize(
+                width: value.translation.width / viewModel.zoom,
+                height: value.translation.height / viewModel.zoom
             )
+            let newPosition = CGPoint(
+                x: dragStartPosition.x + worldDelta.width,
+                y: dragStartPosition.y + worldDelta.height
+            )
+            print("Node drag - screen translation: \(value.translation), zoom: \(viewModel.zoom), world delta: \(worldDelta), new world pos: \(newPosition)")
             // Update position optimistically - UI updates immediately, DB write is debounced
             viewModel.moveNode(nodeId, to: newPosition)
         }
