@@ -11,7 +11,7 @@ struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     var onCommandClose: (() -> Void)? = nil
     
-    @State private var dragOffset: CGSize = .zero
+    @GestureState private var canvasDragStart: CGSize? = nil
     @State private var lastZoom: CGFloat = 1.0
     @State private var draggedNodeId: UUID? = nil
     @State private var dragStartPosition: CGPoint = .zero
@@ -46,7 +46,6 @@ struct CanvasView: View {
                     guard !isResizingActive else { return }
                     viewModel.offset.width += dx
                     viewModel.offset.height += dy
-                    dragOffset = viewModel.offset
                 }, onCommandClose: {
                     onCommandClose?()
                 })
@@ -75,17 +74,22 @@ struct CanvasView: View {
                 }
             }
             .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { value in
-                        if draggedNodeId == nil && !isResizingActive {
-                            viewModel.offset = CGSize(
-                                width: dragOffset.width + value.translation.width,
-                                height: dragOffset.height + value.translation.height
-                            )
+                DragGesture(minimumDistance: 5)
+                    .updating($canvasDragStart) { value, gestureState, transaction in
+                        // Store the initial offset when drag starts (only once per gesture)
+                        if gestureState == nil {
+                            gestureState = viewModel.offset
                         }
                     }
-                    .onEnded { _ in
-                        dragOffset = viewModel.offset
+                    .onChanged { value in
+                        if draggedNodeId == nil && !isResizingActive {
+                            // Use the start offset captured by @GestureState
+                            let startOffset = canvasDragStart ?? viewModel.offset
+                            viewModel.offset = CGSize(
+                                width: startOffset.width + value.translation.width,
+                                height: startOffset.height + value.translation.height
+                            )
+                        }
                     }
             )
             .simultaneousGesture(
@@ -110,7 +114,6 @@ struct CanvasView: View {
                         withAnimation(.linear(duration: 0.05)) {
                             viewModel.zoom = newZoom
                             viewModel.offset = newOffset
-                            dragOffset = newOffset
                         }
                     }
                     .onEnded { _ in
@@ -123,7 +126,6 @@ struct CanvasView: View {
                 viewModel.createNode(at: canvasPos)
             }
             .onAppear {
-                dragOffset = viewModel.offset
                 lastZoom = viewModel.zoom
                 // Create a centered node for new projects once the canvas is laid out
                 if viewModel.nodes.isEmpty {
@@ -146,9 +148,6 @@ struct CanvasView: View {
             }
             .onChange(of: viewModel.zoom) { oldValue, newValue in
                 lastZoom = newValue
-            }
-            .onChange(of: viewModel.offset) { oldValue, newValue in
-                dragOffset = newValue
             }
     }
     
@@ -560,7 +559,6 @@ struct CanvasView: View {
         
         viewModel.zoom = newZoom
         lastZoom = newZoom
-        dragOffset = viewModel.offset
     }
     
     private func zoomIn() {
