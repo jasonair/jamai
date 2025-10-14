@@ -125,7 +125,6 @@ class AppState: ObservableObject {
         // Sync published property with manager to ensure SwiftUI reactivity
         recentProjectsManager.$recentProjects
             .sink { [weak self] projects in
-                print("🔄 AppState: Received \(projects.count) recent projects from manager")
                 self?.recentProjects = projects
             }
             .store(in: &cancellables)

@@ -14,7 +14,7 @@ final class RecentProjectsManager: ObservableObject {
     @Published private(set) var recentProjects: [URL] = []
     
     private let userDefaultsKey = "recentProjectBookmarks"
-    private let maxRecentProjects = 15  // Standard for professional macOS apps
+    private let maxRecentProjects = 10  // Industry standard (Xcode, VS Code, etc.)
     private let queue = DispatchQueue(label: "com.jamai.recentprojects", qos: .userInitiated)
     
     static let shared = RecentProjectsManager()
@@ -80,12 +80,9 @@ final class RecentProjectsManager: ObservableObject {
         // Synchronous load during initialization
         let defaults = UserDefaults.standard
         guard let datas = defaults.array(forKey: userDefaultsKey) as? [Data], !datas.isEmpty else {
-            print("📋 RecentProjectsManager: No saved bookmarks found")
             recentProjects = []
             return
         }
-        
-        print("📋 RecentProjectsManager: Loading \(datas.count) bookmarks...")
         
         // Process bookmarks synchronously
         let results = datas.compactMap { data -> (url: URL, needsRefresh: Bool)? in
@@ -99,20 +96,16 @@ final class RecentProjectsManager: ObservableObject {
                 )
                 
                 if isValidProjectURLSync(url) {
-                    print("✅ Loaded: \(url.lastPathComponent)")
                     return (url, stale)
-                } else {
-                    print("❌ Invalid: \(url.lastPathComponent)")
                 }
             } catch {
-                print("⚠️ Failed to resolve bookmark: \(error.localizedDescription)")
+                // Silently skip invalid bookmarks
             }
             return nil
         }
         
         let validURLs = results.map { $0.url }
         recentProjects = validURLs
-        print("📋 RecentProjectsManager: Loaded \(validURLs.count) valid projects")
         
         // Clean up stale bookmarks asynchronously if needed
         let needsCleanup = results.contains { $0.needsRefresh } || validURLs.count != datas.count
@@ -180,8 +173,26 @@ final class RecentProjectsManager: ObservableObject {
             guard let self = self else { return }
             
             var bookmarks: [Data] = []
+            var validURLs: [URL] = []
             
             for url in urls {
+                // Quick check if file still exists before attempting bookmark creation
+                guard FileManager.default.fileExists(atPath: url.path) else {
+                    continue
+                }
+                
+                // Start security-scoped access before creating bookmark
+                var accessing = false
+                if url.startAccessingSecurityScopedResource() {
+                    accessing = true
+                }
+                
+                defer {
+                    if accessing {
+                        url.stopAccessingSecurityScopedResource()
+                    }
+                }
+                
                 do {
                     // Create security-scoped bookmark
                     let bookmarkData = try url.bookmarkData(
@@ -190,9 +201,17 @@ final class RecentProjectsManager: ObservableObject {
                         relativeTo: nil
                     )
                     bookmarks.append(bookmarkData)
+                    validURLs.append(url)
                 } catch {
-                    print("⚠️ Failed to create bookmark for \(url.lastPathComponent): \(error.localizedDescription)")
-                    // Continue processing other URLs instead of failing completely
+                    // Silently skip files that can't be bookmarked (deleted, moved, etc.)
+                }
+            }
+            
+            // Update in-memory list if we filtered out invalid entries
+            let finalValidURLs = validURLs
+            if finalValidURLs.count != urls.count {
+                Task { @MainActor [weak self] in
+                    self?.recentProjects = finalValidURLs
                 }
             }
             

@@ -76,46 +76,46 @@ struct WelcomeView: View {
                 .buttonStyle(PlainButtonStyle())
             }
             
-            // Recent Projects
+            // Recent Projects - Show first 5 (industry standard for welcome screens)
             if !appState.recentProjects.isEmpty {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Recent Projects")
-                            .font(.headline)
-                        Text("(\(appState.recentProjects.count))")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.top, 8)
+                    Text("Recent Projects")
+                        .font(.headline)
+                        .padding(.top, 8)
                     
-                    VStack(spacing: 4) {
-                        ForEach(appState.recentProjects, id: \.self) { url in
-                            Button(action: {
-                                appState.openRecent(url: url)
-                            }) {
-                                HStack(spacing: 8) {
-                                    Image(systemName: "folder")
-                                        .foregroundColor(.secondary)
-                                    Text(url.deletingPathExtension().lastPathComponent)
-                                        .font(.body)
-                                        .lineLimit(1)
-                                        .truncationMode(.middle)
-                                    Spacer()
-                                    Text(url.deletingPathExtension().path)
-                                        .foregroundColor(.secondary)
-                                        .font(.caption)
-                                        .lineLimit(1)
-                                        .truncationMode(.tail)
+                    ScrollView {
+                        VStack(spacing: 4) {
+                            ForEach(Array(appState.recentProjects.prefix(5)), id: \.self) { url in
+                                Button(action: {
+                                    appState.openRecent(url: url)
+                                }) {
+                                    HStack(spacing: 8) {
+                                        Image(systemName: "folder")
+                                            .foregroundColor(.secondary)
+                                        Text(url.deletingPathExtension().lastPathComponent)
+                                            .font(.body)
+                                            .lineLimit(1)
+                                            .truncationMode(.middle)
+                                        Spacer()
+                                    }
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 12)
+                                    .background(Color.secondary.opacity(0.1))
+                                    .cornerRadius(6)
                                 }
-                                .padding(.vertical, 6)
-                                .padding(.horizontal, 12)
-                                .background(Color.secondary.opacity(0.1))
-                                .cornerRadius(6)
+                                .buttonStyle(PlainButtonStyle())
                             }
-                            .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .frame(maxWidth: .infinity)
+                    .frame(height: 160)  // Fits ~5 items perfectly
+                    
+                    // Show "More in File menu" if there are more than 5
+                    if appState.recentProjects.count > 5 {
+                        Text("+ \(appState.recentProjects.count - 5) more in File > Open Recent")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 4)
+                    }
                 }
                 .padding(.horizontal, 40)
                 .frame(maxWidth: 700)
@@ -138,7 +138,6 @@ struct WelcomeView: View {
         .padding(40)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
-            print("👁️ WelcomeView appeared: \(appState.recentProjects.count) recent projects")
             // Refresh the recent projects list to ensure only valid projects are shown
             appState.refreshRecentProjects()
         }

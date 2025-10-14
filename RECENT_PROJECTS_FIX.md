@@ -73,9 +73,11 @@ NSDocumentController.shared.noteNewRecentDocumentURL(normalizedURL)
 - ✅ Invalid items automatically removed
 - ✅ Most recently used items appear first
 - ✅ Accessible from both Welcome screen and File menu
-- ✅ Stores up to **15 recent projects** (industry standard)
-- ✅ Keyboard shortcuts (Cmd+1 to Cmd+9) for first 9 items
-- ✅ Scrollable list in Welcome screen for easy access
+- ✅ Stores up to **10 recent projects** (industry standard)
+- ✅ **Welcome screen shows 5 most recent** (matches VS Code, Xcode)
+- ✅ **File menu shows all 10** with keyboard shortcuts (Cmd+1-9)
+- ✅ Scrollable list with fixed height (160px)
+- ✅ Helpful hint when more items available in File menu
 
 ## Files Changed
 
@@ -117,7 +119,20 @@ NSDocumentController.shared.noteNewRecentDocumentURL(normalizedURL)
 
 ## Additional Notes
 
-### Why Not Use NSDocument?
+### Design Rationale
+
+**Why 10 total items?**
+- Industry standard across professional macOS apps
+- Xcode, VS Code, Sublime Text all use ~10 items
+- Balances utility with UI cleanliness
+
+**Why show only 5 on Welcome screen?**
+- Prevents overwhelming the start screen
+- Matches convention (VS Code: 5, Xcode: 5-6)
+- Keeps Welcome screen compact and focused
+- All 10 still accessible via File menu
+
+**Why Not Use NSDocument?**
 - This is a SwiftUI app without NSDocument architecture
 - NSDocumentController still provides system menu integration
 - Security-scoped bookmarks required for sandboxed access
