@@ -11,6 +11,7 @@ import UniformTypeIdentifiers
 struct OutlineView: View {
     @ObservedObject var viewModel: CanvasViewModel
     let viewportSize: CGSize
+    @Binding var isCollapsed: Bool
     @Environment(\.colorScheme) var colorScheme
     
     @State private var hoveredNodeId: UUID?
@@ -34,6 +35,19 @@ struct OutlineView: View {
                 Text("Outline")
                     .font(.headline)
                 Spacer()
+                
+                // Collapse button
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        isCollapsed.toggle()
+                    }
+                }) {
+                    Image(systemName: "sidebar.left")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Hide Outline")
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)

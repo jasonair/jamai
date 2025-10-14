@@ -98,9 +98,9 @@ class CanvasViewModel: ObservableObject {
         // Force edge refresh immediately to ensure wire appears
         positionsVersion &+= 1
         
-        // Save to database asynchronously
+        // Save to database asynchronously on background queue
         let dbActor = self.dbActor
-        Task { [weak self, dbActor, note, edge] in
+        Task.detached(priority: .userInitiated) { [weak self, dbActor, note, edge] in
             do {
                 try await dbActor.saveNode(note)
                 try await dbActor.saveEdge(edge)

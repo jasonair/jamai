@@ -20,27 +20,32 @@ struct JamAIApp: App {
                 WelcomeView(appState: appState)
                     .frame(width: 600, height: 400)
             } else {
-                VStack(spacing: 0) {
-                    // Tab bar
-                    TabBarView(
-                        tabs: appState.tabs,
-                        activeTabId: appState.activeTabId,
-                        onTabSelect: { tabId in
-                            appState.selectTab(tabId)
-                        },
-                        onTabClose: { tabId in
-                            appState.closeTab(tabId)
-                        }
-                    )
-                    
-                    Divider()
-                    
-                    // Active project canvas
+                ZStack {
+                    // Active project canvas (bottom layer)
                     if let viewModel = appState.viewModel {
                         CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
                             .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
                             .id(appState.activeTabId) // Force refresh when tab changes
                     }
+                    
+                    // Tab bar overlay (top layer with high z-index)
+                    VStack(spacing: 0) {
+                        TabBarView(
+                            tabs: appState.tabs,
+                            activeTabId: appState.activeTabId,
+                            onTabSelect: { tabId in
+                                appState.selectTab(tabId)
+                            },
+                            onTabClose: { tabId in
+                                appState.closeTab(tabId)
+                            }
+                        )
+                        
+                        Divider()
+                        
+                        Spacer()
+                    }
+                    .allowsHitTesting(true)
                 }
                 .frame(minWidth: 1200, minHeight: 800)
             }
@@ -93,7 +98,7 @@ struct JamAIApp: App {
                 .disabled(appState.viewModel == nil)
             }
             
-            CommandGroup(after: .undoRedo) {
+            CommandGroup(replacing: .undoRedo) {
                 Button("Undo") {
                     appState.viewModel?.undo()
                 }
@@ -105,6 +110,30 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut("z", modifiers: [.command, .shift])
                 .disabled(!(appState.viewModel?.undoManager.canRedo ?? false))
+            }
+            
+            CommandGroup(after: .undoRedo) {
+                Button("Zoom In") {
+                    if let vm = appState.viewModel {
+                        vm.zoom = min(vm.zoom * 1.2, Config.maxZoom)
+                    }
+                }
+                .keyboardShortcut("+", modifiers: .command)
+                .disabled(appState.viewModel == nil)
+                
+                Button("Zoom Out") {
+                    if let vm = appState.viewModel {
+                        vm.zoom = max(vm.zoom / 1.2, Config.minZoom)
+                    }
+                }
+                .keyboardShortcut("-", modifiers: .command)
+                .disabled(appState.viewModel == nil)
+                
+                Button("Reset Zoom") {
+                    appState.viewModel?.zoom = Config.defaultZoom
+                }
+                .keyboardShortcut("0", modifiers: .command)
+                .disabled(appState.viewModel == nil)
             }
             
             CommandGroup(after: .toolbar) {

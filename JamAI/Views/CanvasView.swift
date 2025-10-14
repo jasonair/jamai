@@ -192,24 +192,47 @@ struct CanvasView: View {
             overlayControls
             
             // Outline
-            if showOutline {
-                VStack(alignment: .leading) {
-                    Spacer().frame(height: 80)
-                    HStack(alignment: .top, spacing: 0) {
-                        OutlineView(viewModel: viewModel, viewportSize: geometry.size)
+            VStack(alignment: .leading) {
+                Spacer().frame(height: 0)
+                HStack(alignment: .top, spacing: 0) {
+                    if showOutline {
+                        OutlineView(viewModel: viewModel, viewportSize: geometry.size, isCollapsed: $showOutline)
                             .padding(.leading, 20)
-                        Spacer()
+                            .padding(.top, 20)
+                    } else {
+                        // Collapsed state - show expand button
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                showOutline = true
+                            }
+                        }) {
+                            VStack(spacing: 6) {
+                                Image(systemName: "sidebar.left")
+                                    .font(.system(size: 14))
+                                Text("Outline")
+                                    .font(.caption2)
+                            }
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 12)
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(8)
+                            .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .padding(.leading, 20)
+                        .padding(.top, 20)
+                        .help("Show Outline")
                     }
                     Spacer()
                 }
+                Spacer()
             }
         }
     }
     
     private var overlayControls: some View {
         VStack {
-            toolbar
-                .allowsHitTesting(true)
             Spacer()
             // Contextual formatting bar for text/shape
             if let binding = formattingBinding {
@@ -219,106 +242,12 @@ struct CanvasView: View {
                         .allowsHitTesting(true)
                     Spacer()
                 }
-                .padding(.bottom, 72)
-            }
-            // Bottom controls
-            HStack {
-                // Bottom center tool dock
-                Spacer()
-                ToolDockView(selectedTool: $viewModel.selectedTool)
-                    .allowsHitTesting(true)
-                    .padding(.bottom, 16)
-                Spacer()
-                // Bottom right grid toggle
-                gridToggle
-                    .allowsHitTesting(true)
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
+                .padding(.bottom, 20)
             }
         }
         .allowsHitTesting(true)
     }
     
-    private var toolbar: some View {
-        HStack(spacing: 16) {
-            // Left section: Outline, Undo/Redo and Zoom controls
-            HStack(spacing: 16) {
-                // Outline toggle
-                Button(action: { 
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        showOutline.toggle()
-                    }
-                }) {
-                    Image(systemName: showOutline ? "sidebar.left" : "sidebar.left")
-                        .foregroundColor(showOutline ? .accentColor : .secondary)
-                }
-                .help("Toggle Outline")
-                .buttonStyle(PlainButtonStyle())
-                
-                Divider()
-                    .frame(height: 20)
-                
-                // Undo/Redo
-                Button(action: { viewModel.undo() }) {
-                    Image(systemName: "arrow.uturn.backward")
-                }
-                .disabled(!viewModel.undoManager.canUndo)
-                
-                Button(action: { viewModel.redo() }) {
-                    Image(systemName: "arrow.uturn.forward")
-                }
-                .disabled(!viewModel.undoManager.canRedo)
-                
-                Divider()
-                    .frame(height: 20)
-                
-                // Zoom controls
-                Button(action: { zoomOut() }) {
-                    Image(systemName: "minus.magnifyingglass")
-                }
-                .keyboardShortcut("-", modifiers: .command)
-                
-                Text("\(Int(viewModel.zoom * 100))%")
-                    .font(.caption)
-                    .frame(width: 50)
-                
-                Button(action: { zoomIn() }) {
-                    Image(systemName: "plus.magnifyingglass")
-                }
-                .keyboardShortcut("+", modifiers: .command)
-                
-                Button(action: {
-                    zoomToCenter(newZoom: Config.defaultZoom)
-                }) {
-                    Label("Reset", systemImage: "arrow.counterclockwise")
-                        .font(.caption)
-                }
-            }
-            
-            Spacer()
-            
-            // Center: Project name
-            Text(viewModel.project.name)
-                .font(.headline)
-            
-            Spacer()
-            
-            // Right section: New node button
-            Button(action: {
-                // Create node at canvas origin (0,0) - user can drag to reposition
-                // Or we estimate viewport center without needing geometry
-                let centerX = -viewModel.offset.width / viewModel.zoom
-                let centerY = -viewModel.offset.height / viewModel.zoom
-                viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
-            }) {
-                Label("New Node", systemImage: "plus.circle.fill")
-            }
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 12)
-        .background(toolbarBackground)
-        .shadow(color: Color.black.opacity(0.1), radius: 4, y: 2)
-    }
     
     private var dotBackground: some View {
         Canvas { context, size in
@@ -384,24 +313,6 @@ struct CanvasView: View {
         }
     }
     
-    private var gridToggle: some View {
-        Button(action: {
-            viewModel.showDots.toggle()
-        }) {
-            HStack(spacing: 6) {
-                Image(systemName: viewModel.showDots ? "circle.grid.3x3.fill" : "square.grid.3x3.fill")
-                    .font(.system(size: 14))
-                Text(viewModel.showDots ? "Dots" : "Grid")
-                    .font(.caption)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(toolbarBackground)
-            .cornerRadius(8)
-            .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
     
     // MARK: - Helpers
     
@@ -602,11 +513,6 @@ struct CanvasView: View {
             : Color(white: 0.95)
     }
     
-    private var toolbarBackground: some View {
-        colorScheme == .dark
-            ? Color(nsColor: .controlBackgroundColor)
-            : Color.white
-    }
     
     private var gridColor: Color {
         colorScheme == .dark
@@ -623,6 +529,14 @@ extension View {
             .onKeyPress(.escape) {
                 viewModel.selectedTool = .select
                 viewModel.selectedNodeId = nil
+                return .handled
+            }
+            .onKeyPress("n") {
+                // Only create new node when no nodes are selected
+                guard viewModel.selectedNodeId == nil else { return .ignored }
+                let centerX = -viewModel.offset.width / viewModel.zoom
+                let centerY = -viewModel.offset.height / viewModel.zoom
+                viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
                 return .handled
             }
     }
