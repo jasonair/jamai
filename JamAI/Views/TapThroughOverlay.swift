@@ -70,12 +70,8 @@ final class TapThroughView: NSView {
                     }
                     TapThroughView.activeInstance = self
                     self.isActive = true
-                    if Config.enableVerboseLogging { print("TapThrough: activated for \(self)") }
                     // Find scroll view immediately on click
-                    if self.scrollView == nil {
-                        self.scrollView = self.findScrollView()
-                        if Config.enableVerboseLogging { print("TapThrough: scroll view cached: \(self.scrollView != nil)") }
-                    }
+                    if self.scrollView == nil { self.scrollView = self.findScrollView() }
                 }
             }
             // Note: Removed "click outside" deactivation to prevent stampede effect
@@ -117,18 +113,11 @@ final class TapThroughView: NSView {
         var currentView: NSView? = self.superview
         while let view = currentView {
             // Check if this view is a scroll view
-            if let scrollView = view as? NSScrollView {
-                if Config.enableVerboseLogging { print("TapThrough: found NSScrollView: \(scrollView)") }
-                return scrollView
-            }
+            if let scrollView = view as? NSScrollView { return scrollView }
             // Also check subviews recursively
-            if let scrollView = findScrollViewInSubviews(of: view) {
-                if Config.enableVerboseLogging { print("TapThrough: found NSScrollView in subviews: \(scrollView)") }
-                return scrollView
-            }
+            if let scrollView = findScrollViewInSubviews(of: view) { return scrollView }
             currentView = view.superview
         }
-        if Config.enableVerboseLogging { print("TapThrough: no NSScrollView found") }
         return nil
     }
     

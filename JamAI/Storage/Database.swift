@@ -8,12 +8,6 @@
 import Foundation
 import GRDB
 
-#if DEBUG
-private let DB_NOTE_VERBOSE_LOG: Bool = true
-#else
-private let DB_NOTE_VERBOSE_LOG: Bool = false
-#endif
-
 enum DatabaseError: Error {
     case readOnlyAccess
     case notInitialized
@@ -339,9 +333,6 @@ final class Database: Sendable {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
-            if DB_NOTE_VERBOSE_LOG && node.type == .note {
-                print("🗄️ [DB] saveNode note id=\(node.id) parent=\(node.parentId?.uuidString ?? "nil") x=\(node.x) y=\(node.y) len=\(node.description.count)")
-            }
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO nodes 

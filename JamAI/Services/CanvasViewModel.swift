@@ -1213,9 +1213,6 @@ class CanvasViewModel: ObservableObject {
     
     private func scheduleDebouncedWrite(nodeId: UUID) {
         pendingNodeWrites.insert(nodeId)
-        if Config.enableVerboseLogging {
-            print("🕒 [Debounce] schedule node id=\(nodeId) pending_nodes=\(pendingNodeWrites.count) pending_edges=\(pendingEdgeWrites.count)")
-        }
         
         // Cancel previous debounce
         debounceWorkItem?.cancel()
@@ -1223,7 +1220,6 @@ class CanvasViewModel: ObservableObject {
         // Schedule new debounce
         let workItem = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
-                if Config.enableVerboseLogging { print("🕒 [Debounce] firing flush") }
                 self?.flushPendingWrites()
             }
         }
@@ -1234,9 +1230,6 @@ class CanvasViewModel: ObservableObject {
     
     private func scheduleDebouncedWrite(edgeId: UUID) {
         pendingEdgeWrites.insert(edgeId)
-        if Config.enableVerboseLogging {
-            print("🕒 [Debounce] schedule edge id=\(edgeId) pending_nodes=\(pendingNodeWrites.count) pending_edges=\(pendingEdgeWrites.count)")
-        }
         
         // Cancel previous debounce
         debounceWorkItem?.cancel()
@@ -1263,9 +1256,6 @@ class CanvasViewModel: ObservableObject {
         let nodesToSave = nodeIds.compactMap { nodes[$0] }
         let edgesToSave = edgeIds.compactMap { edges[$0] }
         let dbActor = self.dbActor
-        if Config.enableVerboseLogging {
-            print("💾 [Flush] nodes=\(nodesToSave.count) edges=\(edgesToSave.count)")
-        }
         
         // Perform I/O off the main actor
         Task { [weak self, dbActor, nodesToSave, edgesToSave] in
@@ -1275,9 +1265,6 @@ class CanvasViewModel: ObservableObject {
                 }
                 for edge in edgesToSave {
                     try await dbActor.saveEdge(edge)
-                }
-                if Config.enableVerboseLogging {
-                    print("💾 [Flush] completed nodes=\(nodesToSave.count) edges=\(edgesToSave.count)")
                 }
             } catch {
                 await MainActor.run {
@@ -1290,24 +1277,5 @@ class CanvasViewModel: ObservableObject {
         debounceWorkItem = nil
     }
     
-    // MARK: - Debugging Helpers
     
-    private static func qosName(_ qos: qos_class_t) -> String {
-        switch qos {
-        case QOS_CLASS_USER_INTERACTIVE:
-            return "User Interactive"
-        case QOS_CLASS_USER_INITIATED:
-            return "User Initiated"
-        case QOS_CLASS_DEFAULT:
-            return "Default"
-        case QOS_CLASS_UTILITY:
-            return "Utility"
-        case QOS_CLASS_BACKGROUND:
-            return "Background"
-        case QOS_CLASS_UNSPECIFIED:
-            return "Unspecified"
-        default:
-            return "Unknown (\(qos.rawValue))"
-        }
-    }
 }

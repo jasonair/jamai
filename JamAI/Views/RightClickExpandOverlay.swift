@@ -35,7 +35,6 @@ final class RightClickMonitorView: NSView {
     var onMakeNote: ((String) -> Void)?
     var onJamWithThis: ((String) -> Void)?
     private var eventMonitor: Any?
-    private static var monitorsActive: Int = 0
     
     override func hitTest(_ point: NSPoint) -> NSView? {
         // Never intercept events; allow underlying SwiftUI content to handle everything
@@ -49,10 +48,6 @@ final class RightClickMonitorView: NSView {
         // Local monitor receives events before the target; we don't consume them unless we show our menu
         eventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.rightMouseDown, .rightMouseUp]) { [weak self] event in
             guard let self = self, let window = self.window else { return event }
-            
-            // Log QoS of event monitor callback
-            let eventMonitorQoS = qos_class_self()
-            if Config.enableVerboseLogging { print("🔍 [RightClick] Event monitor QoS: \(Self.qosName(eventMonitorQoS))") }
             
             // Only act when the click occurs within our bounds
             let locationInWindow = event.locationInWindow
@@ -72,13 +67,9 @@ final class RightClickMonitorView: NSView {
             // Show our menu only if there is a non-empty selection
             if let text = selectedText?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty {
                 if event.type == .rightMouseDown {
-                    if Config.enableVerboseLogging { print("🔍 [RightClick] Right-click detected with selection, dispatching menu...") }
                     // Dispatch menu presentation asynchronously to avoid priority inversion
                     // The event monitor runs at User-interactive QoS, but menu operations may use lower QoS
                     DispatchQueue.main.async { [weak self] in
-                        let asyncQoS = qos_class_self()
-                        if Config.enableVerboseLogging { print("🔍 [RightClick] Async block QoS: \(Self.qosName(asyncQoS))") }
-                        
                         guard let self = self else { return }
                         let menu = NSMenu()
                         let expandItem = NSMenuItem(title: "Expand on Selection", action: #selector(self.handleExpand(_:)), keyEquivalent: "")
@@ -93,39 +84,14 @@ final class RightClickMonitorView: NSView {
                         noteItem.target = self
                         noteItem.representedObject = text
                         menu.addItem(noteItem)
-                        
-                        if Config.enableVerboseLogging { print("🔍 [RightClick] About to pop up menu...") }
                         // Pop up menu at the current mouse location
                         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
-                        if Config.enableVerboseLogging { print("🔍 [RightClick] Menu popup completed") }
                     }
-                    if Config.enableVerboseLogging { print("🔍 [RightClick] Event monitor returning nil to suppress default menu") }
                     // Swallow to avoid duplicate default menu popping
                     return nil
                 }
             }
             return event
-        }
-        RightClickMonitorView.monitorsActive += 1
-        if Config.enableVerboseLogging { print("🔍 [RightClick] monitorsActive=\(RightClickMonitorView.monitorsActive)") }
-    }
-    
-    private static func qosName(_ qos: qos_class_t) -> String {
-        switch qos {
-        case QOS_CLASS_USER_INTERACTIVE:
-            return "User Interactive"
-        case QOS_CLASS_USER_INITIATED:
-            return "User Initiated"
-        case QOS_CLASS_DEFAULT:
-            return "Default"
-        case QOS_CLASS_UTILITY:
-            return "Utility"
-        case QOS_CLASS_BACKGROUND:
-            return "Background"
-        case QOS_CLASS_UNSPECIFIED:
-            return "Unspecified"
-        default:
-            return "Unknown (\(qos.rawValue))"
         }
     }
     
@@ -134,42 +100,27 @@ final class RightClickMonitorView: NSView {
     }
     
     @objc private func handleExpand(_ sender: NSMenuItem) {
-        let handlerQoS = qos_class_self()
-        if Config.enableVerboseLogging { print("🔍 [RightClick] handleExpand called, QoS: \(Self.qosName(handlerQoS))") }
-        
         if let text = sender.representedObject as? String {
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
-                let callbackQoS = qos_class_self()
-                if Config.enableVerboseLogging { print("🔍 [RightClick] handleExpand callback QoS: \(Self.qosName(callbackQoS))") }
                 self?.onExpand?(text)
             }
         }
     }
     
     @objc private func handleMakeNote(_ sender: NSMenuItem) {
-        let handlerQoS = qos_class_self()
-        if Config.enableVerboseLogging { print("🔍 [RightClick] handleMakeNote called, QoS: \(Self.qosName(handlerQoS))") }
-        
         if let text = sender.representedObject as? String {
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
-                let callbackQoS = qos_class_self()
-                if Config.enableVerboseLogging { print("🔍 [RightClick] handleMakeNote callback QoS: \(Self.qosName(callbackQoS))") }
                 self?.onMakeNote?(text)
             }
         }
     }
     
     @objc private func handleJamWithThis(_ sender: NSMenuItem) {
-        let handlerQoS = qos_class_self()
-        if Config.enableVerboseLogging { print("🔍 [RightClick] handleJamWithThis called, QoS: \(Self.qosName(handlerQoS))") }
-        
         if let text = sender.representedObject as? String {
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
-                let callbackQoS = qos_class_self()
-                if Config.enableVerboseLogging { print("🔍 [RightClick] handleJamWithThis callback QoS: \(Self.qosName(callbackQoS))") }
                 self?.onJamWithThis?(text)
             }
         }
@@ -179,8 +130,6 @@ final class RightClickMonitorView: NSView {
         if let monitor = eventMonitor {
             NSEvent.removeMonitor(monitor)
             eventMonitor = nil
-            RightClickMonitorView.monitorsActive = max(0, RightClickMonitorView.monitorsActive - 1)
-            if Config.enableVerboseLogging { print("🔍 [RightClick] monitorsActive=\(RightClickMonitorView.monitorsActive)") }
         }
     }
 }

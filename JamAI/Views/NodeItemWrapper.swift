@@ -99,8 +99,11 @@ struct NodeItemWrapper: View {
         case .text:
             // Fixed reasonable width for text
             return 250
+        case .shape:
+            return Node.width(for: .shape)
         default:
-            return Node.width(for: node.type)
+            // Use standard node width for both standard and note types to match NodeView
+            return Node.nodeWidth
         }
     }
 }
