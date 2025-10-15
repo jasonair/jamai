@@ -63,7 +63,7 @@ class DocumentManager {
         
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
         let metadataData = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
-        try metadataData.write(to: metadataURL)
+        try metadataData.write(to: metadataURL, options: .atomic)
     }
     
     func openProject(from url: URL) throws -> (Project, Database) {
@@ -117,7 +117,7 @@ class DocumentManager {
                     "updatedAt": formatter.string(from: anyProject.updatedAt)
                 ]
                 let data = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
-                try data.write(to: metadataURL)
+                try data.write(to: metadataURL, options: .atomic)
             } else {
                 throw DocumentError.projectNotFound
             }
@@ -150,7 +150,7 @@ class DocumentManager {
         ]
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
         let data = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
-        try data.write(to: metadataURL)
+        try data.write(to: metadataURL, options: .atomic)
     }
     
     func exportJSON(project: Project, nodes: [Node], edges: [Edge], to url: URL) throws {

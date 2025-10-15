@@ -381,12 +381,12 @@ class AppState: ObservableObject {
               let viewModel = tab.viewModel else { return }
         
         do {
-            // Security-scoped access is already active from openProjectInNewTab
-            // Pass nil for database to force a fresh write-capable connection
+            // Security-scoped access is already active from openProjectInNewTab.
+            // Reuse the existing database connection to maintain read-write access.
             try DocumentManager.shared.saveProject(
                 viewModel.project,
                 to: tab.projectURL.deletingPathExtension(),
-                database: nil
+                database: tab.database
             )
             viewModel.save()
         } catch {
