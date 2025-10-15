@@ -6,76 +6,53 @@
 //
 
 import Foundation
+#if canImport(AppKit)
 import AppKit
+#endif
 
 class DocumentManager {
-    static let shared = DocumentManager()
+#if canImport(AppKit)
+    static let shared = DocumentManager(adapter: MacStorageAdapter())
+#else
+    static let shared = DocumentManager(adapter: DefaultStorageAdapter())
+#endif
     
-    private init() {}
+    private let adapter: StorageAdapter
+    
+    private init(adapter: StorageAdapter) {
+        self.adapter = adapter
+    }
     
     // MARK: - File Operations
     
     func createNewProject(name: String) throws -> (Project, URL) {
         let project = Project(name: name)
-        let fileURL = try getDefaultSaveLocation(for: project)
+        let fileURL = try adapter.defaultSaveLocation(for: project)
         try saveProject(project, to: fileURL)
         return (project, fileURL)
     }
     
     func saveProject(_ project: Project, to url: URL, database: Database? = nil) throws {
-        // Always ensure we have security-scoped access to the bundle directory
-        let bundleURL = url.appendingPathExtension(Config.jamFileExtension)
-        var startedAccess = false
-        if bundleURL.startAccessingSecurityScopedResource() {
-            startedAccess = true
-        }
-        defer {
-            if startedAccess { bundleURL.stopAccessingSecurityScopedResource() }
-        }
+        // Ensure bundle exists (.jam directory)
+        let bundleURL = try adapter.ensureProjectBundle(at: url)
+        // Acquire temporary access only if caller didn't supply an open database (e.g., first save or external flows)
+        let manageSecurity = (database == nil)
+        let started = manageSecurity ? adapter.startAccessing(bundleURL) : false
+        defer { if manageSecurity && started { adapter.stopAccessing(bundleURL) } }
         
-        // Create bundle directory if needed
-        try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
-        
-        // Database file inside bundle
-        let dbURL = bundleURL.appendingPathComponent("data.db")
-        
-        // Use existing database connection if provided (preserves write access)
-        let db: Database
-        if let existing = database {
-            db = existing
-        } else {
-            let newDB = Database()
-            try newDB.setup(at: dbURL)
-            db = newDB
-        }
+        // Use existing database connection if provided; otherwise open a write-capable one
+        let db: Database = try database ?? adapter.openWritableDatabase(at: bundleURL)
         
         // Save project metadata to database
         try db.saveProject(project)
         
-        // Update metadata file
-        let metadata: [String: Any] = [
-            "version": "1.0",
-            "projectId": project.id.uuidString,
-            "projectName": project.name,
-            "createdAt": ISO8601DateFormatter().string(from: project.createdAt),
-            "updatedAt": ISO8601DateFormatter().string(from: project.updatedAt)
-        ]
-        
-        let metadataURL = bundleURL.appendingPathComponent("metadata.json")
-        let metadataData = try JSONSerialization.data(withJSONObject: metadata, options: .prettyPrinted)
-        try metadataData.write(to: metadataURL, options: .atomic)
+        // Update metadata.json atomically via adapter
+        try adapter.saveMetadata(project, at: bundleURL)
     }
     
     func openProject(from url: URL) throws -> (Project, Database) {
-        // Handle both .jam extension and directory without extension
-        var bundleURL = url
-        if url.pathExtension != Config.jamFileExtension {
-            // If no .jam extension, try adding it
-            let withExtension = url.appendingPathExtension(Config.jamFileExtension)
-            if FileManager.default.fileExists(atPath: withExtension.path) {
-                bundleURL = withExtension
-            }
-        }
+        // Normalize URL to .jam directory for file operations; security scope handled by caller
+        let bundleURL = adapter.normalizeProjectURL(url)
         
         guard FileManager.default.fileExists(atPath: bundleURL.path) else {
             throw DocumentError.fileNotFound
@@ -92,8 +69,7 @@ class DocumentManager {
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw DocumentError.databaseNotFound
         }
-        let database = Database()
-        try database.setup(at: dbURL)
+        let database = try adapter.openWritableDatabase(at: bundleURL)
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
         var loadedProject: Project?
         if FileManager.default.fileExists(atPath: metadataURL.path) {
@@ -126,13 +102,7 @@ class DocumentManager {
     }
 
     func repairMetadata(at url: URL) throws {
-        var bundleURL = url
-        if url.pathExtension != Config.jamFileExtension {
-            let withExtension = url.appendingPathExtension(Config.jamFileExtension)
-            if FileManager.default.fileExists(atPath: withExtension.path) {
-                bundleURL = withExtension
-            }
-        }
+        let bundleURL = adapter.normalizeProjectURL(url)
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: bundleURL.path, isDirectory: &isDirectory), isDirectory.boolValue else { return }
         let dbURL = bundleURL.appendingPathComponent("data.db")

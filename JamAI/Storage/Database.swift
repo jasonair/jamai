@@ -30,7 +30,34 @@ final class Database: Sendable {
         do {
             dbQueue = try DatabaseQueue(path: url.path, configuration: config)
             isReadOnly = false
+            if let dbQueue = dbQueue {
+                do {
+                    try dbQueue.inDatabase { db in
+                        try db.execute(sql: "PRAGMA journal_mode=MEMORY")
+                        try db.execute(sql: "PRAGMA temp_store=MEMORY")
+                        if let mode = try String.fetchOne(db, sql: "PRAGMA journal_mode")?.lowercased() {
+                            print("ℹ️ SQLite journal_mode after request: \(mode)")
+                        }
+                        try? db.execute(sql: "PRAGMA synchronous=NORMAL")
+                        try db.execute(sql: "PRAGMA foreign_keys=ON")
+                    }
+                } catch {
+                    print("⚠️ Failed to set PRAGMAs pre-migration: \(error.localizedDescription). Proceeding with defaults.")
+                }
+            }
             try migrate()
+            // Diagnostics: check directory writability
+            let dirURL = url.deletingLastPathComponent()
+            let dirWritable = FileManager.default.isWritableFile(atPath: dirURL.path)
+            print("ℹ️ Database directory: \(dirURL.path), writable: \(dirWritable)")
+            // Probe write to trigger journaling
+            if let dbQueue = dbQueue {
+                do {
+                    try dbQueue.write { _ in /* no-op write to test journaling */ }
+                } catch {
+                    print("⚠️ Initial write failed: \(error.localizedDescription).")
+                }
+            }
         } catch let dbError {
             // If opening in write mode fails, throw a clear error
             print("⚠️ Cannot open database in write mode: \(dbError)")

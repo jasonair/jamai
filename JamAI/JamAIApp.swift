@@ -280,31 +280,34 @@ class AppState: ObservableObject {
     }
     
     func openProjectInNewTab(url: URL) {
+        // Normalize to the .jam directory URL we will operate on
+        let normalizedURL = (url.pathExtension == Config.jamFileExtension) ? url : url.appendingPathExtension(Config.jamFileExtension)
+        
         // Check if project is already open in a tab
-        if let existingTab = tabs.first(where: { $0.projectURL == url }) {
+        if let existingTab = tabs.first(where: { $0.projectURL == normalizedURL }) {
             activeTabId = existingTab.id
             return
         }
         
         do {
-            // Start security-scoped access
-            if url.startAccessingSecurityScopedResource() {
-                accessingResources.insert(url)
+            // Start security-scoped access on the actual bundle URL we will use for file access
+            if normalizedURL.startAccessingSecurityScopedResource() {
+                accessingResources.insert(normalizedURL)
             }
             
-            let (project, database) = try DocumentManager.shared.openProject(from: url)
+            let (project, database) = try DocumentManager.shared.openProject(from: normalizedURL)
             let viewModel = CanvasViewModel(project: project, database: database)
             
             let newTab = ProjectTab(
-                projectURL: url,
-                projectName: url.deletingPathExtension().lastPathComponent,
+                projectURL: normalizedURL,
+                projectName: normalizedURL.deletingPathExtension().lastPathComponent,
                 viewModel: viewModel,
                 database: database
             )
             
             tabs.append(newTab)
             activeTabId = newTab.id
-            recordRecent(url: url)
+            recordRecent(url: normalizedURL)
         } catch {
             showError("Failed to open project: \(error.localizedDescription)")
         }
