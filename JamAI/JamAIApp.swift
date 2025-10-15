@@ -154,6 +154,16 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(appState.viewModel == nil)
+                
+                Divider()
+                
+                Button("Toggle Grid") {
+                    if let vm = appState.viewModel {
+                        vm.showDots.toggle()
+                    }
+                }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(appState.viewModel == nil)
             }
             
             CommandGroup(after: .toolbar) {

@@ -243,17 +243,33 @@ struct CanvasView: View {
     }
     
     private var overlayControls: some View {
-        VStack {
-            Spacer()
-            // Contextual formatting bar for text/shape
-            if let binding = formattingBinding {
+        ZStack {
+            // Contextual formatting bar for text/shape (centered bottom)
+            VStack {
+                Spacer()
+                if let binding = formattingBinding {
+                    HStack {
+                        Spacer()
+                        FormattingBarView(node: binding)
+                            .allowsHitTesting(true)
+                        Spacer()
+                    }
+                    .padding(.bottom, 20)
+                }
+            }
+            
+            // Background toggle (bottom right, always visible)
+            VStack {
+                Spacer()
                 HStack {
                     Spacer()
-                    FormattingBarView(node: binding)
-                        .allowsHitTesting(true)
-                    Spacer()
+                    BackgroundToggleView(showDots: Binding(
+                        get: { viewModel.showDots },
+                        set: { viewModel.showDots = $0 }
+                    ))
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 20)
                 }
-                .padding(.bottom, 20)
             }
         }
         .allowsHitTesting(true)
