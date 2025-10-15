@@ -71,11 +71,10 @@ final class TapThroughView: NSView {
                         print("Scroll view cached: \(self.scrollView != nil)")
                     }
                 }
-            } else {
-                // Deactivate if clicking outside
-                self.isActive = false
-                print("Click outside - isActive set to false")
             }
+            // Note: Removed "click outside" deactivation to prevent stampede effect
+            // when multiple TapThroughView instances exist. Each click inside a view
+            // will naturally activate only that instance.
             
             // Always return the event to allow text selection and other interactions
             return event
@@ -85,24 +84,21 @@ final class TapThroughView: NSView {
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self = self else { return event }
             
+            // Early exit if not active to reduce processing overhead
+            guard self.isActive else { return event }
+            
             // Check if scroll is happening over our bounds
             guard self.window != nil else { return event }
             let locationInWindow = event.locationInWindow
             let locationInSelf = self.convert(locationInWindow, from: nil)
             
-            print("Scroll event - isActive: \(self.isActive), contains: \(self.bounds.contains(locationInSelf))")
-            
-            // Only intercept if we're active AND the scroll is over our bounds
-            if self.isActive && self.bounds.contains(locationInSelf) {
-                print("Trying to forward scroll event")
+            // Only intercept if the scroll is over our bounds
+            if self.bounds.contains(locationInSelf) {
                 // Forward to scroll view - find it fresh if needed
                 if let scrollView = self.scrollView ?? self.findScrollView() {
                     self.scrollView = scrollView
-                    print("Forwarding to scroll view: \(scrollView)")
                     scrollView.scrollWheel(with: event)
                     return nil // Consume the event
-                } else {
-                    print("No scroll view found to forward to")
                 }
             }
             
