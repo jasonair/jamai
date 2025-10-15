@@ -23,20 +23,30 @@ class DocumentManager {
     }
     
     func saveProject(_ project: Project, to url: URL, database: Database? = nil) throws {
-        // Create bundle directory
+        // Always ensure we have security-scoped access to the bundle directory
         let bundleURL = url.appendingPathExtension(Config.jamFileExtension)
+        var startedAccess = false
+        if bundleURL.startAccessingSecurityScopedResource() {
+            startedAccess = true
+        }
+        defer {
+            if startedAccess { bundleURL.stopAccessingSecurityScopedResource() }
+        }
+        
+        // Create bundle directory if needed
         try FileManager.default.createDirectory(at: bundleURL, withIntermediateDirectories: true)
         
         // Database file inside bundle
         let dbURL = bundleURL.appendingPathComponent("data.db")
         
-        // Use existing database or create new one
+        // Use existing database connection if provided (preserves write access)
         let db: Database
-        if let existingDB = database {
-            db = existingDB
+        if let existing = database {
+            db = existing
         } else {
-            db = Database()
-            try db.setup(at: dbURL)
+            let newDB = Database()
+            try newDB.setup(at: dbURL)
+            db = newDB
         }
         
         // Save project metadata to database

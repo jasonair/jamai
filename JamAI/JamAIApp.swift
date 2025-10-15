@@ -378,16 +378,15 @@ class AppState: ObservableObject {
     
     func save() {
         guard let tab = activeTab,
-              let viewModel = tab.viewModel,
-              let database = tab.database else { return }
+              let viewModel = tab.viewModel else { return }
         
         do {
             // Security-scoped access is already active from openProjectInNewTab
-            // Let DocumentManager handle the database connection to avoid path mismatches
+            // Pass nil for database to force a fresh write-capable connection
             try DocumentManager.shared.saveProject(
                 viewModel.project,
                 to: tab.projectURL.deletingPathExtension(),
-                database: database
+                database: nil
             )
             viewModel.save()
         } catch {

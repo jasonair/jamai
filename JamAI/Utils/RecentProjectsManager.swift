@@ -194,9 +194,9 @@ final class RecentProjectsManager: ObservableObject {
                 }
                 
                 do {
-                    // Create security-scoped bookmark
+                    // Create security-scoped bookmark with READ-WRITE access
                     let bookmarkData = try url.bookmarkData(
-                        options: [.withSecurityScope, .securityScopeAllowOnlyReadAccess],
+                        options: [.withSecurityScope],
                         includingResourceValuesForKeys: nil,
                         relativeTo: nil
                     )

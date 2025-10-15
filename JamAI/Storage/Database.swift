@@ -8,17 +8,43 @@
 import Foundation
 import GRDB
 
+enum DatabaseError: Error {
+    case readOnlyAccess
+    case notInitialized
+}
+
 final class Database: Sendable {
     // GRDB's DatabaseQueue is thread-safe, so we can safely use it across actors
     nonisolated(unsafe) private var dbQueue: DatabaseQueue?
+    private(set) var isReadOnly: Bool = false
     
     init() {}
     
     // MARK: - Setup
     
     func setup(at url: URL) throws {
-        dbQueue = try DatabaseQueue(path: url.path)
-        try migrate()
+        // Always try to open in read-write mode
+        var config = Configuration()
+        config.readonly = false
+        
+        do {
+            dbQueue = try DatabaseQueue(path: url.path, configuration: config)
+            isReadOnly = false
+            try migrate()
+        } catch let dbError {
+            // If opening in write mode fails, throw a clear error
+            print("⚠️ Cannot open database in write mode: \(dbError)")
+            print("⚠️ Database path: \(url.path)")
+            print("⚠️ File exists: \(FileManager.default.fileExists(atPath: url.path))")
+            print("⚠️ Is writable: \(FileManager.default.isWritableFile(atPath: url.path))")
+            
+            // Try to get more info about permissions
+            if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
+                print("⚠️ File permissions: \(attrs[.posixPermissions] ?? "unknown")")
+            }
+            
+            throw DatabaseError.readOnlyAccess
+        }
     }
     
     private func migrate() throws {
