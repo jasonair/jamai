@@ -37,6 +37,7 @@ final class TapThroughView: NSView {
     private var scrollMonitor: Any?
     private var scrollView: NSScrollView?
     private var isActive: Bool = false
+    private static weak var activeInstance: TapThroughView?
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -63,12 +64,17 @@ final class TapThroughView: NSView {
                 
                 // Activate scroll capturing and ensure scroll view is found
                 if self.shouldFocusOnTap {
+                    // Deactivate previous active instance to avoid multiple interceptors
+                    if let prev = TapThroughView.activeInstance, prev !== self {
+                        prev.isActive = false
+                    }
+                    TapThroughView.activeInstance = self
                     self.isActive = true
-                    print("Click detected - isActive set to true")
+                    if Config.enableVerboseLogging { print("TapThrough: activated for \(self)") }
                     // Find scroll view immediately on click
                     if self.scrollView == nil {
                         self.scrollView = self.findScrollView()
-                        print("Scroll view cached: \(self.scrollView != nil)")
+                        if Config.enableVerboseLogging { print("TapThrough: scroll view cached: \(self.scrollView != nil)") }
                     }
                 }
             }
@@ -112,17 +118,17 @@ final class TapThroughView: NSView {
         while let view = currentView {
             // Check if this view is a scroll view
             if let scrollView = view as? NSScrollView {
-                print("Found NSScrollView: \(scrollView)")
+                if Config.enableVerboseLogging { print("TapThrough: found NSScrollView: \(scrollView)") }
                 return scrollView
             }
             // Also check subviews recursively
             if let scrollView = findScrollViewInSubviews(of: view) {
-                print("Found NSScrollView in subviews: \(scrollView)")
+                if Config.enableVerboseLogging { print("TapThrough: found NSScrollView in subviews: \(scrollView)") }
                 return scrollView
             }
             currentView = view.superview
         }
-        print("No NSScrollView found!")
+        if Config.enableVerboseLogging { print("TapThrough: no NSScrollView found") }
         return nil
     }
     
@@ -159,6 +165,9 @@ final class TapThroughView: NSView {
         if let monitor = scrollMonitor {
             NSEvent.removeMonitor(monitor)
             scrollMonitor = nil
+        }
+        if TapThroughView.activeInstance === self {
+            TapThroughView.activeInstance = nil
         }
     }
     

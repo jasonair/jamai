@@ -144,7 +144,7 @@ final class RecentProjectsManager: ObservableObject {
                         return (url, stale)
                     }
                 } catch {
-                    print("⚠️ Failed to resolve bookmark: \(error.localizedDescription)")
+                    if Config.enableVerboseLogging { print("⚠️ Failed to resolve bookmark: \(error.localizedDescription)") }
                 }
                 return nil
             }

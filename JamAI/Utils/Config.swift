@@ -8,6 +8,9 @@
 import Foundation
 
 enum Config {
+    // Logging
+    static let enableVerboseLogging: Bool = false
+    
     // API
     static let geminiAPIBaseURL = "https://generativelanguage.googleapis.com/v1beta"
     static let geminiModel = "gemini-2.0-flash-exp"

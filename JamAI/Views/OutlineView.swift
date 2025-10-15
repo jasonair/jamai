@@ -232,10 +232,16 @@ private struct OutlineItemView: View {
                     Color.clear.frame(width: 12, height: 12)
                 }
                 
-                // Bullet point
-                Circle()
-                    .fill(nodeColor)
-                    .frame(width: 6, height: 6)
+                // Bullet/icon
+                if outlineNode.node.type == .note {
+                    Image(systemName: "note.text")
+                        .font(.system(size: 10))
+                        .foregroundColor(nodeColor)
+                } else {
+                    Circle()
+                        .fill(nodeColor)
+                        .frame(width: 6, height: 6)
+                }
                 
                 // Node title
                 Text(nodeTitle)

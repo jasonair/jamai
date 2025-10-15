@@ -7,9 +7,11 @@ struct NoteView: View {
     let onExpandNote: () -> Void
     let onDescriptionEdit: (String) -> Void
     let onTap: () -> Void
+    let onResizeActiveChanged: (Bool) -> Void
 
     @Environment(\.colorScheme) var colorScheme
     @State private var text: String = ""
+    @FocusState private var isTextFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -44,8 +46,12 @@ struct NoteView: View {
                 .onChange(of: text) { _, newValue in
                     onDescriptionEdit(newValue)
                 }
+                .focused($isTextFocused)
+                .onChange(of: isTextFocused) { _, newValue in
+                    onResizeActiveChanged(newValue)
+                }
                 .overlay(
-                    TapThroughOverlay(onTap: onTap)
+                    TapThroughOverlay(onTap: onTap, shouldFocusOnTap: false)
                 )
         }
         .padding(12)
@@ -59,6 +65,9 @@ struct NoteView: View {
         .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.4 : 0.2), radius: 6, x: 0, y: 3)
         .onAppear {
             text = node.description
+            // Focus editor on appear to prevent wrapper drag during initial mouse movement
+            isTextFocused = true
+            onResizeActiveChanged(true)
         }
         .onTapGesture { onTap() }
     }

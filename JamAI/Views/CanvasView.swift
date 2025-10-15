@@ -432,6 +432,12 @@ struct CanvasView: View {
     
     private func handleDescriptionEdit(_ description: String, for nodeId: UUID) {
         guard var node = viewModel.nodes[nodeId] else { return }
+        // Skip if no real change to avoid thrashing updates
+        if node.description == description {
+            if Config.enableVerboseLogging { print("🗒️ [NoteDesc] skip identical text for node=\(nodeId)") }
+            return
+        }
+        if Config.enableVerboseLogging { print("🗒️ [NoteDesc] apply new text len=\(description.count) node=\(nodeId)") }
         node.description = description
         node.descriptionSource = .user
         viewModel.updateNode(node)

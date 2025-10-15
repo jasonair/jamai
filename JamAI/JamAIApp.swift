@@ -23,18 +23,18 @@ struct UndoStateObserver: View {
             }
             .onChange(of: viewModel?.canUndo) { _, newValue in
                 canUndo = newValue ?? false
-                print("🔔 canUndo changed to: \(canUndo)")
+                if Config.enableVerboseLogging { print("🔔 canUndo changed to: \(canUndo)") }
             }
             .onChange(of: viewModel?.canRedo) { _, newValue in
                 canRedo = newValue ?? false
-                print("🔔 canRedo changed to: \(canRedo)")
+                if Config.enableVerboseLogging { print("🔔 canRedo changed to: \(canRedo)") }
             }
     }
     
     private func updateState() {
         canUndo = viewModel?.canUndo ?? false
         canRedo = viewModel?.canRedo ?? false
-        print("📍 Initial state - canUndo: \(canUndo), canRedo: \(canRedo)")
+        if Config.enableVerboseLogging { print("📍 Initial state - canUndo: \(canUndo), canRedo: \(canRedo)") }
     }
 }
 

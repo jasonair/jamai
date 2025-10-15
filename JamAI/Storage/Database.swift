@@ -8,6 +8,12 @@
 import Foundation
 import GRDB
 
+#if DEBUG
+private let DB_NOTE_VERBOSE_LOG: Bool = true
+#else
+private let DB_NOTE_VERBOSE_LOG: Bool = false
+#endif
+
 enum DatabaseError: Error {
     case readOnlyAccess
     case notInitialized
@@ -36,38 +42,40 @@ final class Database: Sendable {
                         try db.execute(sql: "PRAGMA journal_mode=MEMORY")
                         try db.execute(sql: "PRAGMA temp_store=MEMORY")
                         if let mode = try String.fetchOne(db, sql: "PRAGMA journal_mode")?.lowercased() {
-                            print("ℹ️ SQLite journal_mode after request: \(mode)")
+                            if Config.enableVerboseLogging { print("ℹ️ SQLite journal_mode after request: \(mode)") }
                         }
                         try? db.execute(sql: "PRAGMA synchronous=NORMAL")
                         try db.execute(sql: "PRAGMA foreign_keys=ON")
                     }
                 } catch {
-                    print("⚠️ Failed to set PRAGMAs pre-migration: \(error.localizedDescription). Proceeding with defaults.")
+                    if Config.enableVerboseLogging { print("⚠️ Failed to set PRAGMAs pre-migration: \(error.localizedDescription). Proceeding with defaults.") }
                 }
             }
             try migrate()
             // Diagnostics: check directory writability
             let dirURL = url.deletingLastPathComponent()
             let dirWritable = FileManager.default.isWritableFile(atPath: dirURL.path)
-            print("ℹ️ Database directory: \(dirURL.path), writable: \(dirWritable)")
+            if Config.enableVerboseLogging { print("ℹ️ Database directory: \(dirURL.path), writable: \(dirWritable)") }
             // Probe write to trigger journaling
             if let dbQueue = dbQueue {
                 do {
                     try dbQueue.write { _ in /* no-op write to test journaling */ }
                 } catch {
-                    print("⚠️ Initial write failed: \(error.localizedDescription).")
+                    if Config.enableVerboseLogging { print("⚠️ Initial write failed: \(error.localizedDescription).") }
                 }
             }
         } catch let dbError {
             // If opening in write mode fails, throw a clear error
-            print("⚠️ Cannot open database in write mode: \(dbError)")
-            print("⚠️ Database path: \(url.path)")
-            print("⚠️ File exists: \(FileManager.default.fileExists(atPath: url.path))")
-            print("⚠️ Is writable: \(FileManager.default.isWritableFile(atPath: url.path))")
+            if Config.enableVerboseLogging {
+                print("⚠️ Cannot open database in write mode: \(dbError)")
+                print("⚠️ Database path: \(url.path)")
+                print("⚠️ File exists: \(FileManager.default.fileExists(atPath: url.path))")
+                print("⚠️ Is writable: \(FileManager.default.isWritableFile(atPath: url.path))")
+            }
             
             // Try to get more info about permissions
             if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path) {
-                print("⚠️ File permissions: \(attrs[.posixPermissions] ?? "unknown")")
+                if Config.enableVerboseLogging { print("⚠️ File permissions: \(attrs[.posixPermissions] ?? "unknown")") }
             }
             
             throw DatabaseError.readOnlyAccess
@@ -331,6 +339,9 @@ final class Database: Sendable {
         guard let dbQueue = dbQueue else { return }
         
         try dbQueue.write { db in
+            if DB_NOTE_VERBOSE_LOG && node.type == .note {
+                print("🗄️ [DB] saveNode note id=\(node.id) parent=\(node.parentId?.uuidString ?? "nil") x=\(node.x) y=\(node.y) len=\(node.description.count)")
+            }
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO nodes 

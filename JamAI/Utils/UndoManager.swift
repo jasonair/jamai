@@ -51,7 +51,7 @@ class CanvasUndoManager: ObservableObject {
     // MARK: - Record Actions
     
     func record(_ action: CanvasAction) {
-        print("📝 Recording action: \(action)")
+        if Config.enableVerboseLogging { print("📝 Recording action: \(action)") }
         undoStack.append(action)
         redoStack.removeAll()
         
@@ -61,7 +61,7 @@ class CanvasUndoManager: ObservableObject {
         }
         
         updateState()
-        print("📊 Undo stack size: \(undoStack.count), canUndo: \(canUndo)")
+        if Config.enableVerboseLogging { print("📊 Undo stack size: \(undoStack.count), canUndo: \(canUndo)") }
     }
     
     // MARK: - Undo/Redo

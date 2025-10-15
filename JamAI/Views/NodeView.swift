@@ -34,6 +34,7 @@ struct NodeView: View {
     @State private var showingColorPicker = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
+    @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
     
     @Environment(\.colorScheme) var colorScheme
@@ -158,6 +159,13 @@ struct NodeView: View {
         .onTapGesture {
             onTap()
         }
+        .overlay(
+            RightClickExpandOverlay(
+                onExpand: onExpandSelection,
+                onMakeNote: onMakeNote,
+                onJamWithThis: onJamWithThis
+            )
+        )
         .onAppear {
             if isSelected {
                 isPromptFocused = true
@@ -177,10 +185,10 @@ struct NodeView: View {
     private var headerView: some View {
         HStack {
             // Drag handle icon
-            Image(systemName: "line.3.horizontal")
+            Image(systemName: node.type == .note ? "note.text" : "line.3.horizontal")
                 .foregroundColor(headerTextColor)
                 .font(.system(size: 16))
-                .help("Drag to move node")
+                .help(node.type == .note ? "Note" : "Drag to move node")
             
             // Color button
             Button(action: { showingColorPicker = true }) {
@@ -298,12 +306,26 @@ struct NodeView: View {
     private var descriptionView: some View {
         VStack(alignment: .leading, spacing: 4) {
             if isEditingDescription {
-                TextField("Description", text: $editedDescription, onCommit: {
-                    onDescriptionEdit(editedDescription)
-                    isEditingDescription = false
-                })
-                .textFieldStyle(PlainTextFieldStyle())
-                .font(.body)
+                if node.type == .note {
+                    TextEditor(text: $editedDescription)
+                        .font(.body)
+                        .focused($isDescFocused)
+                        .frame(minHeight: 100)
+                        .onChange(of: isDescFocused) { _, newFocused in
+                            if !newFocused {
+                                onDescriptionEdit(editedDescription)
+                                isEditingDescription = false
+                            }
+                        }
+                        .onAppear { isDescFocused = true }
+                } else {
+                    TextField("Description", text: $editedDescription, onCommit: {
+                        onDescriptionEdit(editedDescription)
+                        isEditingDescription = false
+                    })
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(.body)
+                }
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
                     .font(.body)
@@ -312,6 +334,7 @@ struct NodeView: View {
                         if node.isExpanded {
                             editedDescription = node.description
                             isEditingDescription = true
+                            if node.type == .note { isDescFocused = true }
                         }
                     }
             }
@@ -360,9 +383,6 @@ struct NodeView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
                 .cornerRadius(8)
-                .overlay(
-                    RightClickExpandOverlay(onExpand: onExpandSelection, onMakeNote: onMakeNote, onJamWithThis: onJamWithThis)
-                )
         }
     }
     
@@ -418,8 +438,9 @@ struct NodeView: View {
     
     private var cardBackground: some View {
         if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
-            // Apply subtle tint to card body (5% opacity of selected color)
-            let tintColor = nodeColor.lightVariant.opacity(0.05)
+            // Apply tint to card body; stronger tint for notes to stand out
+            let tintOpacity: Double = (node.type == .note) ? 0.15 : 0.05
+            let tintColor = nodeColor.lightVariant.opacity(tintOpacity)
             let baseColor = colorScheme == .dark
                 ? Color(nsColor: .controlBackgroundColor)
                 : Color.white

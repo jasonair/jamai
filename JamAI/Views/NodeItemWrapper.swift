@@ -30,16 +30,7 @@ struct NodeItemWrapper: View {
     
     var body: some View {
         Group {
-            if node.type == .note {
-                NoteView(
-                    node: $node,
-                    isSelected: isSelected,
-                    onDelete: onDelete,
-                    onExpandNote: onExpandNote,
-                    onDescriptionEdit: onDescriptionEdit,
-                    onTap: onTap
-                )
-            } else if node.type == .text {
+            if node.type == .text {
                 TextLabelView(
                     node: $node,
                     isSelected: isSelected,

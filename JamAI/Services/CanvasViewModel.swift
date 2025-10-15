@@ -62,7 +62,7 @@ class CanvasViewModel: ObservableObject {
         // Forward undo manager state changes with logging
         undoManager.$canUndo
             .sink { [weak self] value in
-                print("🟢 ViewModel: canUndo changed to \(value)")
+                if Config.enableVerboseLogging { print("🟢 ViewModel: canUndo changed to \(value)") }
                 self?.canUndo = value
                 // Force UI update
                 self?.objectWillChange.send()
@@ -71,7 +71,7 @@ class CanvasViewModel: ObservableObject {
         
         undoManager.$canRedo
             .sink { [weak self] value in
-                print("🟢 ViewModel: canRedo changed to \(value)")
+                if Config.enableVerboseLogging { print("🟢 ViewModel: canRedo changed to \(value)") }
                 self?.canRedo = value
                 // Force UI update
                 self?.objectWillChange.send()
@@ -84,7 +84,9 @@ class CanvasViewModel: ObservableObject {
 
     func createNoteFromSelection(parentId: UUID, selectedText: String) {
         guard let parent = nodes[parentId] else { return }
-        
+        let noteCountBefore = self.nodes.values.filter { $0.type == .note }.count
+        if Config.enableVerboseLogging { print("📝 [NoteCreate] begin parent=\(parentId) notes_before=\(noteCountBefore) len=\(selectedText.count)") }
+
         let noteX = parent.x + Node.width(for: parent.type) + 50
         let noteY = parent.y + 40
         var note = Node(
@@ -106,6 +108,7 @@ class CanvasViewModel: ObservableObject {
         ancestry.append(parentId)
         note.setAncestry(ancestry)
         note.systemPromptSnapshot = self.project.systemPrompt
+        if Config.enableVerboseLogging { print("📝 [NoteCreate] note id=\(note.id) x=\(note.x) y=\(note.y)") }
         
         self.nodes[note.id] = note
         self.selectedNodeId = note.id
@@ -117,18 +120,24 @@ class CanvasViewModel: ObservableObject {
         let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: note.id, color: edgeColor)
         self.edges[edge.id] = edge
         self.undoManager.record(.createEdge(edge))
+        if Config.enableVerboseLogging { print("📝 [NoteCreate] edge id=\(edge.id) color=\(String(describing: edge.color))") }
         
         // Force edge refresh immediately to ensure wire appears
         positionsVersion &+= 1
+        if Config.enableVerboseLogging { print("📝 [NoteCreate] positionsVersion=\(positionsVersion)") }
         
         // Save to database asynchronously on background queue
         let dbActor = self.dbActor
-        Task.detached(priority: .userInitiated) { [dbActor, note, edge] in
+        if Config.enableVerboseLogging { print("📝 [NoteCreate] saving node=\(note.id) edge=\(edge.id)") }
+        Task { [dbActor, note, edge] in
             do {
+                if Config.enableVerboseLogging { print("📝 [NoteCreate] save begin node=\(note.id)") }
                 try await dbActor.saveNode(note)
+                if Config.enableVerboseLogging { print("📝 [NoteCreate] save node ok=\(note.id)") }
                 try await dbActor.saveEdge(edge)
+                if Config.enableVerboseLogging { print("📝 [NoteCreate] save edge ok=\(edge.id)") }
             } catch {
-                print("⚠️ Failed to save note: \(error.localizedDescription)")
+                if Config.enableVerboseLogging { print("⚠️ Failed to save note: \(error.localizedDescription)") }
             }
         }
     }
@@ -555,7 +564,7 @@ class CanvasViewModel: ObservableObject {
             
             updateNode(node, immediate: true)
         } catch {
-            print("Failed to auto-generate title/description: \(error)")
+            if Config.enableVerboseLogging { print("Failed to auto-generate title/description: \(error)") }
         }
     }
     
@@ -603,7 +612,7 @@ class CanvasViewModel: ObservableObject {
                 }
             }
         } catch {
-            print("Failed to generate TLDR summary: \(error)")
+            if Config.enableVerboseLogging { print("Failed to generate TLDR summary: \(error)") }
         }
     }
     
@@ -612,6 +621,9 @@ class CanvasViewModel: ObservableObject {
         
         var updatedNode = node
         updatedNode.updatedAt = Date()
+        if Config.enableVerboseLogging && updatedNode.type == .note {
+            print("📝 [NoteUpdate] node=\(updatedNode.id) immediate=\(immediate) desc_len=\(updatedNode.description.count)")
+        }
         
         // Explicitly trigger objectWillChange before mutation
         objectWillChange.send()
@@ -927,22 +939,22 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Undo/Redo
     
     func undo() {
-        print("🔄 Undo called - canUndo: \(undoManager.canUndo)")
+        if Config.enableVerboseLogging { print("🔄 Undo called - canUndo: \(undoManager.canUndo)") }
         guard let action = undoManager.undo() else {
-            print("⚠️ No action to undo")
+            if Config.enableVerboseLogging { print("⚠️ No action to undo") }
             return
         }
-        print("✅ Undoing action: \(action)")
+        if Config.enableVerboseLogging { print("✅ Undoing action: \(action)") }
         applyAction(action, reverse: true)
     }
     
     func redo() {
-        print("🔄 Redo called - canRedo: \(undoManager.canRedo)")
+        if Config.enableVerboseLogging { print("🔄 Redo called - canRedo: \(undoManager.canRedo)") }
         guard let action = undoManager.redo() else {
-            print("⚠️ No action to redo")
+            if Config.enableVerboseLogging { print("⚠️ No action to redo") }
             return
         }
-        print("✅ Redoing action: \(action)")
+        if Config.enableVerboseLogging { print("✅ Redoing action: \(action)") }
         applyAction(action, reverse: false)
     }
     
@@ -1201,6 +1213,9 @@ class CanvasViewModel: ObservableObject {
     
     private func scheduleDebouncedWrite(nodeId: UUID) {
         pendingNodeWrites.insert(nodeId)
+        if Config.enableVerboseLogging {
+            print("🕒 [Debounce] schedule node id=\(nodeId) pending_nodes=\(pendingNodeWrites.count) pending_edges=\(pendingEdgeWrites.count)")
+        }
         
         // Cancel previous debounce
         debounceWorkItem?.cancel()
@@ -1208,6 +1223,7 @@ class CanvasViewModel: ObservableObject {
         // Schedule new debounce
         let workItem = DispatchWorkItem { [weak self] in
             Task { @MainActor [weak self] in
+                if Config.enableVerboseLogging { print("🕒 [Debounce] firing flush") }
                 self?.flushPendingWrites()
             }
         }
@@ -1218,6 +1234,9 @@ class CanvasViewModel: ObservableObject {
     
     private func scheduleDebouncedWrite(edgeId: UUID) {
         pendingEdgeWrites.insert(edgeId)
+        if Config.enableVerboseLogging {
+            print("🕒 [Debounce] schedule edge id=\(edgeId) pending_nodes=\(pendingNodeWrites.count) pending_edges=\(pendingEdgeWrites.count)")
+        }
         
         // Cancel previous debounce
         debounceWorkItem?.cancel()
@@ -1239,11 +1258,14 @@ class CanvasViewModel: ObservableObject {
         let edgeIds = pendingEdgeWrites
         pendingNodeWrites.removeAll()
         pendingEdgeWrites.removeAll()
-        
+
         // Capture models to save
         let nodesToSave = nodeIds.compactMap { nodes[$0] }
         let edgesToSave = edgeIds.compactMap { edges[$0] }
         let dbActor = self.dbActor
+        if Config.enableVerboseLogging {
+            print("💾 [Flush] nodes=\(nodesToSave.count) edges=\(edgesToSave.count)")
+        }
         
         // Perform I/O off the main actor
         Task { [weak self, dbActor, nodesToSave, edgesToSave] in
@@ -1253,6 +1275,9 @@ class CanvasViewModel: ObservableObject {
                 }
                 for edge in edgesToSave {
                     try await dbActor.saveEdge(edge)
+                }
+                if Config.enableVerboseLogging {
+                    print("💾 [Flush] completed nodes=\(nodesToSave.count) edges=\(edgesToSave.count)")
                 }
             } catch {
                 await MainActor.run {
