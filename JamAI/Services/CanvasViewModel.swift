@@ -29,6 +29,10 @@ class CanvasViewModel: ObservableObject {
     @Published var isNavigating: Bool = false // true during animated navigation
     @Published var selectedTool: CanvasTool = .select
     
+    // Forward undo manager state for UI binding
+    @Published var canUndo: Bool = false
+    @Published var canRedo: Bool = false
+    
     // Services
     let geminiClient: GeminiClient
     let ragService: RAGService
@@ -50,10 +54,29 @@ class CanvasViewModel: ObservableObject {
     init(project: Project, database: Database) {
         self.project = project
         self.database = database
+        self.dbActor = DatabaseActor(db: database)
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
-        self.dbActor = DatabaseActor(db: database)
         self.undoManager = CanvasUndoManager()
+        
+        // Forward undo manager state changes with logging
+        undoManager.$canUndo
+            .sink { [weak self] value in
+                print("🟢 ViewModel: canUndo changed to \(value)")
+                self?.canUndo = value
+                // Force UI update
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
+        
+        undoManager.$canRedo
+            .sink { [weak self] value in
+                print("🟢 ViewModel: canRedo changed to \(value)")
+                self?.canRedo = value
+                // Force UI update
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
         
         loadProjectData()
         setupAutosave()
@@ -100,14 +123,12 @@ class CanvasViewModel: ObservableObject {
         
         // Save to database asynchronously on background queue
         let dbActor = self.dbActor
-        Task.detached(priority: .userInitiated) { [weak self, dbActor, note, edge] in
+        Task.detached(priority: .userInitiated) { [dbActor, note, edge] in
             do {
                 try await dbActor.saveNode(note)
                 try await dbActor.saveEdge(edge)
             } catch {
-                await MainActor.run {
-                    self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
-                }
+                print("⚠️ Failed to save note: \(error.localizedDescription)")
             }
         }
     }
@@ -140,7 +161,7 @@ class CanvasViewModel: ObservableObject {
             }
             if !orphanedEdges.isEmpty {
                 let dbActor = self.dbActor
-                Task { [dbActor, orphanedEdges] in
+                Task.detached(priority: .utility) { [dbActor, orphanedEdges] in
                     for edge in orphanedEdges {
                         try? await dbActor.deleteEdge(id: edge.id)
                     }
@@ -906,12 +927,22 @@ class CanvasViewModel: ObservableObject {
     // MARK: - Undo/Redo
     
     func undo() {
-        guard let action = undoManager.undo() else { return }
+        print("🔄 Undo called - canUndo: \(undoManager.canUndo)")
+        guard let action = undoManager.undo() else {
+            print("⚠️ No action to undo")
+            return
+        }
+        print("✅ Undoing action: \(action)")
         applyAction(action, reverse: true)
     }
     
     func redo() {
-        guard let action = undoManager.redo() else { return }
+        print("🔄 Redo called - canRedo: \(undoManager.canRedo)")
+        guard let action = undoManager.redo() else {
+            print("⚠️ No action to redo")
+            return
+        }
+        print("✅ Redoing action: \(action)")
         applyAction(action, reverse: false)
     }
     

@@ -2,10 +2,27 @@ import SwiftUI
 import AppKit
 
 struct MainAppCommands: Commands {
-    @Environment(\.openWindow) private var openWindow
     @ObservedObject var appState: AppState
+    @Environment(\.openWindow) var openWindow
+    @FocusedValue(\.canvasViewModel) private var focusedVM: CanvasViewModel?
 
     var body: some Commands {
+        // Replace system Undo/Redo so they always appear and work
+        CommandGroup(replacing: .undoRedo) {
+            Button("Undo") {
+                let vm = focusedVM ?? appState.viewModel
+                vm?.undo()
+            }
+            .keyboardShortcut("z", modifiers: .command)
+            // Do NOT disable to avoid SwiftUI command reactivity issues
+            
+            Button("Redo") {
+                let vm = focusedVM ?? appState.viewModel
+                vm?.redo()
+            }
+            .keyboardShortcut("z", modifiers: [.command, .shift])
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("New Project...") {
                 ensureWindow()

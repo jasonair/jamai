@@ -7,6 +7,18 @@
 
 import SwiftUI
 
+// FocusedValue key for canvas view model
+struct CanvasViewModelKey: FocusedValueKey {
+    typealias Value = CanvasViewModel
+}
+
+extension FocusedValues {
+    var canvasViewModel: CanvasViewModel? {
+        get { self[CanvasViewModelKey.self] }
+        set { self[CanvasViewModelKey.self] = newValue }
+    }
+}
+
 struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     var onCommandClose: (() -> Void)? = nil
@@ -28,6 +40,7 @@ struct CanvasView: View {
 
     var body: some View {
         canvasContent
+            .focusedValue(\.canvasViewModel, viewModel)
     }
     
     private var canvasContent: some View {
@@ -556,5 +569,12 @@ extension View {
                 viewModel.createNode(at: CGPoint(x: nodeX, y: nodeY))
                 return .handled
             }
+            // Undo/Redo through key events - alternative approach
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded { _ in
+                        // This doesn't prevent other gestures but ensures canvas is focused
+                    }
+            )
     }
 }

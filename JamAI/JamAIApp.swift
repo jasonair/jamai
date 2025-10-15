@@ -10,9 +10,39 @@ import Combine
 import AppKit
 import UniformTypeIdentifiers
 
+// Helper view to observe undo manager state
+struct UndoStateObserver: View {
+    let viewModel: CanvasViewModel?
+    @Binding var canUndo: Bool
+    @Binding var canRedo: Bool
+    
+    var body: some View {
+        Color.clear
+            .onAppear {
+                updateState()
+            }
+            .onChange(of: viewModel?.canUndo) { _, newValue in
+                canUndo = newValue ?? false
+                print("🔔 canUndo changed to: \(canUndo)")
+            }
+            .onChange(of: viewModel?.canRedo) { _, newValue in
+                canRedo = newValue ?? false
+                print("🔔 canRedo changed to: \(canRedo)")
+            }
+    }
+    
+    private func updateState() {
+        canUndo = viewModel?.canUndo ?? false
+        canRedo = viewModel?.canRedo ?? false
+        print("📍 Initial state - canUndo: \(canUndo), canRedo: \(canRedo)")
+    }
+}
+
 @main
 struct JamAIApp: App {
     @StateObject private var appState = AppState()
+    @State private var canUndo = false
+    @State private var canRedo = false
     
     var body: some Scene {
         WindowGroup(id: "main") {
@@ -47,7 +77,11 @@ struct JamAIApp: App {
                     }
                     .allowsHitTesting(true)
                 }
+                .focusedSceneValue(\.canvasViewModel, appState.viewModel)
                 .frame(minWidth: 1200, minHeight: 800)
+                .background(
+                    UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
+                )
             }
         }
         .commands {
@@ -96,24 +130,6 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut("v", modifiers: .command)
                 .disabled(appState.viewModel == nil)
-            }
-            
-            // Empty replacing group to remove default undo/redo
-            CommandGroup(replacing: .undoRedo) {}
-            
-            // Add our custom undo/redo after the empty group
-            CommandGroup(after: .undoRedo) {
-                Button("Undo") {
-                    appState.viewModel?.undo()
-                }
-                .keyboardShortcut("z", modifiers: .command)
-                .disabled(!(appState.viewModel?.undoManager.canUndo ?? false))
-                
-                Button("Redo") {
-                    appState.viewModel?.redo()
-                }
-                .keyboardShortcut("z", modifiers: [.command, .shift])
-                .disabled(!(appState.viewModel?.undoManager.canRedo ?? false))
             }
             
             CommandGroup(after: .undoRedo) {
