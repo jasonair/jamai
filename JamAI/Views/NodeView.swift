@@ -44,13 +44,13 @@ struct NodeView: View {
     @State private var selectedImage: NSImage?
     @State private var selectedImageData: Data?
     @State private var selectedImageMimeType: String?
-    @State private var showingTeamMemberModal = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
     
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject private var modalCoordinator: ModalCoordinator
     @StateObject private var roleManager = RoleManager.shared
     
     var body: some View {
@@ -67,7 +67,14 @@ struct NodeView: View {
                         TeamMemberTray(
                             teamMember: teamMember,
                             role: roleManager.role(withId: teamMember.roleId),
-                            onSettings: { showingTeamMemberModal = true }
+                            onSettings: { 
+                                print("[NodeView] Opening team member modal for editing")
+                                modalCoordinator.showTeamMemberModal(
+                                    existingMember: node.teamMember,
+                                    onSave: onTeamMemberChange,
+                                    onRemove: { onTeamMemberChange(nil) }
+                                )
+                            }
                         )
                         
                         Divider()
@@ -77,6 +84,8 @@ struct NodeView: View {
                 // Content with fixed input at bottom
                 VStack(spacing: 0) {
                     // Content area - different layout for notes vs standard nodes
+                    // Use flexible frame to account for team member tray height
+                    Group {
                     if node.type == .note {
                         // For notes: Handle both note view and conversation view
                         if showChatSection {
@@ -195,6 +204,8 @@ struct NodeView: View {
                             }
                         }
                     }
+                    }
+                    .frame(maxHeight: .infinity) // Let content fill available space
                     
                     // Only show divider and input if not a note OR if chat section is visible
                     if node.type != .note || showChatSection {
@@ -205,7 +216,7 @@ struct NodeView: View {
                             .padding(Node.padding)
                     }
                 }
-                .frame(height: (isResizing ? draggedHeight : node.height) - 60)
+                .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
                 .overlay(
                     TapThroughOverlay(onTap: onTap)
                 )
@@ -227,6 +238,11 @@ struct NodeView: View {
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
             .onTapGesture {
+                // Block if modal sheet is open
+                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                    print("[NodeView] Tap blocked - sheet is active")
+                    return
+                }
                 onTap()
             }
             .overlay(
@@ -267,17 +283,6 @@ struct NodeView: View {
                 isEditingDescription = false
             }
         }
-        .sheet(isPresented: $showingTeamMemberModal) {
-            TeamMemberModal(
-                existingMember: node.teamMember,
-                onSave: { member in
-                    onTeamMemberChange(member)
-                },
-                onRemove: node.teamMember != nil ? {
-                    onTeamMemberChange(nil)
-                } : nil
-            )
-        }
     }
     
     // MARK: - Computed Properties
@@ -288,6 +293,17 @@ struct NodeView: View {
             return showChatSection
         }
         return true
+    }
+    
+    private var headerHeight: CGFloat {
+        var height: CGFloat = 60 // Base header height
+        
+        // Add team member tray height if present
+        if shouldShowTeamMemberTray && node.teamMember != nil {
+            height += 60 // Team member tray height (~50-60px)
+        }
+        
+        return height
     }
     
     // MARK: - Subviews
@@ -362,6 +378,10 @@ struct NodeView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                         .onTapGesture {
+                            // Block if modal sheet is open
+                            if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                                return
+                            }
                             editedTitle = node.title
                             isEditingTitle = true
                             isTitleFocused = true
@@ -395,15 +415,22 @@ struct NodeView: View {
             .buttonStyle(PlainButtonStyle())
             .help("Create Child Node")
             
-            // Add/Edit Team Member button (only for standard nodes or notes with chat)
-            if shouldShowTeamMemberTray {
-                Button(action: { showingTeamMemberModal = true }) {
-                    Image(systemName: node.teamMember != nil ? "person.fill.checkmark" : "person.badge.plus")
+            // Add Team Member button (only show if no team member exists)
+            if shouldShowTeamMemberTray && node.teamMember == nil {
+                Button(action: { 
+                    print("[NodeView] Opening team member modal for adding")
+                    modalCoordinator.showTeamMemberModal(
+                        existingMember: nil,
+                        onSave: onTeamMemberChange,
+                        onRemove: nil
+                    )
+                }) {
+                    Image(systemName: "person.badge.plus")
                         .foregroundColor(headerTextColor)
                         .font(.system(size: 16))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help(node.teamMember != nil ? "Edit Team Member" : "Add Team Member")
+                .help("Add Team Member")
             }
             
             // JAM button (for notes only)
@@ -460,6 +487,10 @@ struct NodeView: View {
                     .font(.system(size: 15))
                     .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
+                        // Block if modal sheet is open
+                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                            return
+                        }
                         editedDescription = node.description
                         isEditingDescription = true
                     }

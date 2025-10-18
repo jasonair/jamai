@@ -8,12 +8,12 @@
 import SwiftUI
 
 struct TeamMemberModal: View {
-    @Environment(\.dismiss) var dismiss
     @StateObject private var roleManager = RoleManager.shared
     
     let existingMember: TeamMember?
     let onSave: (TeamMember) -> Void
     let onRemove: (() -> Void)?
+    let onDismiss: () -> Void
     
     @State private var searchQuery = ""
     @State private var selectedCategory: RoleCategory?
@@ -49,7 +49,10 @@ struct TeamMemberModal: View {
                 
                 Spacer()
                 
-                Button(action: { dismiss() }) {
+                Button(action: { 
+                    print("[TeamMemberModal] Close button tapped")
+                    onDismiss() 
+                }) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 20))
                         .foregroundColor(.secondary)
@@ -103,24 +106,35 @@ struct TeamMemberModal: View {
                 }
                 .padding(.horizontal)
             }
+            .frame(height: 40) // Fixed height for the filter bar
             .padding(.bottom, 12)
+            .onAppear {
+                print("[TeamMemberModal] Category filter ScrollView appeared")
+            }
             
             Divider()
             
             // Role list
-            ScrollView {
+            ScrollView(.vertical, showsIndicators: true) {
                 LazyVStack(spacing: 8) {
                     ForEach(filteredRoles) { role in
                         RoleRow(
                             role: role,
                             isSelected: selectedRole?.id == role.id,
-                            action: { selectedRole = role }
+                            action: { 
+                                print("[TeamMemberModal] Role selected: \(role.name)")
+                                selectedRole = role 
+                            }
                         )
                     }
                 }
                 .padding()
             }
-            .frame(maxHeight: 300)
+            .frame(height: selectedRole == nil ? 350 : 200) // Smaller when config section is visible
+            .clipped() // Clip content to bounds
+            .onAppear {
+                print("[TeamMemberModal] Role list ScrollView appeared")
+            }
             
             if selectedRole != nil {
                 Divider()
@@ -186,7 +200,7 @@ struct TeamMemberModal: View {
                 if existingMember != nil, let onRemove = onRemove {
                     Button(action: {
                         onRemove()
-                        dismiss()
+                        onDismiss()
                     }) {
                         Text("Remove")
                             .foregroundColor(.red)
@@ -198,7 +212,7 @@ struct TeamMemberModal: View {
                 
                 Spacer()
                 
-                Button(action: { dismiss() }) {
+                Button(action: { onDismiss() }) {
                     Text("Cancel")
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
@@ -218,19 +232,28 @@ struct TeamMemberModal: View {
             }
             .padding()
         }
-        .frame(width: 600, height: 650)
+        .frame(width: 600)
+        .fixedSize(horizontal: false, vertical: true) // Size to fit content vertically
+        .frame(maxHeight: 650) // Cap at reasonable max
+        .allowsHitTesting(true) // Ensure modal captures all events
         .onAppear {
+            print("[TeamMemberModal] Modal appeared")
+            
             // Load existing member if editing
             if let member = existingMember {
                 customName = member.name ?? ""
                 selectedLevel = member.experienceLevel
                 selectedRole = roleManager.role(withId: member.roleId)
+                print("[TeamMemberModal] Loaded existing member: \(member.roleId)")
             }
             
             // Focus search on appear
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isSearchFocused = true
             }
+        }
+        .onDisappear {
+            print("[TeamMemberModal] Modal disappeared")
         }
     }
     
@@ -246,7 +269,7 @@ struct TeamMemberModal: View {
         )
         
         onSave(member)
-        dismiss()
+        onDismiss()
     }
 }
 

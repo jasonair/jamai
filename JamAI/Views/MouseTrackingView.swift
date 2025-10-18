@@ -60,6 +60,14 @@ struct MouseTrackingView: NSViewRepresentable {
             guard window != nil else { return }
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self else { return event }
+                
+                // CRITICAL: If sheet is attached, don't process scroll at all
+                // Let the sheet window handle ALL scrolling
+                if let window = self.window, !window.sheets.isEmpty {
+                    print("[MouseTrackingView] Sheet active - scroll event ignored completely")
+                    return event // Pass to system (sheet will handle)
+                }
+                
                 if self.shouldLetSystemHandleScroll(for: event) { return event }
                 let dxBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : CGFloat(event.deltaX)
                 let dyBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : CGFloat(event.deltaY)

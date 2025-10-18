@@ -23,6 +23,8 @@ struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     var onCommandClose: (() -> Void)? = nil
     
+    @StateObject private var modalCoordinator = ModalCoordinator()
+    
     @GestureState private var canvasDragStart: CGSize? = nil
     @State private var lastZoom: CGFloat = 1.0
     @State private var draggedNodeId: UUID? = nil
@@ -100,6 +102,7 @@ struct CanvasView: View {
     var body: some View {
         canvasContent
             .focusedValue(\.canvasViewModel, viewModel)
+            .environmentObject(modalCoordinator)
     }
     
     private var canvasContent: some View {
@@ -133,6 +136,12 @@ struct CanvasView: View {
             .background(canvasBackground)
             .contentShape(Rectangle())
             .onTapGesture {
+                // Block if modal sheet is open
+                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                    print("[CanvasView] Tap blocked - sheet is active")
+                    return
+                }
+                
                 // Place annotation if a tool is active; otherwise deselect
                 switch viewModel.selectedTool {
                 case .text:
@@ -153,12 +162,21 @@ struct CanvasView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 5)
                     .updating($canvasDragStart) { value, gestureState, transaction in
+                        // Block if modal sheet is open
+                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                            return
+                        }
                         // Store the initial offset when drag starts (only once per gesture)
                         if gestureState == nil {
                             gestureState = viewModel.offset
                         }
                     }
                     .onChanged { value in
+                        // Block if modal sheet is open
+                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                            return
+                        }
+                        
                         if draggedNodeId == nil && !isResizingActive {
                             // Use the start offset captured by @GestureState
                             let startOffset = canvasDragStart ?? viewModel.offset
@@ -172,6 +190,10 @@ struct CanvasView: View {
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
+                        // Block if modal sheet is open
+                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                            return
+                        }
                         guard !isResizingActive else { return }
                         
                         // Initialize gesture state on first change
@@ -207,6 +229,10 @@ struct CanvasView: View {
                         )
                     }
                     .onEnded { _ in
+                        // Block if modal sheet is open
+                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                            return
+                        }
                         // Only update viewModel once at the end
                         viewModel.zoom = gestureZoom
                         viewModel.offset = gestureOffset
@@ -215,6 +241,12 @@ struct CanvasView: View {
                     }
             )
             .onTapGesture(count: 2) { location in
+                // Block if modal sheet is open
+                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                    print("[CanvasView] Double-tap blocked - sheet is active")
+                    return
+                }
+                
                 // Double-click to create new node
                 let canvasPos = screenToCanvas(location, in: geometry.size)
                 viewModel.createNode(at: canvasPos)
