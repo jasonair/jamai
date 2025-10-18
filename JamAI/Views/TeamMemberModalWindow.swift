@@ -44,23 +44,30 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
             }
         )
         
-        // Wrap in event-capturing container
-        let wrappedContent = ZStack {
-            // Background that captures all events
+        // Calculate panel size
+        let panelWidth: CGFloat = 600
+        let panelHeight: CGFloat = 620
+        
+        // Wrap in event-capturing container with explicit sizing
+        let wrappedContent = ZStack(alignment: .center) {
+            // Background that captures all events - MUST fill entire panel
             Color.clear
                 .contentShape(Rectangle())
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .frame(width: panelWidth, height: panelHeight)
+                .allowsHitTesting(true)
+                .onTapGesture { location in
+                    print("[DEBUG] Modal background tapped at: \(location)")
+                }
             
             contentView
+        }
+        .frame(width: panelWidth, height: panelHeight)
+        .onAppear {
+            print("[DEBUG] Modal wrapper appeared - size: \(panelWidth)x\(panelHeight)")
         }
         
         // Wrap in NSHostingController
         let hostingController = NSHostingController(rootView: wrappedContent)
-        
-        // Use consistent size that works for both states
-        let panelWidth: CGFloat = 600
-        let panelHeight: CGFloat = 620 // Height that fits configuration section
-        
         hostingController.view.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
         
         // Make hosting view handle events properly
@@ -89,9 +96,15 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         panel.becomesKeyOnlyIfNeeded = false
         panel.hidesOnDeactivate = false
         
-        // Ensure it captures all mouse events
+        // Ensure it captures all mouse events across FULL width
         panel.acceptsMouseMovedEvents = true
         panel.ignoresMouseEvents = false
+        
+        // Explicitly set the content view to fill the panel
+        if let contentView = panel.contentView {
+            contentView.wantsLayer = true
+            contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
+        }
         
         self.window = panel
         

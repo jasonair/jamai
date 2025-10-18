@@ -268,8 +268,12 @@ struct TeamMemberModal: View {
             .padding()
         }
         .frame(width: 600)
-        .fixedSize(horizontal: false, vertical: true) // Size to fit content vertically
         .frame(maxHeight: 650) // Cap at reasonable max
+        .background(
+            Color(NSColor.windowBackgroundColor)
+                .frame(width: 600)
+                .contentShape(Rectangle())
+        )
         .allowsHitTesting(true) // Ensure modal captures all events
         .onAppear {
             
