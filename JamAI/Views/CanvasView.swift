@@ -34,9 +34,9 @@ struct CanvasView: View {
     
     @Environment(\.colorScheme) var colorScheme
     
-    // Precomputed helpers to reduce type-checking complexity
-    private var edgesArray: [Edge] { Array(viewModel.edges.values) }
+    // Computed once per render - safer than @State modification
     private var nodesArray: [Node] { Array(viewModel.nodes.values) }
+    private var edgesArray: [Edge] { Array(viewModel.edges.values) }
 
     var body: some View {
         canvasContent
@@ -192,7 +192,6 @@ struct CanvasView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scaleEffect(viewModel.zoom, anchor: .topLeading)
             .offset(viewModel.offset)
-            .id("edges-\(viewModel.positionsVersion)")
             .allowsHitTesting(false)
             
             // Nodes
