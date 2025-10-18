@@ -214,13 +214,26 @@ class GeminiClient: ObservableObject {
         
         // Add context messages
         for message in context {
+            var parts: [[String: Any]] = [["text": message.content]]
+            
+            // Add image if present
+            if let imageData = message.imageData, let mimeType = message.imageMimeType {
+                let base64Image = imageData.base64EncodedString()
+                parts.append([
+                    "inline_data": [
+                        "mime_type": mimeType,
+                        "data": base64Image
+                    ]
+                ])
+            }
+            
             contents.append([
                 "role": message.role,
-                "parts": [["text": message.content]]
+                "parts": parts
             ])
         }
         
-        // Add current prompt
+        // Add current prompt (text only, images come through context)
         contents.append([
             "role": "user",
             "parts": [["text": prompt]]
@@ -251,6 +264,15 @@ class GeminiClient: ObservableObject {
 struct Message {
     let role: String  // "user" or "model"
     let content: String
+    let imageData: Data?
+    let imageMimeType: String?
+    
+    init(role: String, content: String, imageData: Data? = nil, imageMimeType: String? = nil) {
+        self.role = role
+        self.content = content
+        self.imageData = imageData
+        self.imageMimeType = imageMimeType
+    }
 }
 
 enum GeminiError: LocalizedError {

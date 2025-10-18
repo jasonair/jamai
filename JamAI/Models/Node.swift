@@ -157,9 +157,14 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         }
     }
     
-    mutating func addMessage(role: MessageRole, content: String) {
+    mutating func addMessage(role: MessageRole, content: String, imageData: Data? = nil, imageMimeType: String? = nil) {
         var messages = conversation
-        messages.append(ConversationMessage(role: role, content: content))
+        messages.append(ConversationMessage(
+            role: role, 
+            content: content,
+            imageData: imageData,
+            imageMimeType: imageMimeType
+        ))
         setConversation(messages)
     }
     

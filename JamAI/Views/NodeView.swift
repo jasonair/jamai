@@ -6,13 +6,14 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct NodeView: View {
     @Binding var node: Node
     let isSelected: Bool
     let isGenerating: Bool
     let onTap: () -> Void
-    let onPromptSubmit: (String) -> Void
+    let onPromptSubmit: (String, Data?, String?) -> Void
     let onTitleEdit: (String) -> Void
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
@@ -33,6 +34,9 @@ struct NodeView: View {
     @State private var resizeStartHeight: CGFloat = 0
     @State private var showingColorPicker = false
     @State private var showChatSection = false
+    @State private var selectedImage: NSImage?
+    @State private var selectedImageData: Data?
+    @State private var selectedImageMimeType: String?
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
@@ -477,46 +481,126 @@ struct NodeView: View {
     }
     
     private func messageView(role: MessageRole, content: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+        // Find the corresponding conversation message to check for images
+        let conversationMsg = node.conversation.first(where: { msg in
+            msg.role == role && msg.content == content
+        })
+        
+        return VStack(alignment: .leading, spacing: 4) {
             Text(role == .user ? "You" : "Jam")
                 .font(.caption)
                 .fontWeight(.semibold)
                 .foregroundColor(role == .user ? .secondary : .accentColor)
             
-            MarkdownText(text: content)
-                .font(.body)
-                .padding(8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
-                .cornerRadius(8)
+            VStack(alignment: .leading, spacing: 8) {
+                // Show image if present
+                if let imageData = conversationMsg?.imageData,
+                   let nsImage = NSImage(data: imageData) {
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 200, maxHeight: 200)
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                        )
+                }
+                
+                // Show text content
+                if !content.isEmpty {
+                    MarkdownText(text: content)
+                        .font(.body)
+                }
+            }
+            .padding(8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
+            .cornerRadius(8)
         }
     }
     
     private var inputView: some View {
-        ZStack(alignment: .bottomTrailing) {
-            TextField("Ask a question...", text: $promptText, axis: .vertical)
-                .textFieldStyle(PlainTextFieldStyle())
-                .padding(8)
-                .padding(.trailing, 40) // Make room for the button
+        VStack(spacing: 8) {
+            // Image preview if selected (smaller thumbnail)
+            if let image = selectedImage {
+                HStack {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: 60, maxHeight: 60)
+                        .cornerRadius(6)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        )
+                    
+                    Spacer()
+                    
+                    Button(action: {
+                        selectedImage = nil
+                        selectedImageData = nil
+                        selectedImageMimeType = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Remove image")
+                }
+                .padding(6)
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
-                .lineLimit(3...6)
-                .focused($isPromptFocused)
-                .onSubmit {
-                    submitPrompt()
-                }
-            
-            Button(action: {
-                submitPrompt()
-            }) {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(promptText.isEmpty ? .secondary : .accentColor)
             }
-            .buttonStyle(PlainButtonStyle())
-            .disabled(promptText.isEmpty)
-            .keyboardShortcut(.return, modifiers: [])
-            .padding(8)
+            
+            // Input field with buttons in bottom corners
+            ZStack(alignment: .bottomLeading) {
+                // Text field with full area - minimal bottom padding
+                TextField("Ask a question...", text: $promptText, axis: .vertical)
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .padding(.horizontal, 8)
+                    .padding(.top, 8)
+                    .padding(.bottom, 24) // Just enough for button row
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(8)
+                    .lineLimit(3...6)
+                    .focused($isPromptFocused)
+                    .onSubmit {
+                        submitPrompt()
+                    }
+                
+                // Button row at bottom - tight to bottom edge
+                HStack {
+                    // Image upload button (bottom left)
+                    Button(action: selectImage) {
+                        Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
+                            .font(.title3)
+                            .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Upload image")
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    
+                    Spacer()
+                    
+                    // Send button (bottom right)
+                    Button(action: {
+                        submitPrompt()
+                    }) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title2)
+                            .foregroundColor((promptText.isEmpty && selectedImage == nil) ? .secondary : .accentColor)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .disabled(promptText.isEmpty && selectedImage == nil)
+                    .keyboardShortcut(.return, modifiers: [])
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .bottom)
+            }
         }
     }
     
@@ -632,10 +716,38 @@ struct NodeView: View {
     
     // MARK: - Actions
     
+    private func selectImage() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.allowedContentTypes = [.image]
+        panel.message = "Select an image to send"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            if let image = NSImage(contentsOf: url) {
+                // Process the image
+                if let processed = ImageHelper.processImage(image) {
+                    selectedImage = image
+                    selectedImageData = processed.data
+                    selectedImageMimeType = processed.mimeType
+                } else {
+                    // Show error - image too large or processing failed
+                    print("Failed to process image")
+                }
+            }
+        }
+    }
+    
     private func submitPrompt() {
-        if !promptText.isEmpty {
-            onPromptSubmit(promptText)
+        // Allow sending with just an image or just text or both
+        if !promptText.isEmpty || selectedImage != nil {
+            let textToSend = promptText.isEmpty ? "" : promptText
+            onPromptSubmit(textToSend, selectedImageData, selectedImageMimeType)
             promptText = ""
+            selectedImage = nil
+            selectedImageData = nil
+            selectedImageMimeType = nil
             isPromptFocused = true // Keep focus in input
         }
     }

@@ -723,13 +723,13 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - AI Generation
     
-    func generateResponse(for nodeId: UUID, prompt: String) {
+    func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil) {
         guard var node = nodes[nodeId] else { return }
         
         generatingNodeId = nodeId
         
-        // Add user message to conversation
-        node.addMessage(role: .user, content: prompt)
+        // Add user message to conversation with optional image
+        node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
         // Also update legacy prompt field for backwards compatibility
         node.prompt = prompt
         nodes[nodeId] = node
@@ -805,7 +805,9 @@ class CanvasViewModel: ObservableObject {
             for msg in recentMessages {
                 messages.append(Message(
                     role: msg.role == .user ? "user" : "model",
-                    content: msg.content
+                    content: msg.content,
+                    imageData: msg.imageData,
+                    imageMimeType: msg.imageMimeType
                 ))
             }
         } else {

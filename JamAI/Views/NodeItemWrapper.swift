@@ -12,7 +12,7 @@ struct NodeItemWrapper: View {
     let isSelected: Bool
     let isGenerating: Bool
     let onTap: () -> Void
-    let onPromptSubmit: (String) -> Void
+    let onPromptSubmit: (String, Data?, String?) -> Void
     let onTitleEdit: (String) -> Void
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void

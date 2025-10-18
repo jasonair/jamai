@@ -371,7 +371,7 @@ struct CanvasView: View {
             isSelected: viewModel.selectedNodeId == node.id,
             isGenerating: viewModel.generatingNodeId == node.id,
             onTap: { viewModel.selectedNodeId = node.id },
-            onPromptSubmit: { prompt in handlePromptSubmit(prompt, for: node.id) },
+            onPromptSubmit: { prompt, imageData, imageMimeType in handlePromptSubmit(prompt, imageData: imageData, imageMimeType: imageMimeType, for: node.id) },
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
             onDelete: { handleDeleteNode(node.id) },
@@ -410,8 +410,8 @@ struct CanvasView: View {
         }
     }
     
-    private func handlePromptSubmit(_ prompt: String, for nodeId: UUID) {
-        viewModel.generateResponse(for: nodeId, prompt: prompt)
+    private func handlePromptSubmit(_ prompt: String, imageData: Data?, imageMimeType: String?, for nodeId: UUID) {
+        viewModel.generateResponse(for: nodeId, prompt: prompt, imageData: imageData, imageMimeType: imageMimeType)
     }
     
     private func handleDeleteNode(_ nodeId: UUID) {
