@@ -40,6 +40,10 @@ struct CanvasView: View {
     @State private var gestureStartOffset: CGSize = .zero
     @State private var zoomStartLocation: CGPoint = .zero
     
+    // Cached node frames to avoid rebuilding on every render
+    @State private var cachedNodeFrames: [UUID: CGRect] = [:]
+    @State private var lastFrameUpdateVersion: Int = -1
+    
     @Environment(\.colorScheme) var colorScheme
     
     // Computed once per render - safer than @State modification
@@ -523,14 +527,22 @@ struct CanvasView: View {
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)
+    // Cached to avoid rebuilding on every render - only updates when positions change
     private var nodeFrames: [UUID: CGRect] {
-        var map: [UUID: CGRect] = [:]
-        for node in viewModel.nodes.values {
-            let height = node.height
-            let width = node.width
-            map[node.id] = CGRect(x: node.x, y: node.y, width: width, height: height)
+        // Only rebuild if positions have changed
+        if lastFrameUpdateVersion != viewModel.positionsVersion {
+            var map: [UUID: CGRect] = [:]
+            for node in viewModel.nodes.values {
+                map[node.id] = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+            }
+            // Update cache in next render cycle to avoid state modification during body
+            DispatchQueue.main.async {
+                self.cachedNodeFrames = map
+                self.lastFrameUpdateVersion = viewModel.positionsVersion
+            }
+            return map
         }
-        return map
+        return cachedNodeFrames
     }
 
     private func screenToCanvas(_ point: CGPoint, in size: CGSize) -> CGPoint {
