@@ -27,6 +27,27 @@ enum ExperienceLevel: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// Industry for organizing roles
+enum RoleIndustry: String, Codable, Sendable, CaseIterable {
+    case technology = "Technology"
+    case healthcare = "Healthcare"
+    case finance = "Finance"
+    case ecommerce = "E-commerce"
+    case education = "Education"
+    case marketing = "Marketing & Advertising"
+    case realestate = "Real Estate"
+    case legal = "Legal"
+    case consulting = "Consulting"
+    case manufacturing = "Manufacturing"
+    case retail = "Retail"
+    case hospitality = "Hospitality"
+    case media = "Media & Entertainment"
+    case nonprofit = "Non-profit"
+    case general = "General"
+    
+    var displayName: String { rawValue }
+}
+
 /// Category for organizing roles
 enum RoleCategory: String, Codable, Sendable, CaseIterable {
     case business = "Business"
@@ -70,6 +91,7 @@ struct LevelPrompt: Codable, Sendable {
 struct Role: Identifiable, Codable, Sendable {
     let id: String // Unique identifier (e.g., "research-analyst")
     let name: String // Display name (e.g., "Research Analyst")
+    let industry: RoleIndustry
     let category: RoleCategory
     let icon: String // SF Symbol name
     let color: String // Color identifier (matches NodeColor)
@@ -78,9 +100,11 @@ struct Role: Identifiable, Codable, Sendable {
     let version: Int // For remote updates
     let isCustom: Bool // User-created roles
     
+    // Custom init for programmatic creation
     init(
         id: String,
         name: String,
+        industry: RoleIndustry,
         category: RoleCategory,
         icon: String = "person.circle.fill",
         color: String = "blue",
@@ -91,6 +115,7 @@ struct Role: Identifiable, Codable, Sendable {
     ) {
         self.id = id
         self.name = name
+        self.industry = industry
         self.category = category
         self.icon = icon
         self.color = color
@@ -98,6 +123,26 @@ struct Role: Identifiable, Codable, Sendable {
         self.levelPrompts = levelPrompts
         self.version = version
         self.isCustom = isCustom
+    }
+    
+    // Custom Codable implementation to provide defaults for optional fields
+    enum CodingKeys: String, CodingKey {
+        case id, name, industry, category, icon, color, description, levelPrompts, version, isCustom
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        industry = try container.decode(RoleIndustry.self, forKey: .industry)
+        category = try container.decode(RoleCategory.self, forKey: .category)
+        icon = try container.decode(String.self, forKey: .icon)
+        color = try container.decode(String.self, forKey: .color)
+        description = try container.decode(String.self, forKey: .description)
+        levelPrompts = try container.decode([LevelPrompt].self, forKey: .levelPrompts)
+        // Provide defaults for fields that might not be in JSON
+        version = try container.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        isCustom = try container.decodeIfPresent(Bool.self, forKey: .isCustom) ?? false
     }
     
     /// Get system prompt for a specific level

@@ -17,7 +17,6 @@ class ModalCoordinator: ObservableObject {
         onSave: @escaping (TeamMember) -> Void,
         onRemove: (() -> Void)?
     ) {
-        print("[ModalCoordinator] Showing team member modal window")
         
         // Close existing modal if any
         dismissTeamMemberModal()
@@ -34,7 +33,6 @@ class ModalCoordinator: ObservableObject {
     }
     
     func dismissTeamMemberModal() {
-        print("[ModalCoordinator] Dismissing team member modal window")
         currentModalWindow?.close()
         currentModalWindow = nil
     }

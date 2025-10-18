@@ -138,7 +138,6 @@ struct CanvasView: View {
             .onTapGesture {
                 // Block if modal sheet is open
                 if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    print("[CanvasView] Tap blocked - sheet is active")
                     return
                 }
                 
@@ -243,7 +242,6 @@ struct CanvasView: View {
             .onTapGesture(count: 2) { location in
                 // Block if modal sheet is open
                 if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    print("[CanvasView] Double-tap blocked - sheet is active")
                     return
                 }
                 

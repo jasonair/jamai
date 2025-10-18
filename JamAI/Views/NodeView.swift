@@ -68,7 +68,6 @@ struct NodeView: View {
                             teamMember: teamMember,
                             role: roleManager.role(withId: teamMember.roleId),
                             onSettings: { 
-                                print("[NodeView] Opening team member modal for editing")
                                 modalCoordinator.showTeamMemberModal(
                                     existingMember: node.teamMember,
                                     onSave: onTeamMemberChange,
@@ -240,7 +239,6 @@ struct NodeView: View {
             .onTapGesture {
                 // Block if modal sheet is open
                 if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    print("[NodeView] Tap blocked - sheet is active")
                     return
                 }
                 onTap()
@@ -418,7 +416,6 @@ struct NodeView: View {
             // Add Team Member button (only show if no team member exists)
             if shouldShowTeamMemberTray && node.teamMember == nil {
                 Button(action: { 
-                    print("[NodeView] Opening team member modal for adding")
                     modalCoordinator.showTeamMemberModal(
                         existingMember: nil,
                         onSave: onTeamMemberChange,

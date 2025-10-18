@@ -16,6 +16,7 @@ struct TeamMemberModal: View {
     let onDismiss: () -> Void
     
     @State private var searchQuery = ""
+    @State private var selectedIndustry: RoleIndustry?
     @State private var selectedCategory: RoleCategory?
     @State private var selectedRole: Role?
     @State private var selectedLevel: ExperienceLevel = .intermediate
@@ -27,14 +28,23 @@ struct TeamMemberModal: View {
     var filteredRoles: [Role] {
         var results = roleManager.roles
         
-        // Apply search
-        if !searchQuery.isEmpty {
-            results = roleManager.searchRoles(query: searchQuery)
+        // Filter by industry
+        if let industry = selectedIndustry {
+            results = results.filter { $0.industry == industry }
         }
         
-        // Apply category filter
+        // Filter by category
         if let category = selectedCategory {
             results = results.filter { $0.category == category }
+        }
+        
+        // Filter by search query
+        if !searchQuery.isEmpty {
+            results = results.filter { role in
+                role.name.localizedCaseInsensitiveContains(searchQuery) ||
+                role.description.localizedCaseInsensitiveContains(searchQuery) ||
+                role.industry.displayName.localizedCaseInsensitiveContains(searchQuery)
+            }
         }
         
         return results
@@ -50,7 +60,6 @@ struct TeamMemberModal: View {
                 Spacer()
                 
                 Button(action: { 
-                    print("[TeamMemberModal] Close button tapped")
                     onDismiss() 
                 }) {
                     Image(systemName: "xmark.circle.fill")
@@ -86,6 +95,34 @@ struct TeamMemberModal: View {
             .cornerRadius(8)
             .padding()
             
+            // Industry filter
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    // All industries button
+                    FilterChip(
+                        title: "All Industries",
+                        isSelected: selectedIndustry == nil,
+                        action: { 
+                            selectedIndustry = nil
+                            selectedCategory = nil
+                        }
+                    )
+                    
+                    ForEach(RoleIndustry.allCases, id: \.self) { industry in
+                        FilterChip(
+                            title: industry.displayName,
+                            isSelected: selectedIndustry == industry,
+                            action: { selectedIndustry = industry }
+                        )
+                    }
+                }
+                .padding(.horizontal)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .contentShape(Rectangle())
+            .padding(.bottom, 8)
+            
             // Category filter
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -106,11 +143,10 @@ struct TeamMemberModal: View {
                 }
                 .padding(.horizontal)
             }
-            .frame(height: 40) // Fixed height for the filter bar
+            .frame(maxWidth: .infinity)
+            .frame(height: 40)
+            .contentShape(Rectangle())
             .padding(.bottom, 12)
-            .onAppear {
-                print("[TeamMemberModal] Category filter ScrollView appeared")
-            }
             
             Divider()
             
@@ -122,19 +158,18 @@ struct TeamMemberModal: View {
                             role: role,
                             isSelected: selectedRole?.id == role.id,
                             action: { 
-                                print("[TeamMemberModal] Role selected: \(role.name)")
                                 selectedRole = role 
                             }
                         )
                     }
                 }
                 .padding()
+                .frame(maxWidth: .infinity)
             }
-            .frame(height: selectedRole == nil ? 350 : 200) // Smaller when config section is visible
-            .clipped() // Clip content to bounds
-            .onAppear {
-                print("[TeamMemberModal] Role list ScrollView appeared")
-            }
+            .frame(maxWidth: .infinity)
+            .frame(height: selectedRole == nil ? 350 : 200)
+            .contentShape(Rectangle())
+            .clipped()
             
             if selectedRole != nil {
                 Divider()
@@ -237,23 +272,18 @@ struct TeamMemberModal: View {
         .frame(maxHeight: 650) // Cap at reasonable max
         .allowsHitTesting(true) // Ensure modal captures all events
         .onAppear {
-            print("[TeamMemberModal] Modal appeared")
             
             // Load existing member if editing
             if let member = existingMember {
                 customName = member.name ?? ""
                 selectedLevel = member.experienceLevel
                 selectedRole = roleManager.role(withId: member.roleId)
-                print("[TeamMemberModal] Loaded existing member: \(member.roleId)")
             }
             
             // Focus search on appear
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 isSearchFocused = true
             }
-        }
-        .onDisappear {
-            print("[TeamMemberModal] Modal disappeared")
         }
     }
     

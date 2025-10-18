@@ -27,23 +27,19 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     }
     
     func show() {
-        print("[TeamMemberModalWindow] Creating modal window")
         
         // Create the SwiftUI content view
         let contentView = TeamMemberModal(
             existingMember: existingMember,
             onSave: { [weak self] member in
-                print("[TeamMemberModalWindow] Save callback")
                 self?.onSave(member)
                 self?.close()
             },
             onRemove: onRemove != nil ? { [weak self] in
-                print("[TeamMemberModalWindow] Remove callback")
                 self?.onRemove?()
                 self?.close()
             } : nil,
             onDismiss: { [weak self] in
-                print("[TeamMemberModalWindow] Dismiss callback")
                 self?.close()
             }
         )
@@ -104,13 +100,11 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         
         // Show as modal (blocks parent window)
         if let parentWindow = NSApp.mainWindow {
-            print("[TeamMemberModalWindow] Showing as sheet on parent window")
             
             // Ensure parent becomes inactive
             parentWindow.makeFirstResponder(nil)
             
             parentWindow.beginSheet(panel) { [weak self] response in
-                print("[TeamMemberModalWindow] Sheet ended with response: \(response.rawValue)")
                 self?.window = nil
             }
             
@@ -120,7 +114,6 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
             }
         } else {
             // Fallback to modal dialog if no parent window
-            print("[TeamMemberModalWindow] Showing as modal dialog")
             NSApp.runModal(for: panel)
             panel.orderOut(nil)
             self.window = nil
@@ -128,7 +121,6 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     }
     
     func close() {
-        print("[TeamMemberModalWindow] Closing window")
         guard let window = window else { return }
         
         if let parentWindow = NSApp.mainWindow, parentWindow.sheets.contains(window) {
@@ -144,7 +136,6 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     // MARK: - NSWindowDelegate
     
     func windowWillClose(_ notification: Notification) {
-        print("[TeamMemberModalWindow] Window will close (delegate)")
         if let window = window {
             if let parentWindow = NSApp.mainWindow, parentWindow.sheets.contains(window) {
                 // Already handled by sheet end

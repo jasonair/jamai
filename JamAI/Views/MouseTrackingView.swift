@@ -64,7 +64,6 @@ struct MouseTrackingView: NSViewRepresentable {
                 // CRITICAL: If sheet is attached, don't process scroll at all
                 // Let the sheet window handle ALL scrolling
                 if let window = self.window, !window.sheets.isEmpty {
-                    print("[MouseTrackingView] Sheet active - scroll event ignored completely")
                     return event // Pass to system (sheet will handle)
                 }
                 
