@@ -32,6 +32,7 @@ struct NodeView: View {
     @State private var isResizing = false
     @State private var resizeStartHeight: CGFloat = 0
     @State private var showingColorPicker = false
+    @State private var showChatSection = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
@@ -49,69 +50,111 @@ struct NodeView: View {
             if node.isExpanded {
                 // Expanded content with fixed input at bottom
                 VStack(spacing: 0) {
-                    // Scrollable conversation area
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            VStack(alignment: .leading, spacing: 12) {
-                                // Description
-                                descriptionView
-                                
-                                // Conversation thread
-                                conversationView
-                                    .id(scrollViewID)
-                            }
-                            .padding(Node.padding)
-                        }
-                        .onAppear {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                withAnimation {
-                                    if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                        proxy.scrollTo(lastAssistantId, anchor: .bottom)
-                                    } else if let lastMessageId = node.conversation.last?.id {
-                                        proxy.scrollTo(lastMessageId, anchor: .bottom)
-                                    } else if !node.response.isEmpty {
-                                        proxy.scrollTo("legacy-assistant", anchor: .bottom)
-                                    } else if !node.prompt.isEmpty {
-                                        proxy.scrollTo("legacy-user", anchor: .bottom)
+                    // Content area - different layout for notes vs standard nodes
+                    if node.type == .note {
+                        // For notes: Handle both note view and conversation view
+                        if showChatSection {
+                            // When chat is visible, use ScrollView for conversation
+                            ScrollViewReader { proxy in
+                                ScrollView {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        // Note description (read-only when chat is visible)
+                                        if !node.description.isEmpty {
+                                            Text(node.description)
+                                                .font(.body)
+                                                .padding(Node.padding)
+                                        }
+                                        
+                                        // Conversation thread
+                                        conversationView
+                                            .padding(.horizontal, Node.padding)
+                                            .id(scrollViewID)
                                     }
+                                    .padding(.bottom, Node.padding)
                                 }
-                            }
-                        }
-                        .onChange(of: node.conversation.count) { oldCount, newCount in
-                            if newCount > oldCount {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    withAnimation {
-                                        if let last = node.conversation.last {
-                                            switch last.role {
-                                            case .user:
-                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                    proxy.scrollTo(lastUserId, anchor: .top)
-                                                } else {
-                                                    proxy.scrollTo(scrollViewID, anchor: .top)
-                                                }
-                                            case .assistant:
-                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                    proxy.scrollTo(lastUserId, anchor: .top)
-                                                } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                                    proxy.scrollTo(lastAssistantId, anchor: .top)
-                                                } else {
-                                                    proxy.scrollTo(scrollViewID, anchor: .top)
+                                .onChange(of: node.conversation.count) { oldCount, newCount in
+                                    if newCount > oldCount {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            withAnimation {
+                                                if let last = node.conversation.last {
+                                                    proxy.scrollTo(last.id, anchor: .bottom)
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
+                        } else {
+                            // When chat is hidden, show note content
+                            // Single TextEditor handles both reading and editing
+                            noteDescriptionView
+                                .padding(Node.padding)
                         }
-                        .onChange(of: isGenerating) { oldValue, newValue in
-                            if newValue {
+                    } else {
+                        // For standard nodes: ScrollView with conversation
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Description
+                                    descriptionView
+                                    
+                                    // Conversation thread
+                                    conversationView
+                                        .id(scrollViewID)
+                                }
+                                .padding(Node.padding)
+                            }
+                            .onAppear {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                     withAnimation {
-                                        if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                            proxy.scrollTo(lastUserId, anchor: .top)
-                                        } else if node.conversation.isEmpty && !node.response.isEmpty {
-                                            // Expansion streaming without a user bubble
-                                            proxy.scrollTo("legacy-assistant", anchor: .top)
+                                        if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                            proxy.scrollTo(lastAssistantId, anchor: .bottom)
+                                        } else if let lastMessageId = node.conversation.last?.id {
+                                            proxy.scrollTo(lastMessageId, anchor: .bottom)
+                                        } else if !node.response.isEmpty {
+                                            proxy.scrollTo("legacy-assistant", anchor: .bottom)
+                                        } else if !node.prompt.isEmpty {
+                                            proxy.scrollTo("legacy-user", anchor: .bottom)
+                                        }
+                                    }
+                                }
+                            }
+                            .onChange(of: node.conversation.count) { oldCount, newCount in
+                                if newCount > oldCount {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                        withAnimation {
+                                            if let last = node.conversation.last {
+                                                switch last.role {
+                                                case .user:
+                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                        proxy.scrollTo(lastUserId, anchor: .top)
+                                                    } else {
+                                                        proxy.scrollTo(scrollViewID, anchor: .top)
+                                                    }
+                                                case .assistant:
+                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                        proxy.scrollTo(lastUserId, anchor: .top)
+                                                    } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                        proxy.scrollTo(lastAssistantId, anchor: .top)
+                                                    } else {
+                                                        proxy.scrollTo(scrollViewID, anchor: .top)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            .onChange(of: isGenerating) { oldValue, newValue in
+                                if newValue {
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                        withAnimation {
+                                            if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                proxy.scrollTo(lastUserId, anchor: .top)
+                                            } else if node.conversation.isEmpty && !node.response.isEmpty {
+                                                // Expansion streaming without a user bubble
+                                                proxy.scrollTo("legacy-assistant", anchor: .top)
+                                            }
                                         }
                                     }
                                 }
@@ -119,11 +162,14 @@ struct NodeView: View {
                         }
                     }
                     
-                    Divider()
-                    
-                    // Input area - always visible at bottom
-                    inputView
-                        .padding(Node.padding)
+                    // Only show divider and input if not a note OR if chat section is visible
+                    if node.type != .note || showChatSection {
+                        Divider()
+                        
+                        // Input area - always visible at bottom
+                        inputView
+                            .padding(Node.padding)
+                    }
                 }
                 .frame(height: node.height - 60)
                 .overlay(
@@ -168,14 +214,29 @@ struct NodeView: View {
         )
         .onAppear {
             if isSelected {
-                isPromptFocused = true
+                // Only focus prompt for non-note nodes or when chat section is visible
+                if node.type != .note || showChatSection {
+                    isPromptFocused = true
+                }
                 isEditingTitle = false
             }
         }
         .onChange(of: isSelected) { oldValue, newValue in
             if newValue {
-                isPromptFocused = true
+                // Only focus prompt for non-note nodes or when chat section is visible
+                // Notes can be scrolled and clicked to focus without auto-focusing
+                if node.type != .note || showChatSection {
+                    isPromptFocused = true
+                }
                 isEditingTitle = false
+            } else {
+                // When deselected, clear all focus states
+                // Content is already auto-saved, just clear focus
+                isDescFocused = false
+                isPromptFocused = false
+                isTitleFocused = false
+                isEditingTitle = false
+                isEditingDescription = false
             }
         }
     }
@@ -285,6 +346,24 @@ struct NodeView: View {
             .buttonStyle(PlainButtonStyle())
             .help("Create Child Node")
             
+            // JAM button (for notes only)
+            if node.type == .note {
+                Button(action: {
+                    showChatSection.toggle()
+                    if showChatSection {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            isPromptFocused = true
+                        }
+                    }
+                }) {
+                    Image(systemName: "bubble.left.fill")
+                        .foregroundColor(headerTextColor)
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(showChatSection ? "Hide chat" : "Jam with this note")
+            }
+            
             // Expand/Collapse button
             Button(action: {
                 // Update immediately without animation for instant response
@@ -306,26 +385,12 @@ struct NodeView: View {
     private var descriptionView: some View {
         VStack(alignment: .leading, spacing: 4) {
             if isEditingDescription {
-                if node.type == .note {
-                    TextEditor(text: $editedDescription)
-                        .font(.body)
-                        .focused($isDescFocused)
-                        .frame(minHeight: 100)
-                        .onChange(of: isDescFocused) { _, newFocused in
-                            if !newFocused {
-                                onDescriptionEdit(editedDescription)
-                                isEditingDescription = false
-                            }
-                        }
-                        .onAppear { isDescFocused = true }
-                } else {
-                    TextField("Description", text: $editedDescription, onCommit: {
-                        onDescriptionEdit(editedDescription)
-                        isEditingDescription = false
-                    })
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.body)
-                }
+                TextField("Description", text: $editedDescription, onCommit: {
+                    onDescriptionEdit(editedDescription)
+                    isEditingDescription = false
+                })
+                .textFieldStyle(PlainTextFieldStyle())
+                .font(.body)
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
                     .font(.body)
@@ -334,9 +399,50 @@ struct NodeView: View {
                         if node.isExpanded {
                             editedDescription = node.description
                             isEditingDescription = true
-                            if node.type == .note { isDescFocused = true }
                         }
                     }
+            }
+        }
+    }
+    
+    private var noteDescriptionView: some View {
+        // Simple TextEditor that handles both reading and editing
+        ZStack(alignment: .topLeading) {
+            // Placeholder when empty
+            if editedDescription.isEmpty {
+                Text("Click to start typing...")
+                    .font(.body)
+                    .foregroundColor(.secondary.opacity(0.5))
+                    .padding(.top, 8)
+                    .padding(.leading, 5)
+                    .allowsHitTesting(false)
+            }
+            
+            // TextEditor - always present, scrolls naturally
+            // Uses local state to avoid update loops
+            TextEditor(text: $editedDescription)
+                .font(.body)
+                .scrollContentBackground(.hidden)
+                .background(Color.clear)
+                .focused($isDescFocused)
+        }
+        .onAppear {
+            // Sync local state with node on appear
+            if editedDescription != node.description {
+                editedDescription = node.description
+            }
+        }
+        .onChange(of: isDescFocused) { _, isFocused in
+            if isFocused {
+                // Entering edit mode - sync state
+                if editedDescription != node.description {
+                    editedDescription = node.description
+                }
+            } else {
+                // Exiting edit mode - save if changed
+                if editedDescription != node.description {
+                    onDescriptionEdit(editedDescription)
+                }
             }
         }
     }
@@ -439,18 +545,37 @@ struct NodeView: View {
     private var cardBackground: some View {
         if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
             // Apply tint to card body; stronger tint for notes to stand out
-            let tintOpacity: Double = (node.type == .note) ? 0.15 : 0.05
-            let tintColor = nodeColor.lightVariant.opacity(tintOpacity)
-            let baseColor = colorScheme == .dark
-                ? Color(nsColor: .controlBackgroundColor)
-                : Color.white
-            
-            return AnyView(
-                ZStack {
-                    baseColor
-                    tintColor
-                }
-            )
+            if node.type == .note {
+                // Notes get more visible color treatment
+                let tintOpacity: Double = colorScheme == .dark ? 0.25 : 0.50
+                let tintColor = colorScheme == .dark
+                    ? nodeColor.color.opacity(tintOpacity)
+                    : nodeColor.lightVariant.opacity(tintOpacity)
+                let baseColor = colorScheme == .dark
+                    ? Color(nsColor: .controlBackgroundColor)
+                    : Color.white
+                
+                return AnyView(
+                    ZStack {
+                        baseColor
+                        tintColor
+                    }
+                )
+            } else {
+                // Standard nodes get subtle tint
+                let tintOpacity: Double = 0.05
+                let tintColor = nodeColor.lightVariant.opacity(tintOpacity)
+                let baseColor = colorScheme == .dark
+                    ? Color(nsColor: .controlBackgroundColor)
+                    : Color.white
+                
+                return AnyView(
+                    ZStack {
+                        baseColor
+                        tintColor
+                    }
+                )
+            }
         } else {
             return AnyView(
                 colorScheme == .dark
