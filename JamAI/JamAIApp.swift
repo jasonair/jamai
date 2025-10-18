@@ -134,23 +134,19 @@ struct JamAIApp: App {
             
             CommandGroup(after: .undoRedo) {
                 Button("Zoom In") {
-                    if let vm = appState.viewModel {
-                        vm.zoom = min(vm.zoom * 1.2, Config.maxZoom)
-                    }
+                    appState.viewModel?.zoomIn()
                 }
                 .keyboardShortcut("+", modifiers: .command)
                 .disabled(appState.viewModel == nil)
                 
                 Button("Zoom Out") {
-                    if let vm = appState.viewModel {
-                        vm.zoom = max(vm.zoom / 1.2, Config.minZoom)
-                    }
+                    appState.viewModel?.zoomOut()
                 }
                 .keyboardShortcut("-", modifiers: .command)
                 .disabled(appState.viewModel == nil)
                 
                 Button("Reset Zoom") {
-                    appState.viewModel?.zoom = Config.defaultZoom
+                    appState.viewModel?.resetZoom()
                 }
                 .keyboardShortcut("0", modifiers: .command)
                 .disabled(appState.viewModel == nil)

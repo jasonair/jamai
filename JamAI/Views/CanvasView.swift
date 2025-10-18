@@ -52,7 +52,10 @@ struct CanvasView: View {
     
     @ViewBuilder
     private func canvasWithInteractions(geometry: GeometryProxy) -> some View {
-        let _ = DispatchQueue.main.async { self.viewportSize = geometry.size }
+        let _ = DispatchQueue.main.async { 
+            self.viewportSize = geometry.size
+            self.viewModel.viewportSize = geometry.size
+        }
         canvasLayers(geometry: geometry)
             // Track mouse and capture two-finger pan scrolling
             .overlay(

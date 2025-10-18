@@ -28,6 +28,7 @@ class CanvasViewModel: ObservableObject {
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
     @Published var selectedTool: CanvasTool = .select
+    @Published var viewportSize: CGSize = CGSize(width: 1200, height: 800) // updated by CanvasView
     
     // Forward undo manager state for UI binding
     @Published var canUndo: Bool = false
@@ -1096,6 +1097,42 @@ class CanvasViewModel: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s (0.5s animation + 0.05s buffer)
             positionsVersion &+= 1
+        }
+    }
+    
+    // MARK: - Zoom Controls
+    
+    func zoomIn() {
+        let newZoom = min(Config.maxZoom, zoom * 1.2)
+        zoomToCenter(newZoom: newZoom)
+    }
+    
+    func zoomOut() {
+        let newZoom = max(Config.minZoom, zoom / 1.2)
+        zoomToCenter(newZoom: newZoom)
+    }
+    
+    func resetZoom() {
+        zoomToCenter(newZoom: Config.defaultZoom)
+    }
+    
+    private func zoomToCenter(newZoom: CGFloat) {
+        let oldZoom = zoom
+        // Calculate viewport center
+        let centerX = viewportSize.width / 2
+        let centerY = viewportSize.height / 2
+        // Calculate world point at viewport center before zoom
+        let worldX = (centerX - offset.width) / max(oldZoom, 0.001)
+        let worldY = (centerY - offset.height) / max(oldZoom, 0.001)
+        // Calculate new offset to keep that world point at viewport center after zoom
+        let newOffset = CGSize(
+            width: centerX - worldX * newZoom,
+            height: centerY - worldY * newZoom
+        )
+        
+        withAnimation(.easeOut(duration: 0.2)) {
+            zoom = newZoom
+            offset = newOffset
         }
     }
     
