@@ -1113,9 +1113,9 @@ class CanvasViewModel: ObservableObject {
         // Toggle between min and max size with animation
         withAnimation(.easeInOut(duration: 0.3)) {
             if isMaximized {
-                // Minimize: set to minimum dimensions
+                // Minimize: set to square dimensions (width = height)
                 node.width = minWidth
-                node.height = Node.minHeight
+                node.height = minWidth
             } else {
                 // Maximize: set to maximum dimensions
                 node.width = maxWidth
