@@ -385,7 +385,8 @@ struct CanvasView: View {
             onDragEnded: { draggedNodeId = nil },
             onHeightChange: { height in handleHeightChange(height, for: node.id) },
             onWidthChange: { width in handleWidthChange(width, for: node.id) },
-            onResizeActiveChanged: { active in isResizingActive = active }
+            onResizeActiveChanged: { active in isResizingActive = active },
+            onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) }
         )
     }
     
@@ -486,11 +487,15 @@ struct CanvasView: View {
         viewModel.updateNode(node, immediate: true)
     }
     
+    private func handleMaximizeAndCenter(for nodeId: UUID) {
+        viewModel.toggleNodeSize(nodeId, viewportSize: viewportSize)
+    }
+    
     // Frames for nodes in world coordinates (before pan/zoom)
     private var nodeFrames: [UUID: CGRect] {
         var map: [UUID: CGRect] = [:]
         for node in viewModel.nodes.values {
-            let height = node.isExpanded ? node.height : Node.collapsedHeight
+            let height = node.height
             let width = node.width
             map[node.id] = CGRect(x: node.x, y: node.y, width: width, height: height)
         }

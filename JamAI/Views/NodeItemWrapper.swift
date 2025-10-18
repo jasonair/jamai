@@ -27,6 +27,7 @@ struct NodeItemWrapper: View {
     let onHeightChange: (CGFloat) -> Void
     let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
+    let onMaximizeAndCenter: () -> Void
     @State private var isResizingActive: Bool = false
     
     var body: some View {
@@ -66,7 +67,8 @@ struct NodeItemWrapper: View {
                     onResizeActiveChanged: { active in
                         isResizingActive = active
                         onResizeActiveChanged(active)
-                    }
+                    },
+                    onMaximizeAndCenter: onMaximizeAndCenter
                 )
             }
         }
@@ -90,9 +92,9 @@ struct NodeItemWrapper: View {
         case .text:
             return max(40, node.height)
         case .note:
-            return node.isExpanded ? node.height : Node.collapsedHeight
+            return node.height
         case .standard:
-            return node.isExpanded ? node.height : Node.collapsedHeight
+            return node.height
         }
     }
     

@@ -1078,11 +1078,61 @@ class CanvasViewModel: ObservableObject {
         
         // Calculate node center in world coordinates
         let nodeWidth = node.width
-        let nodeHeight = node.isExpanded ? node.height : Node.collapsedHeight
+        let nodeHeight = node.height
         let nodeCenterX = node.x + nodeWidth / 2
         let nodeCenterY = node.y + nodeHeight / 2
         
         // Calculate target offset to center the node in viewport
+        let targetZoom: CGFloat = 1.0
+        let targetOffset = CGSize(
+            width: viewportSize.width / 2 - nodeCenterX * targetZoom,
+            height: viewportSize.height / 2 - nodeCenterY * targetZoom
+        )
+        
+        // Animate the navigation
+        withAnimation(.easeInOut(duration: 0.5)) {
+            zoom = targetZoom
+            offset = targetOffset
+        }
+        
+        // Update edges after animation completes to ensure they're correctly positioned
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s (0.5s animation + 0.05s buffer)
+            positionsVersion &+= 1
+        }
+    }
+    
+    func toggleNodeSize(_ nodeId: UUID, viewportSize: CGSize = CGSize(width: 1200, height: 800)) {
+        guard var node = nodes[nodeId] else { return }
+        
+        // Determine if node is currently at max size
+        let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
+        let minWidth = node.type == .note ? Node.minNoteWidth : Node.minWidth
+        let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
+        
+        // Toggle between min and max size
+        if isMaximized {
+            // Minimize: set to minimum dimensions
+            node.width = minWidth
+            node.height = Node.minHeight
+        } else {
+            // Maximize: set to maximum dimensions
+            node.width = maxWidth
+            node.height = Node.maxHeight
+        }
+        
+        // Ensure node is expanded when resizing
+        if !node.isExpanded {
+            node.isExpanded = true
+        }
+        
+        updateNode(node, immediate: true)
+        
+        // Calculate node center in world coordinates with new dimensions
+        let nodeCenterX = node.x + node.width / 2
+        let nodeCenterY = node.y + node.height / 2
+        
+        // Calculate target offset to center the node in viewport at 100% zoom
         let targetZoom: CGFloat = 1.0
         let targetOffset = CGSize(
             width: viewportSize.width / 2 - nodeCenterX * targetZoom,

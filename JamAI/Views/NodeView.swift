@@ -25,6 +25,7 @@ struct NodeView: View {
     let onHeightChange: (CGFloat) -> Void
     let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
+    let onMaximizeAndCenter: () -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -57,8 +58,7 @@ struct NodeView: View {
                 
                 Divider()
                 
-                if node.isExpanded {
-                // Expanded content with fixed input at bottom
+                // Content with fixed input at bottom
                 VStack(spacing: 0) {
                     // Content area - different layout for notes vs standard nodes
                     if node.type == .note {
@@ -185,15 +185,10 @@ struct NodeView: View {
                 .overlay(
                     TapThroughOverlay(onTap: onTap)
                 )
-            } else {
-                // Collapsed content
-                collapsedContentView
-                    .padding(Node.padding)
-            }
             }
             .frame(
                 width: isResizing ? draggedWidth : node.width,
-                height: node.isExpanded ? (isResizing ? draggedHeight : node.height) : Node.collapsedHeight
+                height: isResizing ? draggedHeight : node.height
             )
             .background(cardBackground)
             .cornerRadius(Node.cornerRadius)
@@ -218,10 +213,8 @@ struct NodeView: View {
                 )
             )
             
-            // Resize grip overlay - positioned absolutely in corner (only when expanded)
-            if node.isExpanded {
-                resizeGripOverlay
-            }
+            // Resize grip overlay - positioned absolutely in corner
+            resizeGripOverlay
         }
         .onAppear {
             if isSelected {
@@ -375,19 +368,16 @@ struct NodeView: View {
                 .help(showChatSection ? "Hide chat" : "Jam with this note")
             }
             
-            // Expand/Collapse button
-            Button(action: {
-                // Update immediately without animation for instant response
-                var updatedNode = node
-                updatedNode.isExpanded.toggle()
-                node = updatedNode
-            }) {
-                Image(systemName: node.isExpanded ? "chevron.up.circle.fill" : "chevron.down.circle.fill")
+            // Toggle size button (maximize/minimize)
+            Button(action: onMaximizeAndCenter) {
+                let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
+                let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
+                Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                     .foregroundColor(headerTextColor)
                     .font(.system(size: 16))
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Toggle Expand/Collapse")
+            .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
         }
         .padding(.horizontal, Node.padding)
         .padding(.top, Node.padding)
@@ -414,10 +404,8 @@ struct NodeView: View {
                     .font(.system(size: 15))
                     .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
-                        if node.isExpanded {
-                            editedDescription = node.description
-                            isEditingDescription = true
-                        }
+                        editedDescription = node.description
+                        isEditingDescription = true
                     }
             }
         }
@@ -463,13 +451,6 @@ struct NodeView: View {
                 }
             }
         }
-    }
-    
-    private var collapsedContentView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            descriptionView
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     private var conversationView: some View {
