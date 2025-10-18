@@ -44,27 +44,25 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
             }
         )
         
-        // Calculate panel size
+        // Calculate panel size (increased to accommodate industry filter)
         let panelWidth: CGFloat = 600
-        let panelHeight: CGFloat = 620
+        let panelHeight: CGFloat = 680
         
         // Wrap in event-capturing container with explicit sizing
-        let wrappedContent = ZStack(alignment: .center) {
-            // Background that captures all events - MUST fill entire panel
-            Color.clear
-                .contentShape(Rectangle())
+        let wrappedContent = ZStack(alignment: .topLeading) {
+            // CRITICAL: Full-size background that captures ALL events across entire panel
+            Rectangle()
+                .fill(Color(NSColor.windowBackgroundColor))
                 .frame(width: panelWidth, height: panelHeight)
                 .allowsHitTesting(true)
-                .onTapGesture { location in
-                    print("[DEBUG] Modal background tapped at: \(location)")
-                }
+                .contentShape(Rectangle())
             
             contentView
+                .frame(width: panelWidth, alignment: .leading)
         }
         .frame(width: panelWidth, height: panelHeight)
-        .onAppear {
-            print("[DEBUG] Modal wrapper appeared - size: \(panelWidth)x\(panelHeight)")
-        }
+        .contentShape(Rectangle())
+        .allowsHitTesting(true)
         
         // Wrap in NSHostingController
         let hostingController = NSHostingController(rootView: wrappedContent)
@@ -113,17 +111,20 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         
         // Show as modal (blocks parent window)
         if let parentWindow = NSApp.mainWindow {
+            print("[DEBUG Modal] Showing sheet on parent window: \(parentWindow.title)")
             
             // Ensure parent becomes inactive
             parentWindow.makeFirstResponder(nil)
             
             parentWindow.beginSheet(panel) { [weak self] response in
+                print("[DEBUG Modal] Sheet closed")
                 self?.window = nil
             }
             
             // Make absolutely sure the sheet is key
             DispatchQueue.main.async {
                 panel.makeKey()
+                print("[DEBUG Modal] Sheet made key. Parent sheets count: \(parentWindow.sheets.count)")
             }
         } else {
             // Fallback to modal dialog if no parent window

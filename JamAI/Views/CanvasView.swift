@@ -138,10 +138,8 @@ struct CanvasView: View {
             .onTapGesture {
                 // Block if modal sheet is open
                 if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    print("[DEBUG CanvasView] Tap blocked - sheet is active, sheets count: \(window.sheets.count)")
                     return
                 }
-                print("[DEBUG CanvasView] Tap NOT blocked - no sheets")
                 // Place annotation if a tool is active; otherwise deselect
                 switch viewModel.selectedTool {
                 case .text:

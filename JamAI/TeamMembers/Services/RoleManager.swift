@@ -39,29 +39,11 @@ final class RoleManager: ObservableObject {
         
         do {
             let data = try Data(contentsOf: url)
-            print("📄 Found roles.json, file size: \(data.count) bytes")
-            
             let decoder = JSONDecoder()
             roles = try decoder.decode([Role].self, from: data)
             isLoaded = true
-            print("✅ Loaded \(roles.count) roles from \(url.lastPathComponent)")
-            
-            // List first 3 roles
-            for (index, role) in roles.prefix(3).enumerated() {
-                print("  \(index + 1). \(role.name) (\(role.industry.displayName) - \(role.category.displayName))")
-            }
-        } catch let DecodingError.keyNotFound(key, context) {
-            print("❌ Missing key '\(key.stringValue)' - \(context.debugDescription)")
-            print("   Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
-        } catch let DecodingError.typeMismatch(type, context) {
-            print("❌ Type mismatch for type '\(type)' - \(context.debugDescription)")
-            print("   Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
-        } catch let DecodingError.valueNotFound(type, context) {
-            print("❌ Value not found for type '\(type)' - \(context.debugDescription)")
-            print("   Coding path: \(context.codingPath.map { $0.stringValue }.joined(separator: " -> "))")
         } catch {
             print("❌ Error loading roles: \(error)")
-            print("   Error type: \(type(of: error))")
         }
     }
     

@@ -239,10 +239,8 @@ struct NodeView: View {
             .onTapGesture {
                 // Block if modal sheet is open
                 if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    print("[DEBUG NodeView] Tap blocked - sheet is active")
                     return
                 }
-                print("[DEBUG NodeView] Tap NOT blocked - selecting node")
                 onTap()
             }
             .overlay(

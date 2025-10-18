@@ -61,10 +61,16 @@ struct MouseTrackingView: NSViewRepresentable {
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self else { return event }
                 
-                // CRITICAL: If sheet is attached, don't process scroll at all
-                // Let the sheet window handle ALL scrolling
-                if let window = self.window, !window.sheets.isEmpty {
-                    return event // Pass to system (sheet will handle)
+                // CRITICAL: Check main window for sheets (more reliable than self.window)
+                // If sheet is attached, don't process scroll at all
+                if let mainWindow = NSApp.mainWindow {
+                    let hasSheets = !mainWindow.sheets.isEmpty
+                    if hasSheets {
+                        print("[DEBUG] Scroll blocked - \(mainWindow.sheets.count) sheet(s) detected on main window")
+                        return event // Pass to system (sheet will handle)
+                    } else {
+                        print("[DEBUG] Scroll NOT blocked - no sheets on main window (title: \(mainWindow.title))")
+                    }
                 }
                 
                 if self.shouldLetSystemHandleScroll(for: event) { return event }

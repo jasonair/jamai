@@ -178,11 +178,11 @@ struct TeamMemberModal: View {
                 VStack(alignment: .leading, spacing: 16) {
                     // Custom name field
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Name (Optional)")
+                        Text("Name")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(.secondary)
                         
-                        TextField("e.g., Sarah", text: $customName)
+                        TextField("Enter a name (required)", text: $customName)
                             .textFieldStyle(PlainTextFieldStyle())
                             .padding(8)
                             .background(Color.secondary.opacity(0.1))
@@ -259,22 +259,17 @@ struct TeamMemberModal: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selectedRole != nil ? Color.accentColor : Color.gray)
+                        .background(selectedRole != nil && !customName.trimmingCharacters(in: .whitespaces).isEmpty ? Color.accentColor : Color.gray)
                         .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .disabled(selectedRole == nil)
+                .disabled(selectedRole == nil || customName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
             .padding()
         }
-        .frame(width: 600)
-        .frame(maxHeight: 650) // Cap at reasonable max
-        .background(
-            Color(NSColor.windowBackgroundColor)
-                .frame(width: 600)
-                .contentShape(Rectangle())
-        )
-        .allowsHitTesting(true) // Ensure modal captures all events
+        .frame(width: 600, alignment: .leading)
+        .frame(maxHeight: 680)
+        .allowsHitTesting(true)
         .onAppear {
             
             // Load existing member if editing
@@ -293,10 +288,12 @@ struct TeamMemberModal: View {
     
     private func saveTeamMember() {
         guard let role = selectedRole else { return }
+        let trimmedName = customName.trimmingCharacters(in: .whitespaces)
+        guard !trimmedName.isEmpty else { return }
         
         let member = TeamMember(
             roleId: role.id,
-            name: customName.isEmpty ? nil : customName,
+            name: trimmedName,
             experienceLevel: selectedLevel,
             promptAddendum: nil,
             knowledgePackIds: nil
