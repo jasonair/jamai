@@ -21,54 +21,62 @@ struct MarkdownText: View {
                 Group {
                     switch block.type {
                     case .table(let headers, let rows):
-                        // Tables take full width
+                        // Tables take full width with small horizontal margin
                         MarkdownTableView(headers: headers, rows: rows)
+                            .padding(.horizontal, 12)
                             .padding(.bottom, 20)
                     case .text(let content):
-                        // Text is centered with max reading width
+                        // Text is centered with max reading width and padding
                         HStack {
                             Spacer(minLength: 0)
                             FormattedTextView(content: content)
                                 .frame(maxWidth: 700)
                             Spacer(minLength: 0)
                         }
+                        .padding(.horizontal, 8)
                     }
                 }
                 .fixedSize(horizontal: false, vertical: true)
             }
             
-            // Copy button at the end
+            // Copy button at the end - centered within text content width
             if let onCopy = onCopy {
-                HStack(spacing: 6) {
-                    Button(action: {
-                        onCopy(text)
-                        // Show toast
-                        showCopiedToast = true
-                        // Hide after 2 seconds
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                            showCopiedToast = false
+                HStack {
+                    Spacer(minLength: 0)
+                    HStack(spacing: 6) {
+                        Button(action: {
+                            onCopy(text)
+                            // Show toast
+                            showCopiedToast = true
+                            // Hide after 2 seconds
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                                showCopiedToast = false
+                            }
+                        }) {
+                            Image(systemName: showCopiedToast ? "checkmark.circle.fill" : "doc.on.doc")
+                                .font(.system(size: 13))
+                                .foregroundColor(showCopiedToast ? .green : .secondary)
                         }
-                    }) {
-                        Image(systemName: showCopiedToast ? "checkmark.circle.fill" : "doc.on.doc")
-                            .font(.system(size: 13))
-                            .foregroundColor(showCopiedToast ? .green : .secondary)
+                        .buttonStyle(.plain)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                        .help(showCopiedToast ? "Copied!" : "Copy response")
+                        
+                        if showCopiedToast {
+                            Text("Copied!")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.green)
+                                .transition(.opacity.combined(with: .scale))
+                        }
+                        
+                        Spacer()
                     }
-                    .buttonStyle(.plain)
-                    .padding(6)
-                    .background(Color.secondary.opacity(0.08))
-                    .cornerRadius(6)
-                    .help(showCopiedToast ? "Copied!" : "Copy response")
-                    
-                    if showCopiedToast {
-                        Text("Copied!")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.green)
-                            .transition(.opacity.combined(with: .scale))
-                    }
-                    
-                    Spacer()
+                    .frame(maxWidth: 700)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+                    Spacer(minLength: 0)
                 }
-                .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

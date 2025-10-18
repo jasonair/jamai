@@ -67,25 +67,23 @@ struct NodeView: View {
                             // When chat is visible, use ScrollView for conversation
                             ScrollViewReader { proxy in
                                 ScrollView {
-                                    HStack {
-                                        Spacer(minLength: 0)
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            // Note description (read-only when chat is visible)
-                                            if !node.description.isEmpty {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        // Note description (read-only when chat is visible)
+                                        if !node.description.isEmpty {
+                                            HStack {
+                                                Spacer(minLength: 0)
                                                 Text(node.description)
                                                     .font(.system(size: 15))
-                                                    .padding(Node.padding)
+                                                    .frame(maxWidth: 800)
+                                                Spacer(minLength: 0)
                                             }
-                                            
-                                            // Conversation thread
-                                            conversationView
-                                                .padding(.horizontal, Node.padding)
-                                                .id(scrollViewID)
                                         }
-                                        .frame(maxWidth: 800)
-                                        Spacer(minLength: 0)
+                                        
+                                        // Conversation thread - no width constraint, let MarkdownText handle it
+                                        conversationView
+                                            .id(scrollViewID)
                                     }
-                                    .padding(.bottom, Node.padding)
+                                    .padding(Node.padding)
                                 }
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
@@ -109,18 +107,18 @@ struct NodeView: View {
                         // For standard nodes: ScrollView with conversation
                         ScrollViewReader { proxy in
                             ScrollView {
-                                HStack {
-                                    Spacer(minLength: 0)
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        // Description
+                                VStack(alignment: .leading, spacing: 12) {
+                                    // Description - centered
+                                    HStack {
+                                        Spacer(minLength: 0)
                                         descriptionView
-                                        
-                                        // Conversation thread
-                                        conversationView
-                                            .id(scrollViewID)
+                                            .frame(maxWidth: 800)
+                                        Spacer(minLength: 0)
                                     }
-                                    .frame(maxWidth: 800)
-                                    Spacer(minLength: 0)
+                                    
+                                    // Conversation thread - no width constraint, let MarkdownText handle it
+                                    conversationView
+                                        .id(scrollViewID)
                                 }
                                 .padding(Node.padding)
                             }
@@ -491,43 +489,101 @@ struct NodeView: View {
             msg.role == role && msg.content == content
         })
         
-        return VStack(alignment: .leading, spacing: 4) {
-            Text(role == .user ? "You" : "Jam")
-                .font(.system(size: 12, weight: .semibold))
-                .fontWeight(.semibold)
-                .foregroundColor(role == .user ? .secondary : .accentColor)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(alignment: .leading, spacing: 8) {
-                // Show image if present
-                if let imageData = conversationMsg?.imageData,
-                   let nsImage = NSImage(data: imageData) {
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: 200, maxHeight: 200)
+        if role == .user {
+            // User messages: center everything at text content width
+            return AnyView(
+                HStack {
+                    Spacer(minLength: 0)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("You")
+                            .font(.system(size: 12, weight: .semibold))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 8)
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Show image if present
+                            if let imageData = conversationMsg?.imageData,
+                               let nsImage = NSImage(data: imageData) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: 200, maxHeight: 200)
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                    )
+                            }
+                            
+                            // Show text content
+                            if !content.isEmpty {
+                                Text(content)
+                                    .font(.system(size: 15))
+                                    .textSelection(.enabled)
+                            }
+                        }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.1))
                         .cornerRadius(8)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                        )
+                    }
+                    .frame(maxWidth: 700)
+                    Spacer(minLength: 0)
                 }
-                
-                // Show text content
-                if !content.isEmpty {
-                    MarkdownText(text: content, onCopy: role == .assistant ? { text in
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(text, forType: .string)
-                    } : nil)
-                        .font(.system(size: 15))
+            )
+        } else {
+            // Assistant messages: title centered, content can extend full width
+            return AnyView(
+                VStack(alignment: .leading, spacing: 4) {
+                    // Center the "Jam" title at text content width
+                    HStack {
+                        Spacer(minLength: 0)
+                        Text("Jam")
+                            .font(.system(size: 12, weight: .semibold))
+                            .fontWeight(.semibold)
+                            .foregroundColor(.accentColor)
+                            .frame(maxWidth: 700, alignment: .leading)
+                            .padding(.horizontal, 8)
+                        Spacer(minLength: 0)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        // Show image if present
+                        if let imageData = conversationMsg?.imageData,
+                           let nsImage = NSImage(data: imageData) {
+                            HStack {
+                                Spacer(minLength: 0)
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: 200, maxHeight: 200)
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                    )
+                                    .frame(maxWidth: 700, alignment: .leading)
+                                    .padding(.horizontal, 8)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.top, 8)
+                        }
+                        
+                        // Show text content - MarkdownText handles centering text and full-width tables
+                        if !content.isEmpty {
+                            MarkdownText(text: content, onCopy: { text in
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(text, forType: .string)
+                            })
+                                .font(.system(size: 15))
+                        }
+                    }
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }
-            .padding(8)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
-            .cornerRadius(8)
+            )
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var inputView: some View {
