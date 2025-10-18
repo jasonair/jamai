@@ -261,13 +261,16 @@ struct CanvasView: View {
             
             // Edges - transformed the same way as nodes
             // Only renders visible edges (connected to visible nodes)
+            // Use compositingGroup + drawingGroup for GPU acceleration without clipping
             EdgeLayer(
                 edges: visibleEdges,
                 frames: nodeFrames
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .compositingGroup()  // Flatten the layer hierarchy first
             .scaleEffect(currentZoom, anchor: .topLeading)
             .offset(currentOffset)
+            .drawingGroup(opaque: false, colorMode: .nonLinear)  // Rasterize after transforms
             .allowsHitTesting(false)
             
             // Nodes - only renders visible nodes (viewport culling with 40% margin)
