@@ -10,6 +10,7 @@ import Combine
 
 @MainActor
 class ModalCoordinator: ObservableObject {
+    @Published var isModalPresented = false
     private var currentModalWindow: TeamMemberModalWindow?
     
     func showTeamMemberModal(
@@ -25,15 +26,20 @@ class ModalCoordinator: ObservableObject {
         let modalWindow = TeamMemberModalWindow(
             existingMember: existingMember,
             onSave: onSave,
-            onRemove: onRemove
+            onRemove: onRemove,
+            onDismiss: { [weak self] in
+                self?.isModalPresented = false
+            }
         )
         
         currentModalWindow = modalWindow
+        isModalPresented = true
         modalWindow.show()
     }
     
     func dismissTeamMemberModal() {
         currentModalWindow?.close()
         currentModalWindow = nil
+        isModalPresented = false
     }
 }

@@ -14,15 +14,18 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     private let existingMember: TeamMember?
     private let onSave: (TeamMember) -> Void
     private let onRemove: (() -> Void)?
+    private let onDismissCallback: (() -> Void)?
     
     init(
         existingMember: TeamMember?,
         onSave: @escaping (TeamMember) -> Void,
-        onRemove: (() -> Void)?
+        onRemove: (() -> Void)?,
+        onDismiss: (() -> Void)? = nil
     ) {
         self.existingMember = existingMember
         self.onSave = onSave
         self.onRemove = onRemove
+        self.onDismissCallback = onDismiss
         super.init()
     }
     
@@ -111,20 +114,16 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         
         // Show as modal (blocks parent window)
         if let parentWindow = NSApp.mainWindow {
-            print("[DEBUG Modal] Showing sheet on parent window: \(parentWindow.title)")
-            
             // Ensure parent becomes inactive
             parentWindow.makeFirstResponder(nil)
             
             parentWindow.beginSheet(panel) { [weak self] response in
-                print("[DEBUG Modal] Sheet closed")
                 self?.window = nil
             }
             
             // Make absolutely sure the sheet is key
             DispatchQueue.main.async {
                 panel.makeKey()
-                print("[DEBUG Modal] Sheet made key. Parent sheets count: \(parentWindow.sheets.count)")
             }
         } else {
             // Fallback to modal dialog if no parent window
@@ -145,6 +144,7 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         
         window.orderOut(nil)
         self.window = nil
+        onDismissCallback?()
     }
     
     // MARK: - NSWindowDelegate
@@ -158,5 +158,6 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
             }
         }
         self.window = nil
+        onDismissCallback?()
     }
 }

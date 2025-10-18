@@ -136,10 +136,9 @@ struct CanvasView: View {
             .background(canvasBackground)
             .contentShape(Rectangle())
             .onTapGesture {
-                // Block if modal sheet is open
-                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    return
-                }
+                // Completely block if modal is presented
+                guard !modalCoordinator.isModalPresented else { return }
+                
                 // Place annotation if a tool is active; otherwise deselect
                 switch viewModel.selectedTool {
                 case .text:

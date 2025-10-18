@@ -237,10 +237,8 @@ struct NodeView: View {
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
             .onTapGesture {
-                // Block if modal sheet is open
-                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                    return
-                }
+                // Block node selection if modal sheet is open
+                guard NSApp.mainWindow?.sheets.isEmpty ?? true else { return }
                 onTap()
             }
             .overlay(

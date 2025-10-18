@@ -16,22 +16,17 @@ struct TeamMemberModal: View {
     let onDismiss: () -> Void
     
     @State private var searchQuery = ""
-    @State private var selectedIndustry: RoleIndustry?
     @State private var selectedCategory: RoleCategory?
     @State private var selectedRole: Role?
     @State private var selectedLevel: ExperienceLevel = .intermediate
+    @State private var selectedIndustry: RoleIndustry? // Industry for the team member
     @State private var customName: String = ""
-    @State private var currentTier: PlanTier = .free // TODO: Get from user settings
+    @State private var currentTier: PlanTier = .free
     
     @FocusState private var isSearchFocused: Bool
     
     var filteredRoles: [Role] {
         var results = roleManager.roles
-        
-        // Filter by industry
-        if let industry = selectedIndustry {
-            results = results.filter { $0.industry == industry }
-        }
         
         // Filter by category
         if let category = selectedCategory {
@@ -42,8 +37,7 @@ struct TeamMemberModal: View {
         if !searchQuery.isEmpty {
             results = results.filter { role in
                 role.name.localizedCaseInsensitiveContains(searchQuery) ||
-                role.description.localizedCaseInsensitiveContains(searchQuery) ||
-                role.industry.displayName.localizedCaseInsensitiveContains(searchQuery)
+                role.description.localizedCaseInsensitiveContains(searchQuery)
             }
         }
         
@@ -94,34 +88,6 @@ struct TeamMemberModal: View {
             .background(Color.secondary.opacity(0.1))
             .cornerRadius(8)
             .padding()
-            
-            // Industry filter
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    // All industries button
-                    FilterChip(
-                        title: "All Industries",
-                        isSelected: selectedIndustry == nil,
-                        action: { 
-                            selectedIndustry = nil
-                            selectedCategory = nil
-                        }
-                    )
-                    
-                    ForEach(RoleIndustry.allCases, id: \.self) { industry in
-                        FilterChip(
-                            title: industry.displayName,
-                            isSelected: selectedIndustry == industry,
-                            action: { selectedIndustry = industry }
-                        )
-                    }
-                }
-                .padding(.horizontal)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 40)
-            .contentShape(Rectangle())
-            .padding(.bottom, 8)
             
             // Category filter
             ScrollView(.horizontal, showsIndicators: false) {
@@ -189,6 +155,33 @@ struct TeamMemberModal: View {
                             .cornerRadius(6)
                     }
                     
+                    // Industry selector (optional)
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Industry (Optional)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(.secondary)
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                // None button
+                                FilterChip(
+                                    title: "General",
+                                    isSelected: selectedIndustry == nil,
+                                    action: { selectedIndustry = nil }
+                                )
+                                
+                                ForEach(RoleIndustry.allCases, id: \.self) { industry in
+                                    FilterChip(
+                                        title: industry.displayName,
+                                        isSelected: selectedIndustry == industry,
+                                        action: { selectedIndustry = industry }
+                                    )
+                                }
+                            }
+                        }
+                        .frame(height: 32)
+                    }
+                    
                     // Experience level selector
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Experience Level")
@@ -211,18 +204,6 @@ struct TeamMemberModal: View {
                                 )
                             }
                         }
-                    }
-                    
-                    // Plan tier notice for locked levels
-                    if let role = selectedRole,
-                       !role.isLevelAvailable(selectedLevel, for: currentTier) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "lock.fill")
-                                .font(.system(size: 12))
-                            Text("This experience level requires a higher plan tier")
-                                .font(.system(size: 12))
-                        }
-                        .foregroundColor(.orange)
                     }
                 }
                 .padding()
@@ -275,6 +256,7 @@ struct TeamMemberModal: View {
             // Load existing member if editing
             if let member = existingMember {
                 customName = member.name ?? ""
+                selectedIndustry = member.industry
                 selectedLevel = member.experienceLevel
                 selectedRole = roleManager.role(withId: member.roleId)
             }
@@ -294,6 +276,7 @@ struct TeamMemberModal: View {
         let member = TeamMember(
             roleId: role.id,
             name: trimmedName,
+            industry: selectedIndustry,
             experienceLevel: selectedLevel,
             promptAddendum: nil,
             knowledgePackIds: nil

@@ -83,15 +83,27 @@ struct LevelPrompt: Codable, Sendable {
     init(level: ExperienceLevel, systemPrompt: String, requiredTier: PlanTier = .free) {
         self.level = level
         self.systemPrompt = systemPrompt
-        self.requiredTier = requiredTier
+        self.requiredTier = .free // All levels are free for now
+    }
+    
+    // Custom Codable to default requiredTier to free if not in JSON
+    enum CodingKeys: String, CodingKey {
+        case level, systemPrompt, requiredTier
+    }
+    
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        level = try container.decode(ExperienceLevel.self, forKey: .level)
+        systemPrompt = try container.decode(String.self, forKey: .systemPrompt)
+        requiredTier = try container.decodeIfPresent(PlanTier.self, forKey: .requiredTier) ?? .free
     }
 }
 
-/// A role definition (e.g., "Research Analyst", "Content Writer")
+/// A role definition (e.g., "Software Engineer", "Marketing Strategist")
+/// Industry is applied per team member, not per role
 struct Role: Identifiable, Codable, Sendable {
-    let id: String // Unique identifier (e.g., "research-analyst")
-    let name: String // Display name (e.g., "Research Analyst")
-    let industry: RoleIndustry
+    let id: String // Unique identifier (e.g., "software-engineer")
+    let name: String // Display name (e.g., "Software Engineer")
     let category: RoleCategory
     let icon: String // SF Symbol name
     let color: String // Color identifier (matches NodeColor)
@@ -104,7 +116,6 @@ struct Role: Identifiable, Codable, Sendable {
     init(
         id: String,
         name: String,
-        industry: RoleIndustry,
         category: RoleCategory,
         icon: String = "person.circle.fill",
         color: String = "blue",
@@ -115,7 +126,6 @@ struct Role: Identifiable, Codable, Sendable {
     ) {
         self.id = id
         self.name = name
-        self.industry = industry
         self.category = category
         self.icon = icon
         self.color = color
@@ -127,14 +137,13 @@ struct Role: Identifiable, Codable, Sendable {
     
     // Custom Codable implementation to provide defaults for optional fields
     enum CodingKeys: String, CodingKey {
-        case id, name, industry, category, icon, color, description, levelPrompts, version, isCustom
+        case id, name, category, icon, color, description, levelPrompts, version, isCustom
     }
     
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         name = try container.decode(String.self, forKey: .name)
-        industry = try container.decode(RoleIndustry.self, forKey: .industry)
         category = try container.decode(RoleCategory.self, forKey: .category)
         icon = try container.decode(String.self, forKey: .icon)
         color = try container.decode(String.self, forKey: .color)
