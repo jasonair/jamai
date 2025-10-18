@@ -71,7 +71,7 @@ struct NodeView: View {
                                         // Note description (read-only when chat is visible)
                                         if !node.description.isEmpty {
                                             Text(node.description)
-                                                .font(.body)
+                                                .font(.system(size: 15))
                                                 .padding(Node.padding)
                                         }
                                         
@@ -315,13 +315,13 @@ struct NodeView: View {
                     isEditingTitle = false
                 })
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.headline)
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(headerTextColor)
                 .focused($isTitleFocused)
             } else {
                 HStack(spacing: 8) {
                     Text(node.title.isEmpty ? "Untitled" : node.title)
-                        .font(.headline)
+                        .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                         .onTapGesture {
                             editedTitle = node.title
@@ -401,10 +401,10 @@ struct NodeView: View {
                     isEditingDescription = false
                 })
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.body)
+                .font(.system(size: 15))
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
-                    .font(.body)
+                    .font(.system(size: 15))
                     .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
                         if node.isExpanded {
@@ -422,7 +422,7 @@ struct NodeView: View {
             // Placeholder when empty
             if editedDescription.isEmpty {
                 Text("Click to start typing...")
-                    .font(.body)
+                    .font(.system(size: 15))
                     .foregroundColor(.secondary.opacity(0.5))
                     .padding(.top, 8)
                     .padding(.leading, 5)
@@ -432,7 +432,7 @@ struct NodeView: View {
             // TextEditor - always present, scrolls naturally
             // Uses local state to avoid update loops
             TextEditor(text: $editedDescription)
-                .font(.body)
+                .font(.system(size: 15))
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
                 .focused($isDescFocused)
@@ -495,7 +495,7 @@ struct NodeView: View {
         
         return VStack(alignment: .leading, spacing: 4) {
             Text(role == .user ? "You" : "Jam")
-                .font(.caption)
+                .font(.system(size: 12, weight: .semibold))
                 .fontWeight(.semibold)
                 .foregroundColor(role == .user ? .secondary : .accentColor)
             
@@ -520,7 +520,7 @@ struct NodeView: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(text, forType: .string)
                     } : nil)
-                        .font(.body)
+                        .font(.system(size: 15))
                 }
             }
             .padding(8)
@@ -553,7 +553,7 @@ struct NodeView: View {
                         selectedImageMimeType = nil
                     }) {
                         Image(systemName: "xmark.circle.fill")
-                            .font(.body)
+                            .font(.system(size: 15))
                             .foregroundColor(.secondary)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -585,7 +585,7 @@ struct NodeView: View {
                     // Image upload button (bottom left)
                     Button(action: selectImage) {
                         Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
-                            .font(.title3)
+                            .font(.system(size: 19))
                             .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -600,7 +600,7 @@ struct NodeView: View {
                         submitPrompt()
                     }) {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.title2)
+                            .font(.system(size: 22))
                             .foregroundColor((promptText.isEmpty && selectedImage == nil) ? .secondary : .accentColor)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -709,8 +709,9 @@ struct NodeView: View {
                         let deltaY = value.location.y - dragStartLocation.y
                         
                         // Update local state only - smooth without triggering binding updates
+                        let minWidth = node.type == .note ? Node.minNoteWidth : Node.minWidth
                         draggedHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + deltaY))
-                        draggedWidth = max(Node.minWidth, min(Node.maxWidth, resizeStartWidth + deltaX))
+                        draggedWidth = max(minWidth, min(Node.maxWidth, resizeStartWidth + deltaX))
                     }
                     .onEnded { _ in
                         isResizing = false
