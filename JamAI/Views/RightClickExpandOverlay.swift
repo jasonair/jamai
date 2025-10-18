@@ -35,6 +35,7 @@ final class RightClickMonitorView: NSView {
     var onMakeNote: ((String) -> Void)?
     var onJamWithThis: ((String) -> Void)?
     private var eventMonitor: Any?
+    private weak var lastTextView: NSTextView?
     
     override func hitTest(_ point: NSPoint) -> NSView? {
         // Never intercept events; allow underlying SwiftUI content to handle everything
@@ -61,6 +62,8 @@ final class RightClickMonitorView: NSView {
                 if range.length > 0 {
                     let ns = tv.string as NSString
                     selectedText = ns.substring(with: range)
+                    // Store reference to clear selection after action
+                    self.lastTextView = tv
                 }
             }
             
@@ -101,6 +104,8 @@ final class RightClickMonitorView: NSView {
     
     @objc private func handleExpand(_ sender: NSMenuItem) {
         if let text = sender.representedObject as? String {
+            // Clear the text selection
+            clearTextSelection()
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
                 self?.onExpand?(text)
@@ -110,6 +115,8 @@ final class RightClickMonitorView: NSView {
     
     @objc private func handleMakeNote(_ sender: NSMenuItem) {
         if let text = sender.representedObject as? String {
+            // Clear the text selection
+            clearTextSelection()
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
                 self?.onMakeNote?(text)
@@ -119,10 +126,20 @@ final class RightClickMonitorView: NSView {
     
     @objc private func handleJamWithThis(_ sender: NSMenuItem) {
         if let text = sender.representedObject as? String {
+            // Clear the text selection
+            clearTextSelection()
             // Dispatch to main queue with user-initiated QoS to avoid priority inversion
             DispatchQueue.main.async(qos: .userInitiated) { [weak self] in
                 self?.onJamWithThis?(text)
             }
+        }
+    }
+    
+    private func clearTextSelection() {
+        // Clear the text selection from the stored text view
+        if let textView = lastTextView {
+            textView.setSelectedRange(NSRange(location: 0, length: 0))
+            lastTextView = nil
         }
     }
     
