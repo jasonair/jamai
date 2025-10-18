@@ -53,6 +53,46 @@ struct CanvasView: View {
     }
     private var edgesArray: [Edge] { Array(viewModel.edges.values) }
     
+    // Viewport culling: only render visible nodes (with generous margin)
+    private var visibleNodes: [Node] {
+        // Disable culling during navigation to prevent pop-in
+        guard !viewModel.isNavigating else { return nodesArray }
+        
+        // Add 40% margin to viewport bounds to prevent pop-in during pan/zoom
+        let margin: CGFloat = 0.4
+        let zoom = currentZoom
+        let offset = currentOffset
+        
+        let cullLeft = -viewportSize.width * margin
+        let cullRight = viewportSize.width * (1 + margin)
+        let cullTop = -viewportSize.height * margin
+        let cullBottom = viewportSize.height * (1 + margin)
+        
+        return nodesArray.filter { node in
+            // Calculate screen position and size
+            let screenX = node.x * zoom + offset.width
+            let screenY = node.y * zoom + offset.height
+            let screenW = node.width * zoom
+            let screenH = node.height * zoom
+            
+            // Check if node intersects viewport (with margin)
+            return screenX + screenW >= cullLeft &&
+                   screenX <= cullRight &&
+                   screenY + screenH >= cullTop &&
+                   screenY <= cullBottom
+        }
+    }
+    
+    // Smart edge culling: render edge if either endpoint is visible
+    private var visibleEdges: [Edge] {
+        guard !viewModel.isNavigating else { return edgesArray }
+        
+        let visibleNodeIds = Set(visibleNodes.map { $0.id })
+        return edgesArray.filter { edge in
+            visibleNodeIds.contains(edge.sourceId) || visibleNodeIds.contains(edge.targetId)
+        }
+    }
+    
     // Use local gesture state during zoom, otherwise use viewModel values
     private var currentZoom: CGFloat { isZooming ? gestureZoom : viewModel.zoom }
     private var currentOffset: CGSize { isZooming ? gestureOffset : viewModel.offset }
@@ -219,10 +259,9 @@ struct CanvasView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Edges - transformed the same way as nodes
-            // Note: Canvas may clip edges when nodes are very far from origin
-            // This is a known SwiftUI limitation - consider keeping nodes within ~10000x10000 range
+            // Only renders visible edges (connected to visible nodes)
             EdgeLayer(
-                edges: edgesArray,
+                edges: visibleEdges,
                 frames: nodeFrames
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -230,9 +269,9 @@ struct CanvasView: View {
             .offset(currentOffset)
             .allowsHitTesting(false)
             
-            // Nodes
+            // Nodes - only renders visible nodes (viewport culling with 40% margin)
             WorldLayerView(
-                nodes: nodesArray,
+                nodes: visibleNodes,
                 nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
