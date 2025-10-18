@@ -516,7 +516,10 @@ struct NodeView: View {
                 
                 // Show text content
                 if !content.isEmpty {
-                    MarkdownText(text: content)
+                    MarkdownText(text: content, onCopy: role == .assistant ? { text in
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(text, forType: .string)
+                    } : nil)
                         .font(.body)
                 }
             }
