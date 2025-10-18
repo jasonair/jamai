@@ -32,11 +32,23 @@ struct CanvasView: View {
     @State private var showOutline: Bool = true
     @State private var viewportSize: CGSize = .zero
     
+    // Local zoom state for smooth gesture tracking
+    @State private var isZooming: Bool = false
+    @State private var gestureZoom: CGFloat = 1.0
+    @State private var gestureOffset: CGSize = .zero
+    @State private var gestureStartZoom: CGFloat = 1.0
+    @State private var gestureStartOffset: CGSize = .zero
+    @State private var zoomStartLocation: CGPoint = .zero
+    
     @Environment(\.colorScheme) var colorScheme
     
     // Computed once per render - safer than @State modification
     private var nodesArray: [Node] { Array(viewModel.nodes.values) }
     private var edgesArray: [Edge] { Array(viewModel.edges.values) }
+    
+    // Use local gesture state during zoom, otherwise use viewModel values
+    private var currentZoom: CGFloat { isZooming ? gestureZoom : viewModel.zoom }
+    private var currentOffset: CGSize { isZooming ? gestureOffset : viewModel.offset }
 
     var body: some View {
         canvasContent
@@ -114,28 +126,45 @@ struct CanvasView: View {
                 MagnificationGesture()
                     .onChanged { value in
                         guard !isResizingActive else { return }
+                        
+                        // Initialize gesture state on first change
+                        if !isZooming {
+                            isZooming = true
+                            gestureStartZoom = viewModel.zoom
+                            gestureStartOffset = viewModel.offset
+                            gestureZoom = viewModel.zoom
+                            gestureOffset = viewModel.offset
+                            zoomStartLocation = mouseLocation
+                        }
+                        
                         // Cursor-anchored zoom: keep the world point under cursor fixed
-                        let oldZoom = viewModel.zoom
-                        // Reduce sensitivity by dampening the zoom factor
-                        let dampingFactor: CGFloat = 0.1
+                        // Use ORIGINAL captured values for calculation
+                        let baseZoom = gestureStartZoom
+                        let baseOffset = gestureStartOffset
+                        
+                        // High sensitivity for fast zooming (was 0.1, now 0.5 for 5× faster)
+                        let dampingFactor: CGFloat = 0.5
                         let zoomDelta = (value - 1.0) * dampingFactor
-                        let newZoom = max(Config.minZoom, min(Config.maxZoom, lastZoom * (1.0 + zoomDelta)))
-                        let s = mouseLocation
-                        // world point under cursor before zoom
-                        let wx = (s.x - viewModel.offset.width) / max(oldZoom, 0.001)
-                        let wy = (s.y - viewModel.offset.height) / max(oldZoom, 0.001)
-                        let newOffset = CGSize(
+                        let newZoom = max(Config.minZoom, min(Config.maxZoom, baseZoom * (1.0 + zoomDelta)))
+                        let s = zoomStartLocation
+                        
+                        // Calculate world point under cursor using ORIGINAL offset and zoom
+                        let wx = (s.x - baseOffset.width) / max(baseZoom, 0.001)
+                        let wy = (s.y - baseOffset.height) / max(baseZoom, 0.001)
+                        
+                        // Update local state only - no viewModel updates during gesture
+                        gestureZoom = newZoom
+                        gestureOffset = CGSize(
                             width: s.x - wx * newZoom,
                             height: s.y - wy * newZoom
                         )
-                        // Add smooth animation for zoom
-                        withAnimation(.linear(duration: 0.05)) {
-                            viewModel.zoom = newZoom
-                            viewModel.offset = newOffset
-                        }
                     }
                     .onEnded { _ in
-                        lastZoom = viewModel.zoom
+                        // Only update viewModel once at the end
+                        viewModel.zoom = gestureZoom
+                        viewModel.offset = gestureOffset
+                        lastZoom = gestureZoom
+                        isZooming = false
                     }
             )
             .onTapGesture(count: 2) { location in
@@ -176,8 +205,8 @@ struct CanvasView: View {
         ZStack {
             // Background
             WorldBackgroundLayer(
-                zoom: viewModel.zoom,
-                offset: viewModel.offset,
+                zoom: currentZoom,
+                offset: currentOffset,
                 showDots: viewModel.showDots
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -190,8 +219,8 @@ struct CanvasView: View {
                 frames: nodeFrames
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .scaleEffect(viewModel.zoom, anchor: .topLeading)
-            .offset(viewModel.offset)
+            .scaleEffect(currentZoom, anchor: .topLeading)
+            .offset(currentOffset)
             .allowsHitTesting(false)
             
             // Nodes
@@ -200,8 +229,8 @@ struct CanvasView: View {
                 nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
             )
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .scaleEffect(viewModel.zoom, anchor: .topLeading)
-            .offset(viewModel.offset)
+            .scaleEffect(currentZoom, anchor: .topLeading)
+            .offset(currentOffset)
             
             // Toolbar overlay
             overlayControls
