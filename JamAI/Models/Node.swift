@@ -53,6 +53,9 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var summary: String?
     var systemPromptSnapshot: String?
     
+    // Team Member
+    var teamMemberJSON: String? // JSON representation of attached TeamMember
+    
     // UI State
     var isExpanded: Bool
     var isFrozenContext: Bool
@@ -87,6 +90,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         ancestryJSON: String = "[]",
         summary: String? = nil,
         systemPromptSnapshot: String? = nil,
+        teamMemberJSON: String? = nil,
         isExpanded: Bool = true,
         isFrozenContext: Bool = false,
         color: String = "none",
@@ -116,6 +120,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.ancestryJSON = ancestryJSON
         self.summary = summary
         self.systemPromptSnapshot = systemPromptSnapshot
+        self.teamMemberJSON = teamMemberJSON
         self.isExpanded = isExpanded
         self.isFrozenContext = isFrozenContext
         self.color = color
@@ -169,6 +174,25 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
             imageMimeType: imageMimeType
         ))
         setConversation(messages)
+    }
+    
+    var teamMember: TeamMember? {
+        guard let json = teamMemberJSON,
+              let data = json.data(using: .utf8),
+              let member = try? JSONDecoder().decode(TeamMember.self, from: data) else {
+            return nil
+        }
+        return member
+    }
+    
+    mutating func setTeamMember(_ member: TeamMember?) {
+        if let member = member,
+           let data = try? JSONEncoder().encode(member),
+           let json = String(data: data, encoding: .utf8) {
+            self.teamMemberJSON = json
+        } else {
+            self.teamMemberJSON = nil
+        }
     }
     
     static func == (lhs: Node, rhs: Node) -> Bool {

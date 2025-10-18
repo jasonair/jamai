@@ -464,7 +464,8 @@ struct CanvasView: View {
             onHeightChange: { height in handleHeightChange(height, for: node.id) },
             onWidthChange: { width in handleWidthChange(width, for: node.id) },
             onResizeActiveChanged: { active in isResizingActive = active },
-            onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) }
+            onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
+            onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
         )
     }
     
@@ -567,6 +568,12 @@ struct CanvasView: View {
     
     private func handleMaximizeAndCenter(for nodeId: UUID) {
         viewModel.toggleNodeSize(nodeId, viewportSize: viewportSize)
+    }
+    
+    private func handleTeamMemberChange(_ member: TeamMember?, for nodeId: UUID) {
+        guard var node = viewModel.nodes[nodeId] else { return }
+        node.setTeamMember(member)
+        viewModel.updateNode(node)
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)

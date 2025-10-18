@@ -206,6 +206,12 @@ final class Database: Sendable {
                     t.add(column: "display_order", .integer)
                 }
             }
+            // Add team_member_json column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "team_member_json" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "team_member_json", .text)
+                }
+            }
             
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
@@ -345,8 +351,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -366,6 +372,7 @@ final class Database: Sendable {
                     node.ancestryJSON,
                     node.summary,
                     node.systemPromptSnapshot,
+                    node.teamMemberJSON,
                     node.isExpanded,
                     node.isFrozenContext,
                     node.color,
@@ -407,6 +414,7 @@ final class Database: Sendable {
                     ancestryJSON: row["ancestry_json"],
                     summary: row["summary"],
                     systemPromptSnapshot: row["system_prompt_snapshot"],
+                    teamMemberJSON: row["team_member_json"] as String?,
                     isExpanded: row["is_expanded"],
                     isFrozenContext: row["is_frozen_context"],
                     color: row["color"] ?? "none",

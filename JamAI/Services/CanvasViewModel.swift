@@ -470,9 +470,19 @@ class CanvasViewModel: ObservableObject {
                 let context = buildContext(for: node)
                 var streamedResponse = ""
                 
+                // Assemble system prompt - use team member's prompt if available
+                let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+                let finalSystemPrompt: String
+                if let teamMember = node.teamMember,
+                   let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                } else {
+                    finalSystemPrompt = baseSystemPrompt
+                }
+                
                 geminiClient.generateStreaming(
                     prompt: prompt,
-                    systemPrompt: node.systemPromptSnapshot ?? project.systemPrompt,
+                    systemPrompt: finalSystemPrompt,
                     context: context,
                     onChunk: { [weak self] chunk in
                         Task { @MainActor in
@@ -739,9 +749,19 @@ class CanvasViewModel: ObservableObject {
                 let context = buildContext(for: node)
                 var streamedResponse = ""
                 
+                // Assemble system prompt - use team member's prompt if available
+                let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+                let finalSystemPrompt: String
+                if let teamMember = node.teamMember,
+                   let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                } else {
+                    finalSystemPrompt = baseSystemPrompt
+                }
+                
                 geminiClient.generateStreaming(
                     prompt: prompt,
-                    systemPrompt: node.systemPromptSnapshot ?? project.systemPrompt,
+                    systemPrompt: finalSystemPrompt,
                     context: context,
                     onChunk: { [weak self] chunk in
                         Task { @MainActor in

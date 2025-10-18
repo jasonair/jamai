@@ -26,6 +26,7 @@ struct NodeView: View {
     let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
     let onMaximizeAndCenter: () -> Void
+    let onTeamMemberChange: (TeamMember?) -> Void
     
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
@@ -43,12 +44,14 @@ struct NodeView: View {
     @State private var selectedImage: NSImage?
     @State private var selectedImageData: Data?
     @State private var selectedImageMimeType: String?
+    @State private var showingTeamMemberModal = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
     
     @Environment(\.colorScheme) var colorScheme
+    @StateObject private var roleManager = RoleManager.shared
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -57,6 +60,19 @@ struct NodeView: View {
                 headerView
                 
                 Divider()
+                
+                // Team Member Tray (only for non-note nodes or notes with chat enabled)
+                if shouldShowTeamMemberTray {
+                    if let teamMember = node.teamMember {
+                        TeamMemberTray(
+                            teamMember: teamMember,
+                            role: roleManager.role(withId: teamMember.roleId),
+                            onSettings: { showingTeamMemberModal = true }
+                        )
+                        
+                        Divider()
+                    }
+                }
                 
                 // Content with fixed input at bottom
                 VStack(spacing: 0) {
@@ -251,6 +267,27 @@ struct NodeView: View {
                 isEditingDescription = false
             }
         }
+        .sheet(isPresented: $showingTeamMemberModal) {
+            TeamMemberModal(
+                existingMember: node.teamMember,
+                onSave: { member in
+                    onTeamMemberChange(member)
+                },
+                onRemove: node.teamMember != nil ? {
+                    onTeamMemberChange(nil)
+                } : nil
+            )
+        }
+    }
+    
+    // MARK: - Computed Properties
+    
+    private var shouldShowTeamMemberTray: Bool {
+        // Show tray for standard nodes, or for notes when chat is enabled
+        if node.type == .note {
+            return showChatSection
+        }
+        return true
     }
     
     // MARK: - Subviews
@@ -357,6 +394,17 @@ struct NodeView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .help("Create Child Node")
+            
+            // Add/Edit Team Member button (only for standard nodes or notes with chat)
+            if shouldShowTeamMemberTray {
+                Button(action: { showingTeamMemberModal = true }) {
+                    Image(systemName: node.teamMember != nil ? "person.fill.checkmark" : "person.badge.plus")
+                        .foregroundColor(headerTextColor)
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(node.teamMember != nil ? "Edit Team Member" : "Add Team Member")
+            }
             
             // JAM button (for notes only)
             if node.type == .note {
