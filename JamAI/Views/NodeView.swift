@@ -12,6 +12,7 @@ struct NodeView: View {
     @Binding var node: Node
     let isSelected: Bool
     let isGenerating: Bool
+    let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let onTap: () -> Void
     let onPromptSubmit: (String, Data?, String?) -> Void
     let onTitleEdit: (String) -> Void
@@ -75,6 +76,7 @@ struct NodeView: View {
                                 
                                 modalCoordinator.showTeamMemberModal(
                                     existingMember: node.teamMember,
+                                    projectTeamMembers: projectTeamMembers,
                                     onSave: onTeamMemberChange,
                                     onRemove: { onTeamMemberChange(nil) }
                                 )
@@ -427,6 +429,7 @@ struct NodeView: View {
                     
                     modalCoordinator.showTeamMemberModal(
                         existingMember: nil,
+                        projectTeamMembers: projectTeamMembers,
                         onSave: onTeamMemberChange,
                         onRemove: nil
                     )

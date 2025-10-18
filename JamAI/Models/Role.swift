@@ -27,27 +27,6 @@ enum ExperienceLevel: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// Industry for organizing roles
-enum RoleIndustry: String, Codable, Sendable, CaseIterable {
-    case technology = "Technology"
-    case healthcare = "Healthcare"
-    case finance = "Finance"
-    case ecommerce = "E-commerce"
-    case education = "Education"
-    case marketing = "Marketing & Advertising"
-    case realestate = "Real Estate"
-    case legal = "Legal"
-    case consulting = "Consulting"
-    case manufacturing = "Manufacturing"
-    case retail = "Retail"
-    case hospitality = "Hospitality"
-    case media = "Media & Entertainment"
-    case nonprofit = "Non-profit"
-    case general = "General"
-    
-    var displayName: String { rawValue }
-}
-
 /// Category for organizing roles
 enum RoleCategory: String, Codable, Sendable, CaseIterable {
     case business = "Business"
@@ -63,7 +42,6 @@ enum RoleCategory: String, Codable, Sendable, CaseIterable {
     case product = "Product"
     case ai = "AI"
     case startup = "Startup"
-    case other = "Other"
     
     var displayName: String { rawValue }
 }

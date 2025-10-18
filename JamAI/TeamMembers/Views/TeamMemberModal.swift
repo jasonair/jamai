@@ -11,6 +11,7 @@ struct TeamMemberModal: View {
     @StateObject private var roleManager = RoleManager.shared
     
     let existingMember: TeamMember?
+    let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)] // Team members already in project
     let onSave: (TeamMember) -> Void
     let onRemove: (() -> Void)?
     let onDismiss: () -> Void
@@ -19,7 +20,6 @@ struct TeamMemberModal: View {
     @State private var selectedCategory: RoleCategory?
     @State private var selectedRole: Role?
     @State private var selectedLevel: ExperienceLevel = .intermediate
-    @State private var selectedIndustry: RoleIndustry? // Industry for the team member
     @State private var customName: String = ""
     @State private var currentTier: PlanTier = .free
     
@@ -114,6 +114,41 @@ struct TeamMemberModal: View {
             .contentShape(Rectangle())
             .padding(.bottom, 12)
             
+            // Project Team section
+            if !projectTeamMembers.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Team on this Project")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal)
+                    
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(projectTeamMembers.enumerated()), id: \.offset) { _, member in
+                                ProjectTeamMemberPill(
+                                    nodeName: member.nodeName,
+                                    teamMember: member.teamMember,
+                                    role: member.role,
+                                    isSelected: selectedRole?.id == member.teamMember.roleId && 
+                                               selectedLevel == member.teamMember.experienceLevel &&
+                                               customName == (member.teamMember.name ?? ""),
+                                    onTap: {
+                                        // Quick-select this team member's configuration
+                                        selectedRole = member.role
+                                        selectedLevel = member.teamMember.experienceLevel
+                                        customName = member.teamMember.name ?? ""
+                                    }
+                                )
+                            }
+                        }
+                        .padding(.horizontal)
+                    }
+                    .frame(height: 40)
+                }
+                .padding(.vertical, 8)
+                .background(Color.secondary.opacity(0.05))
+            }
+            
             Divider()
             
             // Role list
@@ -153,33 +188,6 @@ struct TeamMemberModal: View {
                             .padding(8)
                             .background(Color.secondary.opacity(0.1))
                             .cornerRadius(6)
-                    }
-                    
-                    // Industry selector (optional)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Industry (Optional)")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                // None button
-                                FilterChip(
-                                    title: "General",
-                                    isSelected: selectedIndustry == nil,
-                                    action: { selectedIndustry = nil }
-                                )
-                                
-                                ForEach(RoleIndustry.allCases, id: \.self) { industry in
-                                    FilterChip(
-                                        title: industry.displayName,
-                                        isSelected: selectedIndustry == industry,
-                                        action: { selectedIndustry = industry }
-                                    )
-                                }
-                            }
-                        }
-                        .frame(height: 32)
                     }
                     
                     // Experience level selector
@@ -256,7 +264,6 @@ struct TeamMemberModal: View {
             // Load existing member if editing
             if let member = existingMember {
                 customName = member.name ?? ""
-                selectedIndustry = member.industry
                 selectedLevel = member.experienceLevel
                 selectedRole = roleManager.role(withId: member.roleId)
             }
@@ -276,7 +283,6 @@ struct TeamMemberModal: View {
         let member = TeamMember(
             roleId: role.id,
             name: trimmedName,
-            industry: selectedIndustry,
             experienceLevel: selectedLevel,
             promptAddendum: nil,
             knowledgePackIds: nil
@@ -392,3 +398,67 @@ struct ExperienceLevelButton: View {
         .disabled(!isAvailable)
     }
 }
+
+struct ProjectTeamMemberPill: View {
+    let nodeName: String
+    let teamMember: TeamMember
+    let role: Role?
+    let isSelected: Bool
+    let onTap: () -> Void
+    
+    var body: some View {
+        Button(action: onTap) {
+            HStack(spacing: 6) {
+                // Role icon
+                Image(systemName: role?.icon ?? "person.circle.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(isSelected ? .white : roleColor)
+                
+                // Team member name and node
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(teamMember.name ?? "Team Member")
+                        .font(.system(size: 12, weight: .medium))
+                        .lineLimit(1)
+                    
+                    Text("from \(nodeName)")
+                        .font(.system(size: 10))
+                        .opacity(0.8)
+                        .lineLimit(1)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? roleColor : roleColor.opacity(0.15))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(16)
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+    
+    private var roleColor: Color {
+        guard let role = role,
+              let nodeColor = NodeColor.color(for: role.color) else {
+            return .accentColor
+        }
+        return nodeColor.color
+    }
+}
+
+// MARK: - Team Reassignment Feature
+// The "Team on this Project" section shows existing team members as clickable pills.
+// Clicking a pill populates the modal with that team member's configuration,
+// allowing quick reassignment to the current node.
+//
+// TODO: RAG Context Feature (Future Enhancement)
+// When a team member is added, implement context sharing:
+// 1. Collect conversation history from all nodes with team members
+// 2. Create context summary using RAG (Retrieval Augmented Generation)
+// 3. Include in system prompt so team members have awareness of:
+//    - What other team members discussed
+//    - Project context and decisions made
+//    - Relevant information from previous conversations
+//
+// Implementation approach:
+// - Use vector embeddings to find relevant context when responding
+// - Append project context to baseSystemPrompt in TeamMember.assembleSystemPrompt()
+// - Add "Project Context" section in assembled prompt

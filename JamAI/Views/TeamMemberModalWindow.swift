@@ -12,17 +12,20 @@ import AppKit
 class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
     private let existingMember: TeamMember?
+    private let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     private let onSave: (TeamMember) -> Void
     private let onRemove: (() -> Void)?
     private let onDismissCallback: (() -> Void)?
     
     init(
         existingMember: TeamMember?,
+        projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)],
         onSave: @escaping (TeamMember) -> Void,
         onRemove: (() -> Void)?,
         onDismiss: (() -> Void)? = nil
     ) {
         self.existingMember = existingMember
+        self.projectTeamMembers = projectTeamMembers
         self.onSave = onSave
         self.onRemove = onRemove
         self.onDismissCallback = onDismiss
@@ -34,6 +37,7 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         // Create the SwiftUI content view
         let contentView = TeamMemberModal(
             existingMember: existingMember,
+            projectTeamMembers: projectTeamMembers,
             onSave: { [weak self] member in
                 self?.onSave(member)
                 self?.close()

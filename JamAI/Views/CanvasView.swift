@@ -476,6 +476,7 @@ struct CanvasView: View {
             node: binding(for: node.id),
             isSelected: viewModel.selectedNodeId == node.id,
             isGenerating: viewModel.generatingNodeId == node.id,
+            projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
             onTap: { viewModel.selectedNodeId = node.id },
             onPromptSubmit: { prompt, imageData, imageMimeType in handlePromptSubmit(prompt, imageData: imageData, imageMimeType: imageMimeType, for: node.id) },
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },

@@ -731,6 +731,26 @@ class CanvasViewModel: ObservableObject {
         scheduleDebouncedWrite(nodeId: nodeId)
     }
     
+    /// Get all team members from nodes in the current project, excluding a specific node
+    func getProjectTeamMembers(excludingNodeId: UUID? = nil) -> [(nodeName: String, teamMember: TeamMember, role: Role?)] {
+        let roleManager = RoleManager.shared
+        return nodes.values
+            .filter { node in
+                // Exclude the specified node if provided
+                if let excludeId = excludingNodeId, node.id == excludeId {
+                    return false
+                }
+                // Only include nodes with team members
+                return node.teamMember != nil
+            }
+            .compactMap { node in
+                guard let teamMember = node.teamMember else { return nil }
+                let role = roleManager.role(withId: teamMember.roleId)
+                let nodeName = node.title.isEmpty ? "Untitled" : node.title
+                return (nodeName: nodeName, teamMember: teamMember, role: role)
+            }
+    }
+    
     // MARK: - AI Generation
     
     func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil) {

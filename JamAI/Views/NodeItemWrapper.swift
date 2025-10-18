@@ -11,6 +11,7 @@ struct NodeItemWrapper: View {
     @Binding var node: Node
     let isSelected: Bool
     let isGenerating: Bool
+    let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let onTap: () -> Void
     let onPromptSubmit: (String, Data?, String?) -> Void
     let onTitleEdit: (String) -> Void
@@ -53,6 +54,7 @@ struct NodeItemWrapper: View {
                     node: $node,
                     isSelected: isSelected,
                     isGenerating: isGenerating,
+                    projectTeamMembers: projectTeamMembers,
                     onTap: onTap,
                     onPromptSubmit: onPromptSubmit,
                     onTitleEdit: onTitleEdit,
