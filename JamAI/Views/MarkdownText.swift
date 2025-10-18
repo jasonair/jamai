@@ -21,6 +21,7 @@ struct MarkdownText: View {
                     case .table(let headers, let rows):
                         // Tables take full width
                         MarkdownTableView(headers: headers, rows: rows)
+                            .padding(.bottom, 20)
                     case .text(let content):
                         // Text is centered with max reading width
                         HStack {
@@ -138,7 +139,7 @@ private struct FormattedTextView: View {
                         
                         // Only apply larger font if it's a standalone header (not in a bullet)
                         if (isAtStart || isAfterNewline) && !isBulletItem {
-                            attributed[run.range].font = .system(size: 16, weight: .semibold)
+                            attributed[run.range].font = .system(size: 19, weight: .heavy)
                         }
                     }
                 }

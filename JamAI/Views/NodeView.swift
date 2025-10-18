@@ -389,8 +389,15 @@ struct NodeView: View {
             .buttonStyle(PlainButtonStyle())
             .help("Toggle Expand/Collapse")
         }
-        .padding(Node.padding)
-        .background(headerBackground)
+        .padding(.horizontal, Node.padding)
+        .padding(.top, Node.padding)
+        .padding(.bottom, Node.padding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            headerBackground
+                .padding(.top, -Node.padding)
+                .padding(.horizontal, -Node.padding)
+        )
     }
     
     private var descriptionView: some View {
@@ -710,8 +717,9 @@ struct NodeView: View {
                         
                         // Update local state only - smooth without triggering binding updates
                         let minWidth = node.type == .note ? Node.minNoteWidth : Node.minWidth
+                        let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
                         draggedHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + deltaY))
-                        draggedWidth = max(minWidth, min(Node.maxWidth, resizeStartWidth + deltaX))
+                        draggedWidth = max(minWidth, min(maxWidth, resizeStartWidth + deltaX))
                     }
                     .onEnded { _ in
                         isResizing = false
