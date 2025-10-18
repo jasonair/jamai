@@ -60,6 +60,9 @@ enum RoleCategory: String, Codable, Sendable, CaseIterable {
     case healthcare = "Healthcare"
     case legal = "Legal"
     case finance = "Finance"
+    case product = "Product"
+    case ai = "AI"
+    case startup = "Startup"
     case other = "Other"
     
     var displayName: String { rawValue }
