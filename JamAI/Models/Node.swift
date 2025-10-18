@@ -186,8 +186,8 @@ extension Node {
     nonisolated static let expandedHeight: CGFloat = 400 // Default expanded height
     nonisolated static let minHeight: CGFloat = 300 // Minimum height when resizing
     nonisolated static let maxHeight: CGFloat = 800 // Maximum height when resizing
-    nonisolated static let minWidth: CGFloat = 200 // Minimum width when resizing
-    nonisolated static let maxWidth: CGFloat = 600 // Maximum width when resizing
+    nonisolated static let minWidth: CGFloat = 420 // Minimum width when resizing
+    nonisolated static let maxWidth: CGFloat = 1200 // Maximum width when resizing
     nonisolated static let padding: CGFloat = 16
     nonisolated static let cornerRadius: CGFloat = 12
     nonisolated static let shadowRadius: CGFloat = 8

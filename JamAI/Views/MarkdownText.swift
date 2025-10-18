@@ -11,43 +11,65 @@ struct MarkdownText: View {
     let text: String
     var onCopy: ((String) -> Void)?
     
+    @State private var showCopiedToast = false
+    
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(parseMarkdownBlocks(text), id: \.id) { block in
-                switch block.type {
-                case .table(let headers, let rows):
-                    MarkdownTableView(headers: headers, rows: rows)
-                case .text(let content):
-                    FormattedTextView(content: content)
+                Group {
+                    switch block.type {
+                    case .table(let headers, let rows):
+                        // Tables take full width
+                        MarkdownTableView(headers: headers, rows: rows)
+                    case .text(let content):
+                        // Text is centered with max reading width
+                        HStack {
+                            Spacer(minLength: 0)
+                            FormattedTextView(content: content)
+                                .frame(maxWidth: 700)
+                            Spacer(minLength: 0)
+                        }
+                    }
                 }
+                .fixedSize(horizontal: false, vertical: true)
             }
             
             // Copy button at the end
             if let onCopy = onCopy {
-                HStack {
-                    Spacer()
+                HStack(spacing: 6) {
                     Button(action: {
                         onCopy(text)
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "doc.on.doc")
-                                .font(.system(size: 11))
-                            Text("Copy")
-                                .font(.system(size: 11))
+                        // Show toast
+                        showCopiedToast = true
+                        // Hide after 2 seconds
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showCopiedToast = false
                         }
-                        .foregroundColor(.secondary)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
+                    }) {
+                        Image(systemName: showCopiedToast ? "checkmark.circle.fill" : "doc.on.doc")
+                            .font(.system(size: 13))
+                            .foregroundColor(showCopiedToast ? .green : .secondary)
                     }
                     .buttonStyle(.plain)
+                    .padding(6)
+                    .background(Color.secondary.opacity(0.08))
+                    .cornerRadius(6)
+                    .help(showCopiedToast ? "Copied!" : "Copy response")
+                    
+                    if showCopiedToast {
+                        Text("Copied!")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.green)
+                            .transition(.opacity.combined(with: .scale))
+                    }
+                    
+                    Spacer()
                 }
                 .padding(.top, 4)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .fixedSize(horizontal: false, vertical: true) // Fix disappearing content on resize
+        .fixedSize(horizontal: false, vertical: true) // Prevent content from disappearing on resize
     }
 }
 
@@ -88,14 +110,36 @@ private struct FormattedTextView: View {
         options.interpretedSyntax = .inlineOnlyPreservingWhitespace
         
         if var attributed = try? AttributedString(markdown: processedText, options: options) {
-            // Increase font size for headers (bold text followed by colon)
+            // Increase font size ONLY for standalone section headers (bold text with colon at start of line)
+            let fullText = String(attributed.characters)
+            
             for run in attributed.runs {
                 if let inlinePresentationIntent = run.inlinePresentationIntent,
                    inlinePresentationIntent.contains(.stronglyEmphasized) {
-                    // Check if this bold text is followed by a colon (likely a header)
                     let runText = String(attributed[run.range].characters)
+                    
+                    // Only increase size if it ends with colon AND is a standalone header
                     if runText.hasSuffix(":") {
-                        attributed[run.range].font = .system(size: 15, weight: .semibold)
+                        // Check if this bold text starts at beginning of content or after a newline
+                        let startIndex = attributed.characters.distance(from: attributed.startIndex, to: run.range.lowerBound)
+                        let isAtStart = startIndex == 0
+                        let isAfterNewline = startIndex > 0 && fullText.dropFirst(startIndex - 1).first == "\n"
+                        
+                        // Check it's not part of a bullet point line (no bullet before it on same line)
+                        var isBulletItem = false
+                        if let lineStart = fullText[..<fullText.index(fullText.startIndex, offsetBy: startIndex)].lastIndex(of: "\n") {
+                            let lineContent = fullText[fullText.index(after: lineStart)..<fullText.index(fullText.startIndex, offsetBy: startIndex)]
+                            isBulletItem = lineContent.contains("•")
+                        } else if startIndex > 0 {
+                            // Check from start if no newline found
+                            let lineContent = fullText[..<fullText.index(fullText.startIndex, offsetBy: startIndex)]
+                            isBulletItem = lineContent.contains("•")
+                        }
+                        
+                        // Only apply larger font if it's a standalone header (not in a bullet)
+                        if (isAtStart || isAfterNewline) && !isBulletItem {
+                            attributed[run.range].font = .system(size: 16, weight: .semibold)
+                        }
                     }
                 }
             }
@@ -228,7 +272,7 @@ private struct MarkdownTableView: View {
                     ZStack {
                         headerBackground
                         Text(headers[index])
-                            .font(.body.weight(.semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .textSelection(.enabled)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 6)
@@ -279,7 +323,7 @@ private struct MarkdownTableView: View {
             }
         }
         .cornerRadius(4)
-        .padding(.vertical, 4)
+        .fixedSize(horizontal: false, vertical: true)
     }
     
     private var headerBackground: Color {
