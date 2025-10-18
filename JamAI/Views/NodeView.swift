@@ -68,6 +68,11 @@ struct NodeView: View {
                             teamMember: teamMember,
                             role: roleManager.role(withId: teamMember.roleId),
                             onSettings: { 
+                                // Clear all focus states to disengage scroll
+                                isTitleFocused = false
+                                isPromptFocused = false
+                                isDescFocused = false
+                                
                                 modalCoordinator.showTeamMemberModal(
                                     existingMember: node.teamMember,
                                     onSave: onTeamMemberChange,
@@ -279,6 +284,7 @@ struct NodeView: View {
                 isEditingDescription = false
             }
         }
+        .allowsHitTesting(!modalCoordinator.isModalPresented) // Disable all interaction when modal is open
     }
     
     // MARK: - Computed Properties
@@ -414,6 +420,11 @@ struct NodeView: View {
             // Add Team Member button (only show if no team member exists)
             if shouldShowTeamMemberTray && node.teamMember == nil {
                 Button(action: { 
+                    // Clear all focus states to disengage scroll
+                    isTitleFocused = false
+                    isPromptFocused = false
+                    isDescFocused = false
+                    
                     modalCoordinator.showTeamMemberModal(
                         existingMember: nil,
                         onSave: onTeamMemberChange,
