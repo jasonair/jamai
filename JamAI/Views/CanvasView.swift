@@ -43,7 +43,10 @@ struct CanvasView: View {
     @Environment(\.colorScheme) var colorScheme
     
     // Computed once per render - safer than @State modification
-    private var nodesArray: [Node] { Array(viewModel.nodes.values) }
+    // Pre-sorted by creation date so WorldLayerView doesn't need to sort every frame
+    private var nodesArray: [Node] { 
+        Array(viewModel.nodes.values).sorted(by: { $0.createdAt < $1.createdAt })
+    }
     private var edgesArray: [Edge] { Array(viewModel.edges.values) }
     
     // Use local gesture state during zoom, otherwise use viewModel values
