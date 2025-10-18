@@ -67,18 +67,23 @@ struct NodeView: View {
                             // When chat is visible, use ScrollView for conversation
                             ScrollViewReader { proxy in
                                 ScrollView {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        // Note description (read-only when chat is visible)
-                                        if !node.description.isEmpty {
-                                            Text(node.description)
-                                                .font(.system(size: 15))
-                                                .padding(Node.padding)
+                                    HStack {
+                                        Spacer(minLength: 0)
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Note description (read-only when chat is visible)
+                                            if !node.description.isEmpty {
+                                                Text(node.description)
+                                                    .font(.system(size: 15))
+                                                    .padding(Node.padding)
+                                            }
+                                            
+                                            // Conversation thread
+                                            conversationView
+                                                .padding(.horizontal, Node.padding)
+                                                .id(scrollViewID)
                                         }
-                                        
-                                        // Conversation thread
-                                        conversationView
-                                            .padding(.horizontal, Node.padding)
-                                            .id(scrollViewID)
+                                        .frame(maxWidth: 800)
+                                        Spacer(minLength: 0)
                                     }
                                     .padding(.bottom, Node.padding)
                                 }
@@ -104,13 +109,18 @@ struct NodeView: View {
                         // For standard nodes: ScrollView with conversation
                         ScrollViewReader { proxy in
                             ScrollView {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    // Description
-                                    descriptionView
-                                    
-                                    // Conversation thread
-                                    conversationView
-                                        .id(scrollViewID)
+                                HStack {
+                                    Spacer(minLength: 0)
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        // Description
+                                        descriptionView
+                                        
+                                        // Conversation thread
+                                        conversationView
+                                            .id(scrollViewID)
+                                    }
+                                    .frame(maxWidth: 800)
+                                    Spacer(minLength: 0)
                                 }
                                 .padding(Node.padding)
                             }
@@ -486,6 +496,7 @@ struct NodeView: View {
                 .font(.system(size: 12, weight: .semibold))
                 .fontWeight(.semibold)
                 .foregroundColor(role == .user ? .secondary : .accentColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
             
             VStack(alignment: .leading, spacing: 8) {
                 // Show image if present
@@ -516,10 +527,13 @@ struct NodeView: View {
             .background(role == .user ? Color.secondary.opacity(0.1) : Color.clear)
             .cornerRadius(8)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     private var inputView: some View {
-        VStack(spacing: 8) {
+        HStack {
+            Spacer(minLength: 0)
+            VStack(spacing: 8) {
             // Image preview if selected (smaller thumbnail)
             if let image = selectedImage {
                 HStack {
@@ -599,6 +613,9 @@ struct NodeView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .bottom)
             }
+            }
+            .frame(maxWidth: 800)
+            Spacer(minLength: 0)
         }
     }
     

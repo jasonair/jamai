@@ -1110,20 +1110,24 @@ class CanvasViewModel: ObservableObject {
         let minWidth = node.type == .note ? Node.minNoteWidth : Node.minWidth
         let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
         
-        // Toggle between min and max size
-        if isMaximized {
-            // Minimize: set to minimum dimensions
-            node.width = minWidth
-            node.height = Node.minHeight
-        } else {
-            // Maximize: set to maximum dimensions
-            node.width = maxWidth
-            node.height = Node.maxHeight
-        }
-        
-        // Ensure node is expanded when resizing
-        if !node.isExpanded {
-            node.isExpanded = true
+        // Toggle between min and max size with animation
+        withAnimation(.easeInOut(duration: 0.3)) {
+            if isMaximized {
+                // Minimize: set to minimum dimensions
+                node.width = minWidth
+                node.height = Node.minHeight
+            } else {
+                // Maximize: set to maximum dimensions
+                node.width = maxWidth
+                node.height = Node.maxHeight
+            }
+            
+            // Ensure node is expanded when resizing
+            if !node.isExpanded {
+                node.isExpanded = true
+            }
+            
+            nodes[nodeId] = node
         }
         
         updateNode(node, immediate: true)
