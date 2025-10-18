@@ -13,7 +13,7 @@ struct ShapeItemView: View {
                 .overlay(
                     shape.stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                 )
-                .frame(width: Node.width(for: .shape), height: node.height)
+                .frame(width: node.width, height: node.height)
                 .onTapGesture { onTap() }
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")

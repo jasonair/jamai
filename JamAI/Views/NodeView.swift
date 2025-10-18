@@ -23,6 +23,7 @@ struct NodeView: View {
     let onMakeNote: (String) -> Void
     let onJamWithThis: (String) -> Void
     let onHeightChange: (CGFloat) -> Void
+    let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
     
     @State private var isEditingTitle = false
@@ -32,6 +33,10 @@ struct NodeView: View {
     @State private var promptText = ""
     @State private var isResizing = false
     @State private var resizeStartHeight: CGFloat = 0
+    @State private var resizeStartWidth: CGFloat = 0
+    @State private var draggedHeight: CGFloat = 0
+    @State private var draggedWidth: CGFloat = 0
+    @State private var dragStartLocation: CGPoint = .zero
     @State private var showingColorPicker = false
     @State private var showChatSection = false
     @State private var selectedImage: NSImage?
@@ -45,13 +50,14 @@ struct NodeView: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // Header
-            headerView
-            
-            Divider()
-            
-            if node.isExpanded {
+        ZStack(alignment: .bottomTrailing) {
+            VStack(alignment: .leading, spacing: 0) {
+                // Header
+                headerView
+                
+                Divider()
+                
+                if node.isExpanded {
                 // Expanded content with fixed input at bottom
                 VStack(spacing: 0) {
                     // Content area - different layout for notes vs standard nodes
@@ -175,7 +181,7 @@ struct NodeView: View {
                             .padding(Node.padding)
                     }
                 }
-                .frame(height: node.height - 60)
+                .frame(height: (isResizing ? draggedHeight : node.height) - 60)
                 .overlay(
                     TapThroughOverlay(onTap: onTap)
                 )
@@ -184,38 +190,39 @@ struct NodeView: View {
                 collapsedContentView
                     .padding(Node.padding)
             }
+            }
+            .frame(
+                width: isResizing ? draggedWidth : node.width,
+                height: node.isExpanded ? (isResizing ? draggedHeight : node.height) : Node.collapsedHeight
+            )
+            .background(cardBackground)
+            .cornerRadius(Node.cornerRadius)
+            .shadow(
+                color: shadowColor,
+                radius: Node.shadowRadius,
+                x: 0,
+                y: 4
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: Node.cornerRadius)
+                    .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+            )
+            .onTapGesture {
+                onTap()
+            }
+            .overlay(
+                RightClickExpandOverlay(
+                    onExpand: onExpandSelection,
+                    onMakeNote: onMakeNote,
+                    onJamWithThis: onJamWithThis
+                )
+            )
             
-            // Resize handle at bottom (only when expanded)
+            // Resize grip overlay - positioned absolutely in corner (only when expanded)
             if node.isExpanded {
-                resizeHandle
+                resizeGripOverlay
             }
         }
-        .frame(
-            width: Node.nodeWidth,
-            height: node.isExpanded ? node.height : Node.collapsedHeight
-        )
-        .background(cardBackground)
-        .cornerRadius(Node.cornerRadius)
-        .shadow(
-            color: shadowColor,
-            radius: Node.shadowRadius,
-            x: 0,
-            y: 4
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: Node.cornerRadius)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
-        .onTapGesture {
-            onTap()
-        }
-        .overlay(
-            RightClickExpandOverlay(
-                onExpand: onExpandSelection,
-                onMakeNote: onMakeNote,
-                onJamWithThis: onJamWithThis
-            )
-        )
         .onAppear {
             if isSelected {
                 // Only focus prompt for non-note nodes or when chat section is visible
@@ -675,43 +682,41 @@ struct NodeView: View {
             : Color.black.opacity(0.15)
     }
     
-    private var resizeHandle: some View {
-        Rectangle()
-            .fill(Color.gray.opacity(0.3))
-            .frame(height: 6)
-            .frame(maxWidth: .infinity)
-            .overlay(
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(Color.gray)
-                    .frame(width: 40, height: 4)
-            )
-            .contentShape(Rectangle())
+    private var resizeGripOverlay: some View {
+        // macOS-style resize grip - absolutely positioned in bottom right corner
+        ResizeGripView()
+            .frame(width: 16, height: 16)
+            .padding(.trailing, 8)
+            .padding(.bottom, 8)
+            .contentShape(Rectangle().size(width: 40, height: 40))
             .highPriorityGesture(
-                DragGesture(minimumDistance: 0)
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
                     .onChanged { value in
                         if !isResizing {
                             isResizing = true
                             resizeStartHeight = node.height
+                            resizeStartWidth = node.width
+                            draggedHeight = node.height
+                            draggedWidth = node.width
+                            dragStartLocation = value.location
                             onResizeActiveChanged(true)
                         }
-                        let newHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + value.translation.height))
-                        var updatedNode = node
-                        updatedNode.height = newHeight
-                        node = updatedNode
+                        // Calculate delta from initial drag position (prevents drift)
+                        let deltaX = value.location.x - dragStartLocation.x
+                        let deltaY = value.location.y - dragStartLocation.y
+                        
+                        // Update local state only - smooth without triggering binding updates
+                        draggedHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + deltaY))
+                        draggedWidth = max(Node.minWidth, min(Node.maxWidth, resizeStartWidth + deltaX))
                     }
                     .onEnded { _ in
                         isResizing = false
-                        onHeightChange(node.height)
+                        // Only update the binding once at the end
+                        onHeightChange(draggedHeight)
+                        onWidthChange(draggedWidth)
                         onResizeActiveChanged(false)
                     }
             )
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.resizeUpDown.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
     }
     
     // MARK: - Actions

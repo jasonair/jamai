@@ -106,6 +106,7 @@ final class Database: Sendable {
                 t.column("parent_id", .text)
                 t.column("x", .double).notNull()
                 t.column("y", .double).notNull()
+                t.column("width", .double).notNull().defaults(to: 400)
                 t.column("height", .double).notNull().defaults(to: 400)
                 t.column("title", .text).notNull()
                 t.column("title_source", .text).notNull()
@@ -140,6 +141,13 @@ final class Database: Sendable {
             if try db.columns(in: "nodes").first(where: { $0.name == "height" }) == nil {
                 try db.alter(table: "nodes") { t in
                     t.add(column: "height", .double).notNull().defaults(to: 400)
+                }
+            }
+            
+            // Add width column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "width" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "width", .double).notNull().defaults(to: 400)
                 }
             }
             
@@ -336,9 +344,9 @@ final class Database: Sendable {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO nodes 
-                (id, project_id, parent_id, x, y, height, title, title_source, description, description_source, 
+                (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
                  conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -346,6 +354,7 @@ final class Database: Sendable {
                     node.parentId?.uuidString,
                     node.x,
                     node.y,
+                    node.width,
                     node.height,
                     node.title,
                     node.titleSource.rawValue,
@@ -386,6 +395,7 @@ final class Database: Sendable {
                     parentId: (row["parent_id"] as String?).flatMap { UUID(uuidString: $0) },
                     x: row["x"],
                     y: row["y"],
+                    width: row["width"] ?? 400,
                     height: row["height"] ?? 400,
                     title: row["title"],
                     titleSource: TextSource(rawValue: row["title_source"]) ?? .user,

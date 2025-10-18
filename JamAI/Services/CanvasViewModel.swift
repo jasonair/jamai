@@ -88,7 +88,7 @@ class CanvasViewModel: ObservableObject {
         let noteCountBefore = self.nodes.values.filter { $0.type == .note }.count
         if Config.enableVerboseLogging { print("📝 [NoteCreate] begin parent=\(parentId) notes_before=\(noteCountBefore) len=\(selectedText.count)") }
 
-        let noteX = parent.x + Node.width(for: parent.type) + 50
+        let noteX = parent.x + parent.width + 50
         let noteY = parent.y + 40
         var note = Node(
             projectId: project.id,
@@ -382,7 +382,7 @@ class CanvasViewModel: ObservableObject {
         guard let parent = nodes[parentId] else { return }
         
         // Calculate position for child node (offset to the right and down)
-        let childX = parent.x + Node.width(for: parent.type) + 50
+        let childX = parent.x + parent.width + 50
         let childY = parent.y + 100
         
         // Create branch without inheriting conversation (inheritContext: false)
@@ -399,7 +399,7 @@ class CanvasViewModel: ObservableObject {
         guard let parent = nodes[parentId] else { return }
         
         // Calculate position for child node (offset to the right and down)
-        let childX = parent.x + Node.width(for: parent.type) + 50
+        let childX = parent.x + parent.width + 50
         let childY = parent.y + 100
         
         // Create branch without inheriting conversation immediately to avoid race with async creation
@@ -431,7 +431,7 @@ class CanvasViewModel: ObservableObject {
         guard let parent = nodes[parentId] else { return }
         
         // Calculate position for child node (offset to the right and down)
-        let childX = parent.x + Node.width(for: parent.type) + 50
+        let childX = parent.x + parent.width + 50
         let childY = parent.y + 100
         
         // Create branch immediately to avoid race; do not inherit conversation
@@ -1077,7 +1077,7 @@ class CanvasViewModel: ObservableObject {
         selectedNodeId = nodeId
         
         // Calculate node center in world coordinates
-        let nodeWidth = Node.width(for: node.type)
+        let nodeWidth = node.width
         let nodeHeight = node.isExpanded ? node.height : Node.collapsedHeight
         let nodeCenterX = node.x + nodeWidth / 2
         let nodeCenterY = node.y + nodeHeight / 2

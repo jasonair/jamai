@@ -25,6 +25,7 @@ struct NodeItemWrapper: View {
     let onDragChanged: (DragGesture.Value) -> Void
     let onDragEnded: () -> Void
     let onHeightChange: (CGFloat) -> Void
+    let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
     @State private var isResizingActive: Bool = false
     
@@ -61,6 +62,7 @@ struct NodeItemWrapper: View {
                     onMakeNote: onMakeNote,
                     onJamWithThis: onJamWithThis,
                     onHeightChange: onHeightChange,
+                    onWidthChange: onWidthChange,
                     onResizeActiveChanged: { active in
                         isResizingActive = active
                         onResizeActiveChanged(active)
@@ -95,13 +97,7 @@ struct NodeItemWrapper: View {
     }
     
     private var displayWidth: CGFloat {
-        switch node.type {
-        case .text:
-            // Fixed reasonable width for text
-            return 250
-        default:
-            // Use correct width for each node type (standard, note, shape)
-            return Node.width(for: node.type)
-        }
+        // Use the node's custom width property
+        return node.width
     }
 }
