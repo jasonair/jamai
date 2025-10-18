@@ -12,10 +12,12 @@ struct MarkdownText: View {
     var onCopy: ((String) -> Void)?
     
     @State private var showCopiedToast = false
+    @State private var cachedBlocks: [MarkdownBlock] = []
+    @State private var parseTask: Task<Void, Never>?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(parseMarkdownBlocks(text), id: \.id) { block in
+            ForEach(cachedBlocks, id: \.id) { block in
                 Group {
                     switch block.type {
                     case .table(let headers, let rows):
@@ -71,6 +73,32 @@ struct MarkdownText: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true) // Prevent content from disappearing on resize
+        .onAppear {
+            // Initial parse on appear
+            cachedBlocks = parseMarkdownBlocks(text)
+        }
+        .onChange(of: text) { oldValue, newValue in
+            // Cancel any pending parse task
+            parseTask?.cancel()
+            
+            // Debounce parsing: wait 100ms before parsing
+            // This prevents re-parsing on every character during AI streaming
+            parseTask = Task {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                
+                // Check if task was cancelled
+                guard !Task.isCancelled else { return }
+                
+                // Parse on main actor to update UI
+                await MainActor.run {
+                    cachedBlocks = parseMarkdownBlocks(newValue)
+                }
+            }
+        }
+        .onDisappear {
+            // Cancel parse task when view disappears
+            parseTask?.cancel()
+        }
     }
 }
 
