@@ -7,12 +7,19 @@
 
 import SwiftUI
 
-struct WorldBackgroundLayer: View {
+struct WorldBackgroundLayer: View, Equatable {
     let zoom: CGFloat
     let offset: CGSize
     let showDots: Bool
     
     @Environment(\.colorScheme) private var colorScheme
+    
+    // Only redraw when zoom, offset, or showDots actually change
+    static func == (lhs: WorldBackgroundLayer, rhs: WorldBackgroundLayer) -> Bool {
+        lhs.zoom == rhs.zoom &&
+        lhs.offset == rhs.offset &&
+        lhs.showDots == rhs.showDots
+    }
     
     var body: some View {
         Canvas { context, size in

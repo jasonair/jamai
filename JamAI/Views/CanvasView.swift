@@ -256,6 +256,7 @@ struct CanvasView: View {
                 offset: currentOffset,
                 showDots: viewModel.showDots
             )
+            .equatable()  // Only redraws when zoom/offset/showDots change
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Edges - transformed the same way as nodes
