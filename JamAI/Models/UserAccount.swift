@@ -52,7 +52,7 @@ enum UserPlan: String, Codable, CaseIterable {
         switch self {
         case .trial: return "All experience levels"
         case .free: return "Junior & Intermediate"
-        case .premium: return "Senior & Expert"
+        case .premium: return "All experience levels"
         case .pro: return "All experience levels"
         }
     }

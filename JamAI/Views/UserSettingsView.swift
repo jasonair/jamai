@@ -87,53 +87,52 @@ struct UserSettingsView: View {
                     .background(Color(nsColor: .controlBackgroundColor))
                     .cornerRadius(16)
                     
-                    // Credits section
+                    // Credits section with progress bar
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Credits")
                             .font(.system(size: 18, weight: .semibold))
                         
-                        HStack(spacing: 16) {
-                            // Available credits
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Available")
-                                    .font(.system(size: 12))
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Usage summary
+                            HStack {
+                                Text("\(account.credits) / \(account.plan.monthlyCredits)")
+                                    .font(.system(size: 16, weight: .semibold))
+                                Text("available")
+                                    .font(.system(size: 14))
                                     .foregroundColor(.secondary)
-                                
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text("\(account.credits)")
-                                        .font(.system(size: 32, weight: .bold))
-                                        .foregroundColor(account.hasCredits ? .primary : .red)
-                                    
-                                    Text("credits")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.secondary)
-                                }
+                                Spacer()
+                                Text("\(account.creditsUsedThisMonth) used")
+                                    .font(.system(size: 13))
+                                    .foregroundColor(.secondary)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(12)
                             
-                            // Used this month
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Used This Month")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                                
-                                HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                    Text("\(account.creditsUsedThisMonth)")
-                                        .font(.system(size: 32, weight: .bold))
+                            // Progress bar
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    // Background (total capacity)
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(Color.secondary.opacity(0.15))
+                                        .frame(height: 8)
                                     
-                                    Text("credits")
-                                        .font(.system(size: 14))
-                                        .foregroundColor(.secondary)
+                                    // Used portion
+                                    RoundedRectangle(cornerRadius: 4)
+                                        .fill(progressBarColor(for: account))
+                                        .frame(
+                                            width: geometry.size.width * CGFloat(account.creditsUsedThisMonth) / CGFloat(account.plan.monthlyCredits),
+                                            height: 8
+                                        )
                                 }
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding()
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(12)
+                            .frame(height: 8)
+                            
+                            // Additional info
+                            Text("Usage since \(formattedMonthStart())")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
                         }
+                        .padding()
+                        .background(Color(nsColor: .controlBackgroundColor))
+                        .cornerRadius(12)
                         
                         if !account.hasCredits {
                             HStack(spacing: 8) {
@@ -300,6 +299,32 @@ struct UserSettingsView: View {
         case .premium: return .purple
         case .pro: return .blue
         }
+    }
+    
+    private func progressBarColor(for account: UserAccount) -> Color {
+        let usagePercentage = Double(account.creditsUsedThisMonth) / Double(account.plan.monthlyCredits)
+        
+        if usagePercentage >= 0.9 {
+            return .red
+        } else if usagePercentage >= 0.7 {
+            return .orange
+        } else {
+            return .green
+        }
+    }
+    
+    private func formattedMonthStart() -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        let components = calendar.dateComponents([.year, .month], from: now)
+        
+        if let monthStart = calendar.date(from: components) {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "MMM d, yyyy"
+            return formatter.string(from: monthStart)
+        }
+        
+        return "this month"
     }
     
     private func upgradePlan(to plan: UserPlan) {

@@ -28,6 +28,15 @@ struct MarkdownText: View {
                         MarkdownTableView(headers: headers, rows: rows)
                             .padding(.horizontal, 12)
                             .padding(.bottom, 20)
+                    case .codeBlock(let code, let language):
+                        // Code blocks with syntax highlighting
+                        HStack {
+                            Spacer(minLength: 0)
+                            CodeBlockView(code: code, language: language)
+                                .frame(maxWidth: 700)
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 8)
                     case .text(let content):
                         // Text is centered with max reading width and padding
                         HStack {
@@ -196,12 +205,15 @@ private struct FormattedTextView: View {
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
             
-            // Add background color for code
+            // Add background color and padding for inline code
             if isCode {
                 let codeBackgroundColor: NSColor = colorScheme == .dark 
-                    ? NSColor.white.withAlphaComponent(0.1) 
-                    : NSColor.black.withAlphaComponent(0.06)
+                    ? NSColor.white.withAlphaComponent(0.15) 
+                    : NSColor.black.withAlphaComponent(0.08)
                 runAttrString.addAttribute(.backgroundColor, value: codeBackgroundColor, range: NSRange(location: 0, length: runLength))
+                
+                // Add slight padding effect with baseline offset
+                runAttrString.addAttribute(.baselineOffset, value: 1, range: NSRange(location: 0, length: runLength))
             }
             
             nsAttrString.append(runAttrString)
@@ -327,6 +339,7 @@ private struct FormattedTextView: View {
 private enum MarkdownBlockType {
     case text(String)
     case table([String], [[String]]) // headers, rows
+    case codeBlock(String, String?) // code, language
 }
 
 private struct MarkdownBlock {
@@ -342,9 +355,37 @@ private func parseMarkdownBlocks(_ text: String) -> [MarkdownBlock] {
     
     while i < lines.count {
         let line = lines[i]
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
         
+        // Check if this is a code block start (```)
+        if trimmed.hasPrefix("```") {
+            // Flush any accumulated text
+            if !currentTextLines.isEmpty {
+                blocks.append(MarkdownBlock(type: .text(currentTextLines.joined(separator: "\n"))))
+                currentTextLines = []
+            }
+            
+            // Extract language if present
+            let language = trimmed.count > 3 ? String(trimmed.dropFirst(3)).trimmingCharacters(in: .whitespaces) : nil
+            var codeLines: [String] = []
+            var j = i + 1
+            
+            // Collect code until closing ```
+            while j < lines.count {
+                let codeLine = lines[j]
+                if codeLine.trimmingCharacters(in: .whitespaces).hasPrefix("```") {
+                    j += 1
+                    break
+                }
+                codeLines.append(codeLine)
+                j += 1
+            }
+            
+            blocks.append(MarkdownBlock(type: .codeBlock(codeLines.joined(separator: "\n"), language)))
+            i = j
+        }
         // Check if this is a table row (contains pipes)
-        if line.contains("|") && line.trimmingCharacters(in: .whitespaces).hasPrefix("|") {
+        else if line.contains("|") && trimmed.hasPrefix("|") {
             // Flush any accumulated text
             if !currentTextLines.isEmpty {
                 blocks.append(MarkdownBlock(type: .text(currentTextLines.joined(separator: "\n"))))
@@ -426,6 +467,64 @@ private func parseTableRow(_ line: String) -> [String] {
         .map { $0.trimmingCharacters(in: .whitespaces) }
         .filter { !$0.isEmpty && !$0.allSatisfy({ $0 == "-" }) }
     return cells
+}
+
+// MARK: - Code Block View
+
+private struct CodeBlockView: View {
+    let code: String
+    let language: String?
+    @Environment(\.colorScheme) var colorScheme
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Language label if present
+            if let lang = language, !lang.isEmpty {
+                HStack {
+                    Text(lang.uppercased())
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Spacer()
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(headerBackground)
+            }
+            
+            // Code content
+            ScrollView(.horizontal, showsIndicators: false) {
+                Text(code)
+                    .font(.system(size: 13, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .background(codeBackground)
+        }
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(borderColor, lineWidth: 1)
+        )
+    }
+    
+    private var headerBackground: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.08)
+            : Color.black.opacity(0.04)
+    }
+    
+    private var codeBackground: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.05)
+            : Color.black.opacity(0.03)
+    }
+    
+    private var borderColor: Color {
+        colorScheme == .dark
+            ? Color.white.opacity(0.15)
+            : Color.black.opacity(0.12)
+    }
 }
 
 // MARK: - Table View

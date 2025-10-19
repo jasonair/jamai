@@ -202,6 +202,9 @@ struct AuthenticationView: View {
                 } else {
                     _ = try await authService.signIn(email: email, password: password)
                 }
+                
+                // Clear any persisted tabs to show welcome screen after login
+                UserDefaults.standard.removeObject(forKey: "lastOpenedProjectURL")
             } catch {
                 errorMessage = error.localizedDescription
                 showingError = true
@@ -260,10 +263,6 @@ struct AuthTextFieldStyle: TextFieldStyle {
             .padding(16)
             .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-            )
     }
 }
 

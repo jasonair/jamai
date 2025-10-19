@@ -204,14 +204,6 @@ struct JamAIApp: App {
                     appState.showUserSettings()
                 }
                 .disabled(!authService.isAuthenticated)
-                
-                Divider()
-                
-                Button("Settings...") {
-                    appState.showSettings()
-                }
-                .keyboardShortcut(",", modifiers: .command)
-                .disabled(appState.viewModel == nil)
             }
         }
         
