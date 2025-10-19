@@ -49,7 +49,7 @@ struct AuthenticationView: View {
                 .padding(.bottom, 40)
                 
                 // Auth form
-                VStack(spacing: 16) {
+                VStack(spacing: 12) {
                     if isSignUpMode {
                         TextField("Display Name", text: $displayName)
                             .textFieldStyle(AuthTextFieldStyle())
@@ -70,10 +70,10 @@ struct AuthenticationView: View {
                             Button("Forgot Password?") {
                                 showingForgotPassword = true
                             }
-                            .font(.system(size: 13))
+                            .font(.system(size: 14))
                             .foregroundColor(.accentColor)
                         }
-                        .padding(.top, -8)
+                        .padding(.top, 4)
                     }
                     
                     // Email sign in/up button
@@ -90,16 +90,16 @@ struct AuthenticationView: View {
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .frame(maxWidth: .infinity)
-                        .frame(height: 50)
+                        .frame(height: 48)
                         .background(Color.accentColor)
                         .foregroundColor(.white)
-                        .cornerRadius(12)
+                        .cornerRadius(10)
                     }
                     .buttonStyle(.plain)
                     .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
-                    .padding(.top, 8)
+                    .padding(.top, 16)
                 }
-                .frame(width: 380)
+                .frame(width: 460)
                 .padding(.bottom, 24)
                 
                 // OAuth buttons - Temporarily disabled due to SDK issues
@@ -260,9 +260,11 @@ struct AuthenticationView: View {
 struct AuthTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
-            .padding(16)
+            .font(.system(size: 15))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
             .background(Color(nsColor: .textBackgroundColor))
-            .cornerRadius(12)
+            .cornerRadius(10)
     }
 }
 

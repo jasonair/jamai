@@ -21,8 +21,10 @@ class CreditTracker {
     
     /// Check if user has enough credits for AI generation
     func canGenerateResponse() -> Bool {
+        // If no user account is loaded, allow generation (development mode / Firebase not configured)
         guard let account = FirebaseDataService.shared.userAccount else {
-            return false
+            print("⚠️ CreditTracker: No user account, allowing generation (dev mode)")
+            return true
         }
         
         // Check if account is active
@@ -56,6 +58,7 @@ class CreditTracker {
     /// Deduct credits after AI generation
     func trackGeneration(promptText: String, responseText: String, nodeId: UUID) async {
         guard let userId = FirebaseAuthService.shared.currentUser?.uid else {
+            print("⚠️ CreditTracker: No authenticated user, skipping credit tracking")
             return
         }
         
@@ -68,7 +71,7 @@ class CreditTracker {
         )
         
         if !success {
-            print("⚠️ Failed to deduct credits for generation")
+            print("⚠️ CreditTracker: Failed to deduct credits (Firebase permissions issue?)")
         }
         
         // Update user metadata

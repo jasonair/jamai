@@ -103,16 +103,14 @@ struct MarkdownText: View {
             
             // Debounce parsing: wait 100ms before parsing
             // This prevents re-parsing on every character during AI streaming
-            parseTask = Task {
+            parseTask = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 
                 // Check if task was cancelled
                 guard !Task.isCancelled else { return }
                 
-                // Parse on main actor to update UI
-                await MainActor.run {
-                    cachedBlocks = parseMarkdownBlocks(newValue)
-                }
+                // Update state directly - we're already on MainActor
+                cachedBlocks = parseMarkdownBlocks(newValue)
             }
         }
         .onDisappear {
@@ -475,30 +473,60 @@ private struct CodeBlockView: View {
     let code: String
     let language: String?
     @Environment(\.colorScheme) var colorScheme
+    @State private var showCopied = false
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Language label if present
-            if let lang = language, !lang.isEmpty {
-                HStack {
+            // Header with language label and copy button
+            HStack {
+                if let lang = language, !lang.isEmpty {
                     Text(lang.uppercased())
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.secondary)
-                    Spacer()
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(headerBackground)
+                
+                Spacer()
+                
+                // Copy button
+                Button(action: {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(code, forType: .string)
+                    showCopied = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        showCopied = false
+                    }
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11))
+                        if showCopied {
+                            Text("Copied")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(showCopied ? .green : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.secondary.opacity(0.1))
+                    .cornerRadius(4)
+                }
+                .buttonStyle(.plain)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(headerBackground)
             
-            // Code content
-            ScrollView(.horizontal, showsIndicators: false) {
+            // Code content with wrapping and vertical scrolling
+            ScrollView(.vertical, showsIndicators: true) {
                 Text(code)
                     .font(.system(size: 13, design: .monospaced))
                     .textSelection(.enabled)
-                    .padding(12)
+                    .lineLimit(nil)
+                    .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
             }
+            .frame(maxHeight: 400)
             .background(codeBackground)
         }
         .cornerRadius(8)

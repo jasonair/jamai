@@ -277,6 +277,9 @@ class CanvasViewModel: ObservableObject {
         // Auto-select newly created node
         self.selectedNodeId = node.id
         self.undoManager.record(.createNode(node))
+        
+        // Force positions refresh so edges render immediately
+        self.positionsVersion += 1
 
         let dbActor = self.dbActor
         Task { [weak self, dbActor, node] in
@@ -372,7 +375,15 @@ class CanvasViewModel: ObservableObject {
         
         // Create branch without inheriting conversation (inheritContext: false)
         // The parent's summary will be used as context instead
-        createNode(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
+        let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
+        
+        // Inherit team member from parent if present
+        if let parentTeamMember = parent.teamMember {
+            if var child = nodes[childId] {
+                child.setTeamMember(parentTeamMember)
+                updateNode(child, immediate: true)
+            }
+        }
         
         // Generate TLDR summary asynchronously to provide context for the branch
         Task {
