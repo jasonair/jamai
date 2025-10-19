@@ -9,6 +9,8 @@ import SwiftUI
 import Combine
 import AppKit
 import UniformTypeIdentifiers
+import FirebaseCore
+import FirebaseAuth
 
 // Helper view to observe undo manager state
 struct UndoStateObserver: View {
@@ -41,15 +43,34 @@ struct UndoStateObserver: View {
 @main
 struct JamAIApp: App {
     @StateObject private var appState = AppState()
+    @StateObject private var authService = FirebaseAuthService.shared
+    @StateObject private var dataService = FirebaseDataService.shared
     @State private var canUndo = false
     @State private var canRedo = false
+    @State private var showingMaintenanceAlert = false
+    @State private var maintenanceMessage = ""
+    
+    init() {
+        // Configure Firebase on app launch
+        FirebaseApp.configure()
+    }
     
     var body: some Scene {
         WindowGroup(id: "main") {
-            if appState.tabs.isEmpty {
-                WelcomeView(appState: appState)
-                    .frame(width: 600, height: 400)
-            } else {
+            Group {
+                if !authService.isAuthenticated {
+                    // Show authentication view if not signed in
+                    AuthenticationView()
+                        .frame(width: 800, height: 600)
+                } else if shouldBlockApp() {
+                    // Show maintenance/update screen
+                    MaintenanceView(message: maintenanceMessage)
+                        .frame(width: 600, height: 400)
+                } else if appState.tabs.isEmpty {
+                    // Show welcome view for signed-in users
+                    WelcomeView(appState: appState)
+                        .frame(width: 600, height: 400)
+                } else {
                 ZStack {
                     // Active project canvas (bottom layer)
                     if let viewModel = appState.viewModel {
@@ -82,6 +103,15 @@ struct JamAIApp: App {
                 .background(
                     UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
                 )
+                }
+            }
+            .onAppear {
+                // Load user account when authenticated
+                if let userId = authService.currentUser?.uid {
+                    Task {
+                        await dataService.loadUserAccount(userId: userId)
+                    }
+                }
             }
         }
         .commands {
@@ -168,6 +198,11 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut(",", modifiers: .command)
                 .disabled(appState.viewModel == nil)
+                
+                Button("Account...") {
+                    appState.showUserSettings()
+                }
+                .disabled(!authService.isAuthenticated)
             }
         }
         
@@ -178,6 +213,14 @@ struct JamAIApp: App {
         }
     }
     
+    // MARK: - Helpers
+    
+    private func shouldBlockApp() -> Bool {
+        let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        let (shouldBlock, message) = dataService.shouldBlockApp(currentVersion: currentVersion)
+        maintenanceMessage = message ?? ""
+        return shouldBlock
+    }
 }
 
 // MARK: - App State
@@ -452,6 +495,48 @@ class AppState: ObservableObject {
     
     func showSettings() {
         NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+    }
+    
+    private var userSettingsWindow: NSWindow?
+    
+    func showUserSettings() {
+        // Reuse existing window if already open
+        if let existingWindow = userSettingsWindow {
+            existingWindow.makeKeyAndOrderFront(nil)
+            return
+        }
+        
+        let settingsView = UserSettingsView()
+        let hostingController = NSHostingController(rootView: settingsView)
+        let window = NSWindow(contentViewController: hostingController)
+        window.title = "Account Settings"
+        window.styleMask = [.titled, .closable, .resizable]
+        window.setContentSize(NSSize(width: 600, height: 700))
+        
+        // Center on main window or screen
+        if let mainWindow = NSApp.mainWindow {
+            window.center()
+            window.setFrameOrigin(NSPoint(
+                x: mainWindow.frame.midX - window.frame.width / 2,
+                y: mainWindow.frame.midY - window.frame.height / 2
+            ))
+        } else {
+            window.center()
+        }
+        
+        // Keep reference to prevent deallocation
+        self.userSettingsWindow = window
+        
+        // Clear reference when closed
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: window,
+            queue: .main
+        ) { [weak self] _ in
+            self?.userSettingsWindow = nil
+        }
+        
+        window.makeKeyAndOrderFront(nil)
     }
     
     private func showError(_ message: String) {

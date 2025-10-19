@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F9126DE62EA53E5D00CF5584 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = F9126DE52EA53E5D00CF5584 /* FirebaseAuth */; };
+		F9126DE82EA53E5D00CF5584 /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = F9126DE72EA53E5D00CF5584 /* FirebaseCore */; };
+		F9126DEA2EA53E5D00CF5584 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = F9126DE92EA53E5D00CF5584 /* FirebaseFirestore */; };
+		F9126DF02EA5453200CF5584 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = F9126DEF2EA5453200CF5584 /* GoogleSignIn */; };
 		F9E382F42E9962940097A9E7 /* GRDB in Frameworks */ = {isa = PBXBuildFile; productRef = F9E382F32E9962940097A9E7 /* GRDB */; };
 /* End PBXBuildFile section */
 
@@ -69,7 +73,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F9126DF02EA5453200CF5584 /* GoogleSignIn in Frameworks */,
 				F9E382F42E9962940097A9E7 /* GRDB in Frameworks */,
+				F9126DEA2EA53E5D00CF5584 /* FirebaseFirestore in Frameworks */,
+				F9126DE82EA53E5D00CF5584 /* FirebaseCore in Frameworks */,
+				F9126DE62EA53E5D00CF5584 /* FirebaseAuth in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -131,6 +139,10 @@
 			name = JamAI;
 			packageProductDependencies = (
 				F9E382F32E9962940097A9E7 /* GRDB */,
+				F9126DE52EA53E5D00CF5584 /* FirebaseAuth */,
+				F9126DE72EA53E5D00CF5584 /* FirebaseCore */,
+				F9126DE92EA53E5D00CF5584 /* FirebaseFirestore */,
+				F9126DEF2EA5453200CF5584 /* GoogleSignIn */,
 			);
 			productName = JamAI;
 			productReference = F9E3829F2E995D660097A9E7 /* JamAI.app */;
@@ -216,6 +228,8 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				F9E382F22E9962940097A9E7 /* XCRemoteSwiftPackageReference "GRDB" */,
+				F9126DE42EA53E5D00CF5584 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+				F9126DEE2EA5453200CF5584 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = F9E382A02E995D660097A9E7 /* Products */;
@@ -619,6 +633,22 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		F9126DE42EA53E5D00CF5584 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.4.0;
+			};
+		};
+		F9126DEE2EA5453200CF5584 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/google/GoogleSignIn-iOS";
+			requirement = {
+				kind = exactVersion;
+				version = 8.0.0;
+			};
+		};
 		F9E382F22E9962940097A9E7 /* XCRemoteSwiftPackageReference "GRDB" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/groue/GRDB.swift";
@@ -630,6 +660,26 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		F9126DE52EA53E5D00CF5584 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9126DE42EA53E5D00CF5584 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		F9126DE72EA53E5D00CF5584 /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9126DE42EA53E5D00CF5584 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		F9126DE92EA53E5D00CF5584 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9126DE42EA53E5D00CF5584 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+		F9126DEF2EA5453200CF5584 /* GoogleSignIn */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F9126DEE2EA5453200CF5584 /* XCRemoteSwiftPackageReference "GoogleSignIn-iOS" */;
+			productName = GoogleSignIn;
+		};
 		F9E382F32E9962940097A9E7 /* GRDB */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = F9E382F22E9962940097A9E7 /* XCRemoteSwiftPackageReference "GRDB" */;

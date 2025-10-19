@@ -446,6 +446,12 @@ class CanvasViewModel: ObservableObject {
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
         guard let node = nodes[nodeId] else { return }
         
+        // Check credit availability before generating
+        guard CreditTracker.shared.canGenerateResponse() else {
+            errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+            return
+        }
+        
         generatingNodeId = nodeId
         
         // Do not store user prompt; expansions keep the conversation clean
@@ -495,6 +501,13 @@ class CanvasViewModel: ObservableObject {
                                         try? await dbActor.saveNode(finalNode)
                                     }
                                 }
+                                
+                                // Track credit usage
+                                await CreditTracker.shared.trackGeneration(
+                                    promptText: prompt,
+                                    responseText: fullResponse,
+                                    nodeId: nodeId
+                                )
                                 
                                 // Auto-generate title based on selected text
                                 await self?.autoGenerateTitleForExpansion(for: nodeId, selectedText: selectedText)
@@ -732,6 +745,12 @@ class CanvasViewModel: ObservableObject {
     func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil) {
         guard var node = nodes[nodeId] else { return }
         
+        // Check credit availability before generating
+        guard CreditTracker.shared.canGenerateResponse() else {
+            errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+            return
+        }
+        
         generatingNodeId = nodeId
         
         // Add user message to conversation with optional image
@@ -786,6 +805,13 @@ class CanvasViewModel: ObservableObject {
                                         try? await dbActor.saveNode(finalNode)
                                     }
                                 }
+                                
+                                // Track credit usage
+                                await CreditTracker.shared.trackGeneration(
+                                    promptText: prompt,
+                                    responseText: fullResponse,
+                                    nodeId: nodeId
+                                )
                                 
                                 // Auto-generate title and description if empty
                                 await self?.autoGenerateTitleAndDescription(for: nodeId)
