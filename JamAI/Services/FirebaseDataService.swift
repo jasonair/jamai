@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import FirebaseFirestore
+import FirebaseAuth
 
 /// Firestore database service
 @MainActor
@@ -103,6 +104,9 @@ class FirebaseDataService: ObservableObject {
             )
             
             self.userAccount = account
+            
+            // Setup real-time listener for the new account
+            setupUserListener(userId: userId)
         } catch {
             print("Failed to create user account: \(error)")
         }
@@ -114,15 +118,41 @@ class FirebaseDataService: ObservableObject {
             let document = try await usersCollection.document(userId).getDocument()
             
             if document.exists {
-                // Use Firestore decoder directly to handle timestamps
-                let account = try document.data(as: UserAccount.self)
-                self.userAccount = account
+                do {
+                    // Use Firestore decoder directly to handle timestamps
+                    let account = try document.data(as: UserAccount.self)
+                    self.userAccount = account
+                    
+                    // Setup real-time listener
+                    setupUserListener(userId: userId)
+                } catch {
+                    // Document exists but is corrupted - delete and recreate
+                    print("⚠️ User document corrupted, deleting and recreating for userId: \(userId)")
+                    print("Decoding error: \(error)")
+                    
+                    // Delete corrupted document
+                    try? await usersCollection.document(userId).delete()
+                    
+                    // Create fresh account
+                    let email = FirebaseAuthService.shared.currentUser?.email ?? ""
+                    let displayName = FirebaseAuthService.shared.currentUser?.displayName
+                    
+                    await createUserAccount(userId: userId, email: email, displayName: displayName)
+                }
+            } else {
+                // Document doesn't exist - create it
+                print("User document not found, creating new account for userId: \(userId)")
                 
-                // Setup real-time listener
-                setupUserListener(userId: userId)
+                // Get email from current user
+                let email = FirebaseAuthService.shared.currentUser?.email ?? ""
+                let displayName = FirebaseAuthService.shared.currentUser?.displayName
+                
+                await createUserAccount(userId: userId, email: email, displayName: displayName)
             }
         } catch {
             print("Failed to load user account: \(error)")
+            // On error, set userAccount to nil to trigger auth flow
+            self.userAccount = nil
         }
     }
     
@@ -148,11 +178,13 @@ class FirebaseDataService: ObservableObject {
     /// Update last login timestamp
     func updateLastLogin(userId: String) async {
         do {
-            try await usersCollection.document(userId).updateData([
+            // Use setData with merge to create document if it doesn't exist
+            try await usersCollection.document(userId).setData([
                 "lastLoginAt": Timestamp(date: Date())
-            ])
+            ], merge: true)
         } catch {
             print("Failed to update last login: \(error)")
+            // Non-critical error, don't crash
         }
     }
     

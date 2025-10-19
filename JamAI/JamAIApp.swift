@@ -49,6 +49,7 @@ struct JamAIApp: App {
     @State private var canRedo = false
     @State private var showingMaintenanceAlert = false
     @State private var maintenanceMessage = ""
+    @State private var isLoadingUserAccount = false
     
     init() {
         // Configure Firebase on app launch
@@ -62,6 +63,28 @@ struct JamAIApp: App {
                     // Show authentication view if not signed in
                     AuthenticationView()
                         .frame(width: 800, height: 600)
+                } else if isLoadingUserAccount {
+                    // Show loading indicator while user account is loading
+                    VStack(spacing: 20) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Loading account...")
+                            .foregroundColor(.secondary)
+                        
+                        // Emergency logout button
+                        Button("Sign Out") {
+                            do {
+                                try authService.signOut()
+                                dataService.userAccount = nil
+                                isLoadingUserAccount = false
+                            } catch {
+                                print("Failed to sign out: \(error)")
+                            }
+                        }
+                        .buttonStyle(.link)
+                        .padding(.top, 20)
+                    }
+                    .frame(width: 400, height: 300)
                 } else if shouldBlockApp() {
                     // Show maintenance/update screen
                     MaintenanceView(message: maintenanceMessage)
@@ -109,7 +132,23 @@ struct JamAIApp: App {
                 // Load user account when authenticated
                 if let userId = authService.currentUser?.uid {
                     Task {
-                        await dataService.loadUserAccount(userId: userId)
+                        isLoadingUserAccount = true
+                        
+                        // Add timeout to prevent infinite loading
+                        await withTaskGroup(of: Void.self) { group in
+                            group.addTask {
+                                await dataService.loadUserAccount(userId: userId)
+                            }
+                            group.addTask {
+                                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                            }
+                            
+                            // Wait for first to complete
+                            await group.next()
+                            group.cancelAll()
+                        }
+                        
+                        isLoadingUserAccount = false
                     }
                 }
                 
@@ -118,6 +157,34 @@ struct JamAIApp: App {
                     // User just signed in, ensure we show welcome screen
                     appState.tabs = []
                     appState.activeTabId = nil
+                }
+            }
+            .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
+                if isAuthenticated, let userId = authService.currentUser?.uid {
+                    // Load user account when auth state changes to authenticated
+                    Task {
+                        isLoadingUserAccount = true
+                        
+                        // Add timeout to prevent infinite loading
+                        await withTaskGroup(of: Void.self) { group in
+                            group.addTask {
+                                await dataService.loadUserAccount(userId: userId)
+                            }
+                            group.addTask {
+                                try? await Task.sleep(nanoseconds: 10_000_000_000) // 10 seconds
+                            }
+                            
+                            // Wait for first to complete
+                            await group.next()
+                            group.cancelAll()
+                        }
+                        
+                        isLoadingUserAccount = false
+                    }
+                } else {
+                    // Clear user account when logged out
+                    dataService.userAccount = nil
+                    isLoadingUserAccount = false
                 }
             }
         }
