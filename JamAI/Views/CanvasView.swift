@@ -114,11 +114,18 @@ struct CanvasView: View {
     
     @ViewBuilder
     private func canvasWithInteractions(geometry: GeometryProxy) -> some View {
-        let _ = DispatchQueue.main.async { 
-            self.viewportSize = geometry.size
-            self.viewModel.viewportSize = geometry.size
-        }
         canvasLayers(geometry: geometry)
+            .onChange(of: geometry.size) { oldSize, newSize in
+                // Only update when size actually changes
+                guard oldSize != newSize else { return }
+                viewportSize = newSize
+                viewModel.viewportSize = newSize
+            }
+            .onAppear {
+                // Initialize on first appear
+                viewportSize = geometry.size
+                viewModel.viewportSize = geometry.size
+            }
             // Track mouse and capture two-finger pan scrolling
             .overlay(
                 MouseTrackingView(position: $mouseLocation, onScroll: { dx, dy in
@@ -247,7 +254,8 @@ struct CanvasView: View {
                 let canvasPos = screenToCanvas(location, in: geometry.size)
                 viewModel.createNode(at: canvasPos)
             }
-            .onAppear {
+            .task {
+                // Use task to prevent duplicate renders
                 lastZoom = viewModel.zoom
                 // Create a centered node for new projects once the canvas is laid out
                 if viewModel.nodes.isEmpty {
@@ -270,6 +278,15 @@ struct CanvasView: View {
             }
             .onChange(of: viewModel.zoom) { oldValue, newValue in
                 lastZoom = newValue
+            }
+            .onChange(of: viewModel.positionsVersion) { _, _ in
+                // Update cached node frames when positions change
+                var map: [UUID: CGRect] = [:]
+                for node in viewModel.nodes.values {
+                    map[node.id] = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+                }
+                cachedNodeFrames = map
+                lastFrameUpdateVersion = viewModel.positionsVersion
             }
     }
     
@@ -610,14 +627,10 @@ struct CanvasView: View {
     private var nodeFrames: [UUID: CGRect] {
         // Only rebuild if positions have changed
         if lastFrameUpdateVersion != viewModel.positionsVersion {
+            // Build map directly without state updates
             var map: [UUID: CGRect] = [:]
             for node in viewModel.nodes.values {
                 map[node.id] = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
-            }
-            // Update cache in next render cycle to avoid state modification during body
-            DispatchQueue.main.async {
-                self.cachedNodeFrames = map
-                self.lastFrameUpdateVersion = viewModel.positionsVersion
             }
             return map
         }

@@ -116,6 +116,7 @@ struct NodeView: View {
                                     }
                                     .padding(Node.padding)
                                 }
+                                .blockScrollPropagation()
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -153,6 +154,7 @@ struct NodeView: View {
                                 }
                                 .padding(Node.padding)
                             }
+                            .blockScrollPropagation()
                             .onAppear {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                     withAnimation {
