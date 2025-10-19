@@ -37,7 +37,7 @@ struct Project: Identifiable, Codable, Sendable {
         systemPrompt: String = "You are a helpful AI assistant.",
         kTurns: Int = 10,
         includeSummaries: Bool = true,
-        includeRAG: Bool = false,
+        includeRAG: Bool = true,
         ragK: Int = 5,
         ragMaxChars: Int = 2000,
         appearanceMode: AppearanceMode = .system,

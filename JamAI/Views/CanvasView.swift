@@ -31,7 +31,7 @@ struct CanvasView: View {
     @State private var dragStartPosition: CGPoint = .zero
     @State private var mouseLocation: CGPoint = .zero
     @State private var isResizingActive: Bool = false
-    @State private var showOutline: Bool = true
+    @State private var showOutline: Bool = false
     @State private var viewportSize: CGSize = .zero
     
     // Local zoom state for smooth gesture tracking
