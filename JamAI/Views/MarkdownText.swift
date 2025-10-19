@@ -117,11 +117,12 @@ struct MarkdownText: View {
 
 private struct FormattedTextView: View {
     let content: String
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         if #available(macOS 12.0, *) {
             let formatted = formatText(content)
-            let nsAttributed = convertToNSAttributedString(formatted)
+            let nsAttributed = convertToNSAttributedString(formatted, colorScheme: colorScheme)
             NSTextViewWrapper(attributedString: nsAttributed)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -134,13 +135,16 @@ private struct FormattedTextView: View {
     }
     
     @available(macOS 12.0, *)
-    private func convertToNSAttributedString(_ attributedString: AttributedString) -> NSAttributedString {
+    private func convertToNSAttributedString(_ attributedString: AttributedString, colorScheme: ColorScheme) -> NSAttributedString {
         let nsAttrString = NSMutableAttributedString()
         
         // Build NSAttributedString from scratch with proper NSFont attributes
         let baseFont = NSFont.systemFont(ofSize: 15)
         let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
         let headerFont = NSFont.systemFont(ofSize: 24, weight: .heavy)
+        
+        // Set text color based on color scheme
+        let textColor: NSColor = colorScheme == .dark ? .white : .black
         
         // Process runs from the original AttributedString
         for run in attributedString.runs {
@@ -184,8 +188,7 @@ private struct FormattedTextView: View {
             // Create attributed string for this run
             let runAttrString = NSMutableAttributedString(string: runText)
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
-            
-            
+            runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
             
             nsAttrString.append(runAttrString)
         }
