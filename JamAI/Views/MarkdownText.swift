@@ -516,18 +516,15 @@ private struct CodeBlockView: View {
             .padding(.vertical, 8)
             .background(headerBackground)
             
-            // Code content with wrapping and vertical scrolling
-            ScrollView(.vertical, showsIndicators: true) {
-                Text(code)
-                    .font(.system(size: 13, design: .monospaced))
-                    .textSelection(.enabled)
-                    .lineLimit(nil)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
-            }
-            .frame(maxHeight: 400)
-            .background(codeBackground)
+            // Code content - expands to fit all content
+            Text(code)
+                .font(.system(size: 13, design: .monospaced))
+                .textSelection(.enabled)
+                .lineLimit(nil)
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(codeBackground)
         }
         .cornerRadius(8)
         .overlay(
