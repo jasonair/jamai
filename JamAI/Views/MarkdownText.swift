@@ -185,13 +185,23 @@ private struct FormattedTextView: View {
             let runAttrString = NSMutableAttributedString(string: runText)
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             
-            // Copy over paragraph style if it exists (suppress Sendable warning - safe in this context)
-            if let paragraphStyle = run.paragraphStyle {
-                let style = paragraphStyle as NSParagraphStyle
-                runAttrString.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: runLength))
-            }
+            
             
             nsAttrString.append(runAttrString)
+        }
+        
+        let fullString = nsAttrString.string
+        var location = 0
+        for line in fullString.components(separatedBy: "\n") {
+            let length = (line as NSString).length
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("•") && length > 0 {
+                let ps = NSMutableParagraphStyle()
+                ps.firstLineHeadIndent = 0
+                ps.headIndent = 17
+                nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
+            }
+            location += length + 1 // account for newline
         }
         
         return nsAttrString
@@ -217,37 +227,6 @@ private struct FormattedTextView: View {
             // Get full text for processing
             let fullText = String(attributed.characters)
             
-            // Apply hanging indent only to bullet lines
-            let lines = fullText.components(separatedBy: "\n")
-            var charCount = 0
-            
-            for line in lines {
-                let lineLength = line.count
-                let lineEndCount = charCount + lineLength
-                
-                // Check if this line is a bullet item
-                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-                if trimmedLine.hasPrefix("•") {
-                    // Calculate the range for this line
-                    let startIdx = attributed.index(attributed.startIndex, offsetByCharacters: charCount)
-                    let endIdx = attributed.index(attributed.startIndex, offsetByCharacters: min(lineEndCount, attributed.characters.count))
-                    
-                    if startIdx < attributed.endIndex && endIdx <= attributed.endIndex && startIdx < endIdx {
-                        let lineRange = startIdx..<endIdx
-                        
-                        // Apply hanging indent: first line at 0, wrapped lines at 17pt (just after "• ")
-                        let paragraphStyle = NSMutableParagraphStyle()
-                        paragraphStyle.firstLineHeadIndent = 0
-                        paragraphStyle.headIndent = 17
-                        
-                        // Apply paragraph style (suppress Sendable warning - safe in this context)
-                        let style = paragraphStyle as NSParagraphStyle
-                        attributed[lineRange].paragraphStyle = style
-                    }
-                }
-                
-                charCount = lineEndCount + 1 // +1 for the newline character
-            }
             
             // Increase font size ONLY for standalone section headers (bold text with colon at start of line)
             for run in attributed.runs {
@@ -531,6 +510,11 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         textView.drawsBackground = false
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainerInset = .zero
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.heightTracksTextView = false
+        textView.textContainer?.size = CGSize(width: 700, height: CGFloat.greatestFiniteMagnitude)
         
         // Set base font to match prompt size (15pt)
         textView.font = .systemFont(ofSize: 15)
@@ -548,24 +532,37 @@ private struct NSTextViewWrapper: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         guard let textView = scrollView.documentView as? NSTextView else { return }
         
+        let width: CGFloat = {
+            if scrollView.bounds.width > 0 { return scrollView.bounds.width }
+            if let superWidth = scrollView.superview?.bounds.width, superWidth > 0 { return superWidth }
+            return 700
+        }()
+        textView.textContainer?.size = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        
         if textView.attributedString() != attributedString {
             textView.textStorage?.setAttributedString(attributedString)
             
             // Force layout to ensure all attributes are applied
             textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         }
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
     }
     
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
-        guard let textView = nsView.documentView as? NSTextView,
-              let width = proposal.width else {
+        guard let textView = nsView.documentView as? NSTextView else {
             return nil
         }
         
-        textView.textContainer?.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        let measuredWidth: CGFloat = {
+            if let w = proposal.width, w > 0 { return w }
+            if nsView.bounds.width > 0 { return nsView.bounds.width }
+            return 700
+        }()
+        
+        textView.textContainer?.size = CGSize(width: measuredWidth, height: CGFloat.greatestFiniteMagnitude)
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         let height = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
         
-        return CGSize(width: width, height: height)
+        return CGSize(width: measuredWidth, height: height)
     }
 }
