@@ -74,7 +74,7 @@ struct MarkdownText: View {
                     }
                     .frame(maxWidth: 700)
                     .padding(.horizontal, 8)
-                    .padding(.top, 4)
+                    .padding(.top, 0)
                     Spacer(minLength: 0)
                 }
             }
@@ -132,15 +132,62 @@ private struct FormattedTextView: View {
     
     @available(macOS 12.0, *)
     private func convertToNSAttributedString(_ attributedString: AttributedString) -> NSAttributedString {
-        let nsAttrString = NSMutableAttributedString(attributedString)
+        let nsAttrString = NSMutableAttributedString()
         
-        // Ensure font attributes are properly converted
-        nsAttrString.enumerateAttribute(.font, in: NSRange(location: 0, length: nsAttrString.length)) { value, range, _ in
-            // SwiftUI fonts should already be converted, but we can add fallback if needed
-            if value == nil {
-                // Apply default system font if no font is set
-                nsAttrString.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.systemFontSize), range: range)
+        // Build NSAttributedString from scratch with proper NSFont attributes
+        let baseFont = NSFont.systemFont(ofSize: 15)
+        let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
+        let headerFont = NSFont.systemFont(ofSize: 28, weight: .heavy)
+        
+        // Process runs from the original AttributedString
+        for run in attributedString.runs {
+            let runText = String(attributedString[run.range].characters)
+            let runLength = runText.utf16.count
+            
+            // Check if this run is bold (has stronglyEmphasized intent)
+            let isBold = run.inlinePresentationIntent?.contains(.stronglyEmphasized) ?? false
+            
+            // Check if this is a standalone header (bold text ending with colon at line start)
+            var isHeader = false
+            if isBold && runText.hasSuffix(":") {
+                let currentLength = nsAttrString.length
+                let isAtStart = currentLength == 0
+                let isAfterNewline = currentLength > 0 && (nsAttrString.string as NSString).character(at: currentLength - 1) == UInt16(UnicodeScalar("\n").value)
+                
+                // Check it's not part of a bullet line
+                var isBulletItem = false
+                let lineStartRange = (nsAttrString.string as NSString).range(of: "\n", options: .backwards, range: NSRange(location: 0, length: currentLength))
+                if lineStartRange.location != NSNotFound {
+                    let lineContent = (nsAttrString.string as NSString).substring(with: NSRange(location: lineStartRange.location + 1, length: currentLength - lineStartRange.location - 1))
+                    isBulletItem = lineContent.contains("•")
+                } else if currentLength > 0 {
+                    let lineContent = (nsAttrString.string as NSString).substring(with: NSRange(location: 0, length: currentLength))
+                    isBulletItem = lineContent.contains("•")
+                }
+                
+                isHeader = (isAtStart || isAfterNewline) && !isBulletItem
             }
+            
+            // Choose appropriate font
+            let font: NSFont
+            if isHeader {
+                font = headerFont
+            } else if isBold {
+                font = baseBoldFont
+            } else {
+                font = baseFont
+            }
+            
+            // Create attributed string for this run
+            let runAttrString = NSMutableAttributedString(string: runText)
+            runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
+            
+            // Copy over paragraph style if it exists
+            if let paragraphStyle = run.paragraphStyle {
+                runAttrString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: runLength))
+            }
+            
+            nsAttrString.append(runAttrString)
         }
         
         return nsAttrString
@@ -184,10 +231,10 @@ private struct FormattedTextView: View {
                     if startIdx < attributed.endIndex && endIdx <= attributed.endIndex && startIdx < endIdx {
                         let lineRange = startIdx..<endIdx
                         
-                        // Apply hanging indent: first line at 0, wrapped lines at 15pt (just after "• ")
+                        // Apply hanging indent: first line at 0, wrapped lines at 18pt (just after "• ")
                         let paragraphStyle = NSMutableParagraphStyle()
                         paragraphStyle.firstLineHeadIndent = 0
-                        paragraphStyle.headIndent = 15
+                        paragraphStyle.headIndent = 17
                         
                         // Note: NSParagraphStyle Sendable warning is a framework limitation, but usage is safe here
                         attributed[lineRange].paragraphStyle = paragraphStyle
@@ -223,7 +270,7 @@ private struct FormattedTextView: View {
                         
                         // Only apply larger font if it's a standalone header (not in a bullet)
                         if (isAtStart || isAfterNewline) && !isBulletItem {
-                            attributed[run.range].font = .system(size: 22, weight: .heavy)
+                            attributed[run.range].font = .system(size: 28, weight: .heavy)
                         }
                     }
                 }
@@ -442,8 +489,8 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         textView.textContainer?.lineFragmentPadding = 0
         textView.textContainerInset = .zero
         
-        // Set base font to match SwiftUI default
-        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        // Set base font to match prompt size (15pt)
+        textView.font = .systemFont(ofSize: 15)
         textView.allowsUndo = false
         
         scrollView.hasVerticalScroller = false
