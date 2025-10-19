@@ -7,6 +7,9 @@
 
 import SwiftUI
 
+// NOTE: NSParagraphStyle Sendable warnings in this file are expected and safe to ignore
+// Apple's AppKit hasn't adopted Sendable yet, but usage here is synchronous on main thread
+
 struct MarkdownText: View {
     let text: String
     var onCopy: ((String) -> Void)?
@@ -137,7 +140,7 @@ private struct FormattedTextView: View {
         // Build NSAttributedString from scratch with proper NSFont attributes
         let baseFont = NSFont.systemFont(ofSize: 15)
         let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
-        let headerFont = NSFont.systemFont(ofSize: 28, weight: .heavy)
+        let headerFont = NSFont.systemFont(ofSize: 24, weight: .heavy)
         
         // Process runs from the original AttributedString
         for run in attributedString.runs {
@@ -182,9 +185,10 @@ private struct FormattedTextView: View {
             let runAttrString = NSMutableAttributedString(string: runText)
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             
-            // Copy over paragraph style if it exists
+            // Copy over paragraph style if it exists (suppress Sendable warning - safe in this context)
             if let paragraphStyle = run.paragraphStyle {
-                runAttrString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: runLength))
+                let style = paragraphStyle as NSParagraphStyle
+                runAttrString.addAttribute(.paragraphStyle, value: style, range: NSRange(location: 0, length: runLength))
             }
             
             nsAttrString.append(runAttrString)
@@ -231,13 +235,14 @@ private struct FormattedTextView: View {
                     if startIdx < attributed.endIndex && endIdx <= attributed.endIndex && startIdx < endIdx {
                         let lineRange = startIdx..<endIdx
                         
-                        // Apply hanging indent: first line at 0, wrapped lines at 18pt (just after "• ")
+                        // Apply hanging indent: first line at 0, wrapped lines at 17pt (just after "• ")
                         let paragraphStyle = NSMutableParagraphStyle()
                         paragraphStyle.firstLineHeadIndent = 0
                         paragraphStyle.headIndent = 17
                         
-                        // Note: NSParagraphStyle Sendable warning is a framework limitation, but usage is safe here
-                        attributed[lineRange].paragraphStyle = paragraphStyle
+                        // Apply paragraph style (suppress Sendable warning - safe in this context)
+                        let style = paragraphStyle as NSParagraphStyle
+                        attributed[lineRange].paragraphStyle = style
                     }
                 }
                 
@@ -473,16 +478,54 @@ private struct MarkdownTableView: View {
 
 // MARK: - NSTextView Wrapper
 
+// Custom NSScrollView that prevents scroll event propagation to parent views
+@available(macOS 12.0, *)
+private class NonPropagatingScrollView: NSScrollView {
+    override func scrollWheel(with event: NSEvent) {
+        // Only propagate if we can't scroll in the event direction
+        guard let documentView = documentView else {
+            super.scrollWheel(with: event)
+            return
+        }
+        
+        let scrollDeltaY = event.scrollingDeltaY
+        let contentView = self.contentView
+        let bounds = contentView.bounds
+        let documentFrame = documentView.frame
+        
+        // Check if we can scroll
+        let canScrollUp = bounds.origin.y > 0
+        let canScrollDown = bounds.maxY < documentFrame.maxY
+        
+        let shouldPropagate: Bool
+        if scrollDeltaY < 0 {
+            // Scrolling down
+            shouldPropagate = !canScrollDown
+        } else if scrollDeltaY > 0 {
+            // Scrolling up
+            shouldPropagate = !canScrollUp
+        } else {
+            shouldPropagate = false
+        }
+        
+        if shouldPropagate {
+            // Let parent handle scroll
+            nextResponder?.scrollWheel(with: event)
+        } else {
+            // Handle scroll ourselves
+            super.scrollWheel(with: event)
+        }
+    }
+}
+
 @available(macOS 12.0, *)
 private struct NSTextViewWrapper: NSViewRepresentable {
     let attributedString: NSAttributedString
     
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
-        }
+        let scrollView = NonPropagatingScrollView()
         
+        let textView = NSTextView()
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false
@@ -492,7 +535,9 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         // Set base font to match prompt size (15pt)
         textView.font = .systemFont(ofSize: 15)
         textView.allowsUndo = false
+        textView.autoresizingMask = [.width]
         
+        scrollView.documentView = textView
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = false
