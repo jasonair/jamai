@@ -8,6 +8,75 @@
 import SwiftUI
 import AppKit
 
+// Routes scroll wheel events anywhere within the modal window to the nearest
+// scrollable NSScrollView (vertical or horizontal). This ensures users can
+// scroll even when hovering non-scrollable regions (headers, dividers, padding)
+// and prevents scroll leakage to the background canvas.
+final class ScrollRoutingContentView: NSView {
+    override func scrollWheel(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let preferVertical = abs(event.scrollingDeltaY) >= abs(event.scrollingDeltaX)
+
+        if let hitView = hitTest(point) {
+            if let enclosing = hitView.enclosingScrollView {
+                if (preferVertical && isVertScrollable(enclosing)) || (!preferVertical && isHorizScrollable(enclosing)) {
+                    enclosing.scrollWheel(with: event)
+                    return
+                }
+            }
+            if let candidate = findBestScrollView(preferVertical: preferVertical, near: point) {
+                candidate.scrollWheel(with: event)
+                return
+            }
+        } else if let candidate = findBestScrollView(preferVertical: preferVertical, near: point) {
+            candidate.scrollWheel(with: event)
+            return
+        }
+        // No suitable scroll view found; swallow to avoid background scroll
+    }
+
+    private func findBestScrollView(preferVertical: Bool, near point: NSPoint) -> NSScrollView? {
+        var all: [NSScrollView] = []
+        collectScrollViews(in: self, into: &all)
+
+        // Prefer those that can actually scroll in the desired direction
+        let filtered = all.filter { preferVertical ? isVertScrollable($0) : isHorizScrollable($0) }
+
+        // First prefer the one under the pointer
+        if let hit = filtered.first(where: { self.convert($0.frame, from: $0.superview).contains(point) }) {
+            return hit
+        }
+        // Otherwise, choose the largest as a heuristic (usually the role list)
+        if let largest = filtered.max(by: { area(of: $0) < area(of: $1) }) {
+            return largest
+        }
+        // Fallback: any scroll view (largest)
+        return all.max(by: { area(of: $0) < area(of: $1) })
+    }
+
+    private func area(of sv: NSScrollView) -> CGFloat {
+        let f = convert(sv.frame, from: sv.superview)
+        return f.width * f.height
+    }
+
+    private func collectScrollViews(in view: NSView, into out: inout [NSScrollView]) {
+        for sub in view.subviews {
+            if let sv = sub as? NSScrollView { out.append(sv) }
+            collectScrollViews(in: sub, into: &out)
+        }
+    }
+
+    private func isVertScrollable(_ sv: NSScrollView) -> Bool {
+        guard let doc = sv.documentView else { return false }
+        return doc.frame.height > sv.contentSize.height + 0.5
+    }
+
+    private func isHorizScrollable(_ sv: NSScrollView) -> Bool {
+        guard let doc = sv.documentView else { return false }
+        return doc.frame.width > sv.contentSize.width + 0.5
+    }
+}
+
 @MainActor
 class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
@@ -73,11 +142,14 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         
         // Wrap in NSHostingController
         let hostingController = NSHostingController(rootView: wrappedContent)
-        hostingController.view.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
         
-        // Make hosting view handle events properly
-        hostingController.view.wantsLayer = true
-        hostingController.view.layer?.masksToBounds = false // Allow content to size properly
+        // Embed hosting view inside a scroll-routing container that forwards
+        // scroll events to the nearest scroll view so scrolling works anywhere
+        let containerView = ScrollRoutingContentView(frame: NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight))
+        containerView.wantsLayer = true
+        hostingController.view.frame = containerView.bounds
+        hostingController.view.autoresizingMask = [.width, .height]
+        containerView.addSubview(hostingController.view)
         
         // Create NSPanel
         let panel = NSPanel(
@@ -88,7 +160,7 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         )
         
         panel.title = existingMember == nil ? "Add Team Member" : "Edit Team Member"
-        panel.contentView = hostingController.view
+        panel.contentView = containerView
         panel.isReleasedWhenClosed = false
         panel.center()
         panel.isMovableByWindowBackground = true
@@ -105,7 +177,7 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         panel.acceptsMouseMovedEvents = true
         panel.ignoresMouseEvents = false
         
-        // Explicitly set the content view to fill the panel
+        // Ensure content view fills the panel
         if let contentView = panel.contentView {
             contentView.wantsLayer = true
             contentView.frame = NSRect(x: 0, y: 0, width: panelWidth, height: panelHeight)
