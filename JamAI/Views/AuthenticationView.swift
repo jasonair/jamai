@@ -23,13 +23,9 @@ struct AuthenticationView: View {
     
     var body: some View {
         ZStack {
-            // Background gradient
-            LinearGradient(
-                colors: [Color.accentColor.opacity(0.1), Color.accentColor.opacity(0.05)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            // Clean background
+            Color(nsColor: .windowBackgroundColor)
+                .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 Spacer()
@@ -262,7 +258,7 @@ struct AuthTextFieldStyle: TextFieldStyle {
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
             .padding(16)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .background(Color(nsColor: .textBackgroundColor))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)

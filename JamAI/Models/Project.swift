@@ -44,7 +44,7 @@ struct Project: Identifiable, Codable, Sendable {
         canvasOffsetX: Double = 0,
         canvasOffsetY: Double = 0,
         canvasZoom: Double = 1.0,
-        showDots: Bool = true
+        showDots: Bool = false
     ) {
         self.id = id
         self.name = name

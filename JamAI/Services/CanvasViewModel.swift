@@ -24,7 +24,7 @@ class CanvasViewModel: ObservableObject {
     // Canvas state
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
-    @Published var showDots: Bool = true
+    @Published var showDots: Bool = false
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
     @Published var selectedTool: CanvasTool = .select

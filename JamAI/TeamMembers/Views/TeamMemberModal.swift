@@ -9,6 +9,7 @@ import SwiftUI
 
 struct TeamMemberModal: View {
     @StateObject private var roleManager = RoleManager.shared
+    @StateObject private var dataService = FirebaseDataService.shared
     
     let existingMember: TeamMember?
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)] // Team members already in project
@@ -21,7 +22,16 @@ struct TeamMemberModal: View {
     @State private var selectedRole: Role?
     @State private var selectedLevel: ExperienceLevel = .intermediate
     @State private var customName: String = ""
-    @State private var currentTier: PlanTier = .free
+    
+    private var currentTier: PlanTier {
+        guard let account = dataService.userAccount else { return .free }
+        // Map UserPlan to PlanTier for experience level access
+        switch account.plan {
+        case .trial, .pro: return .pro
+        case .premium: return .pro
+        case .free: return .free
+        }
+    }
     
     @FocusState private var isSearchFocused: Bool
     

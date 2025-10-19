@@ -53,6 +53,7 @@ struct NodeView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
     @StateObject private var roleManager = RoleManager.shared
+    @StateObject private var dataService = FirebaseDataService.shared
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -426,6 +427,16 @@ struct NodeView: View {
             // Add Team Member button (only show if no team member exists)
             if shouldShowTeamMemberTray && node.teamMember == nil {
                 Button(action: { 
+                    // Check team member limit before allowing addition
+                    if let account = dataService.userAccount {
+                        let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
+                        if currentTeamMemberCount >= account.plan.maxTeamMembers {
+                            // Show alert about limit reached
+                            showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembers, currentPlan: account.plan)
+                            return
+                        }
+                    }
+                    
                     // Clear SwiftUI focus states
                     isTitleFocused = false
                     isPromptFocused = false
@@ -879,6 +890,15 @@ struct NodeView: View {
     }
     
     // MARK: - Actions
+    
+    private func showTeamMemberLimitAlert(maxAllowed: Int, currentPlan: UserPlan) {
+        let alert = NSAlert()
+        alert.messageText = "Team Member Limit Reached"
+        alert.informativeText = "Your \(currentPlan.displayName) plan allows up to \(maxAllowed) AI team members. Upgrade your plan to add more team members."
+        alert.alertStyle = .informational
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
     
     private func selectImage() {
         let panel = NSOpenPanel()

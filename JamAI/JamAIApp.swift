@@ -112,6 +112,13 @@ struct JamAIApp: App {
                         await dataService.loadUserAccount(userId: userId)
                     }
                 }
+                
+                // Clear tabs on sign-in to show welcome screen
+                if authService.isAuthenticated && appState.tabs.isEmpty {
+                    // User just signed in, ensure we show welcome screen
+                    appState.tabs = []
+                    appState.activeTabId = nil
+                }
             }
         }
         .commands {
@@ -192,17 +199,19 @@ struct JamAIApp: App {
                 .disabled(appState.viewModel == nil)
             }
             
-            CommandGroup(after: .toolbar) {
+            CommandGroup(after: .appInfo) {
+                Button("Account...") {
+                    appState.showUserSettings()
+                }
+                .disabled(!authService.isAuthenticated)
+                
+                Divider()
+                
                 Button("Settings...") {
                     appState.showSettings()
                 }
                 .keyboardShortcut(",", modifiers: .command)
                 .disabled(appState.viewModel == nil)
-                
-                Button("Account...") {
-                    appState.showUserSettings()
-                }
-                .disabled(!authService.isAuthenticated)
             }
         }
         
@@ -506,7 +515,9 @@ class AppState: ObservableObject {
             return
         }
         
-        let settingsView = UserSettingsView()
+        let settingsView = UserSettingsView(onDismiss: { [weak self] in
+            self?.userSettingsWindow?.close()
+        })
         let hostingController = NSHostingController(rootView: settingsView)
         let window = NSWindow(contentViewController: hostingController)
         window.title = "Account Settings"

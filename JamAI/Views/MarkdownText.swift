@@ -141,7 +141,8 @@ private struct FormattedTextView: View {
         // Build NSAttributedString from scratch with proper NSFont attributes
         let baseFont = NSFont.systemFont(ofSize: 15)
         let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
-        let headerFont = NSFont.systemFont(ofSize: 24, weight: .heavy)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+        let headerFont = NSFont.systemFont(ofSize: 20, weight: .semibold)
         
         // Set text color based on color scheme
         let textColor: NSColor = colorScheme == .dark ? .white : .black
@@ -153,6 +154,9 @@ private struct FormattedTextView: View {
             
             // Check if this run is bold (has stronglyEmphasized intent)
             let isBold = run.inlinePresentationIntent?.contains(.stronglyEmphasized) ?? false
+            
+            // Check if this run is code (has code intent)
+            let isCode = run.inlinePresentationIntent?.contains(.code) ?? false
             
             // Check if this is a standalone header (bold text ending with colon at line start)
             var isHeader = false
@@ -179,6 +183,8 @@ private struct FormattedTextView: View {
             let font: NSFont
             if isHeader {
                 font = headerFont
+            } else if isCode {
+                font = codeFont
             } else if isBold {
                 font = baseBoldFont
             } else {
@@ -190,20 +196,67 @@ private struct FormattedTextView: View {
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
             
+            // Add background color for code
+            if isCode {
+                let codeBackgroundColor: NSColor = colorScheme == .dark 
+                    ? NSColor.white.withAlphaComponent(0.1) 
+                    : NSColor.black.withAlphaComponent(0.06)
+                runAttrString.addAttribute(.backgroundColor, value: codeBackgroundColor, range: NSRange(location: 0, length: runLength))
+            }
+            
             nsAttrString.append(runAttrString)
         }
         
+        // Apply paragraph styles for bullets and numbered lists
         let fullString = nsAttrString.string
         var location = 0
         for line in fullString.components(separatedBy: "\n") {
             let length = (line as NSString).length
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            // Detect bullet points with different indentation levels
             if trimmed.hasPrefix("•") && length > 0 {
                 let ps = NSMutableParagraphStyle()
                 ps.firstLineHeadIndent = 0
-                ps.headIndent = 17
+                
+                // Count leading spaces to determine nesting level
+                let leadingSpaces = line.prefix(while: { $0 == " " }).count
+                if leadingSpaces >= 4 {
+                    // Second-level bullet (4+ spaces): more indent
+                    ps.headIndent = 38
+                } else if leadingSpaces >= 2 {
+                    // First-level nested bullet (2-3 spaces): medium indent
+                    ps.headIndent = 38
+                } else {
+                    // Top-level bullet: base indent (increased from 17 to 19)
+                    ps.headIndent = 19
+                }
                 nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
             }
+            // Detect numbered lists (e.g., "1. ", "2. ", etc.)
+            else if let firstChar = trimmed.first, firstChar.isNumber {
+                // Check if it's followed by a period and space
+                let pattern = "^[0-9]+\\. "
+                if trimmed.range(of: pattern, options: .regularExpression) != nil {
+                    let ps = NSMutableParagraphStyle()
+                    ps.firstLineHeadIndent = 0
+                    
+                    // Count leading spaces to determine nesting level
+                    let leadingSpaces = line.prefix(while: { $0 == " " }).count
+                    if leadingSpaces >= 4 {
+                        // Nested numbered list: more indent
+                        ps.headIndent = 42
+                    } else if leadingSpaces >= 2 {
+                        // First-level nested: medium indent
+                        ps.headIndent = 42
+                    } else {
+                        // Top-level numbered list: base indent
+                        ps.headIndent = 24
+                    }
+                    nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
+                }
+            }
+            
             location += length + 1 // account for newline
         }
         
@@ -257,7 +310,7 @@ private struct FormattedTextView: View {
                         
                         // Only apply larger font if it's a standalone header (not in a bullet)
                         if (isAtStart || isAfterNewline) && !isBulletItem {
-                            attributed[run.range].font = .system(size: 28, weight: .heavy)
+                            attributed[run.range].font = .system(size: 22, weight: .semibold)
                         }
                     }
                 }

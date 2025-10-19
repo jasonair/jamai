@@ -17,6 +17,12 @@ struct UserSettingsView: View {
     @State private var creditHistory: [CreditTransaction] = []
     @State private var isLoadingHistory = false
     
+    let onDismiss: (() -> Void)?
+    
+    init(onDismiss: (() -> Void)? = nil) {
+        self.onDismiss = onDismiss
+    }
+    
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -260,6 +266,10 @@ struct UserSettingsView: View {
             .padding(24)
         }
         .frame(width: 600, height: 700)
+        .contentShape(Rectangle())
+        .simultaneousGesture(
+            DragGesture().onChanged { _ in }
+        )
         .alert("Sign Out", isPresented: $showingSignOutAlert) {
             Button("Cancel", role: .cancel) {}
             Button("Sign Out", role: .destructive) {
@@ -270,6 +280,12 @@ struct UserSettingsView: View {
         }
         .onAppear {
             if let userId = authService.currentUser?.uid {
+                // Load user account if not already loaded
+                if dataService.userAccount == nil {
+                    Task {
+                        await dataService.loadUserAccount(userId: userId)
+                    }
+                }
                 loadCreditHistory(userId: userId)
             }
         }
@@ -309,6 +325,8 @@ struct UserSettingsView: View {
     private func signOut() {
         do {
             try authService.signOut()
+            // Close the modal after signing out
+            onDismiss?()
         } catch {
             print("Sign out failed: \(error)")
         }
@@ -328,12 +346,17 @@ struct PlanCard: View {
                 Text(plan.displayName)
                     .font(.system(size: 16, weight: .bold))
                 
-                if isCurrentPlan {
-                    Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
-                }
-                
                 Spacer()
+                
+                if isCurrentPlan {
+                    Text("Your Current Plan")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.green.opacity(0.15))
+                        .cornerRadius(8)
+                }
             }
             
             VStack(alignment: .leading, spacing: 6) {
@@ -345,11 +368,11 @@ struct PlanCard: View {
                         .foregroundColor(.secondary)
                 }
                 
-                Text("• \(plan.maxTeamMembers) team members")
+                Text("• \(plan.maxTeamMembers) AI team members")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                 
-                Text("• \(plan.canAccessAdvancedFeatures ? "Advanced features" : "Basic features")")
+                Text("• \(plan.experienceLevelAccess)")
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
             }
@@ -370,6 +393,7 @@ struct PlanCard: View {
             }
         }
         .padding()
+        .frame(minHeight: 140)
         .background(isCurrentPlan ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .overlay(

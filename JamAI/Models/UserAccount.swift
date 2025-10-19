@@ -47,6 +47,15 @@ enum UserPlan: String, Codable, CaseIterable {
         case .free: return false
         }
     }
+    
+    var experienceLevelAccess: String {
+        switch self {
+        case .trial: return "All experience levels"
+        case .free: return "Junior & Intermediate"
+        case .premium: return "Senior & Expert"
+        case .pro: return "All experience levels"
+        }
+    }
 }
 
 /// User account data stored in Firebase
