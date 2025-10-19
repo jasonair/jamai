@@ -128,14 +128,19 @@ struct CanvasView: View {
             }
             // Track mouse and capture two-finger pan scrolling
             .overlay(
-                MouseTrackingView(position: $mouseLocation, onScroll: { dx, dy in
-                    // Pan the canvas with fingers (Figma-style)
-                    guard !isResizingActive else { return }
-                    viewModel.offset.width += dx
-                    viewModel.offset.height += dy
-                }, onCommandClose: {
-                    onCommandClose?()
-                })
+                MouseTrackingView(
+                    position: $mouseLocation,
+                    hasSelectedNode: viewModel.selectedNodeId != nil && !modalCoordinator.isModalPresented,
+                    onScroll: { dx, dy in
+                        // Pan the canvas with fingers (Figma-style)
+                        guard !isResizingActive else { return }
+                        viewModel.offset.width += dx
+                        viewModel.offset.height += dy
+                    },
+                    onCommandClose: {
+                        onCommandClose?()
+                    }
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .allowsHitTesting(false)
             )

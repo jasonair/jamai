@@ -87,6 +87,21 @@ struct NodeItemWrapper: View {
                 }
                 .onEnded { _ in onDragEnded() }
         )
+        // Invisible tagging view so AppKit hit-testing can recognize node areas
+        .overlay(NodeHitTag().allowsHitTesting(false))
+    }
+
+    // Invisible NSView to tag node view hierarchy for hit-testing
+    private struct NodeHitTag: NSViewRepresentable {
+        func makeNSView(context: Context) -> NSView {
+            let v = NSView(frame: .zero)
+            v.identifier = NSUserInterfaceItemIdentifier("JamAI_Node")
+            v.isHidden = true
+            v.translatesAutoresizingMaskIntoConstraints = true
+            v.setFrameSize(.zero)
+            return v
+        }
+        func updateNSView(_ nsView: NSView, context: Context) {}
     }
 
     private var displayHeight: CGFloat {

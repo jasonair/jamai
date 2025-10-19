@@ -69,11 +69,12 @@ struct NodeView: View {
                             teamMember: teamMember,
                             role: roleManager.role(withId: teamMember.roleId),
                             onSettings: { 
-                                // Clear all focus states to disengage scroll
+                                // Clear SwiftUI focus states
                                 isTitleFocused = false
                                 isPromptFocused = false
                                 isDescFocused = false
                                 
+                                // Show modal - sheet detection will handle scroll
                                 modalCoordinator.showTeamMemberModal(
                                     existingMember: node.teamMember,
                                     projectTeamMembers: projectTeamMembers,
@@ -116,7 +117,7 @@ struct NodeView: View {
                                     }
                                     .padding(Node.padding)
                                 }
-                                .blockScrollPropagation()
+                                .disabled(!isSelected)
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -154,7 +155,7 @@ struct NodeView: View {
                                 }
                                 .padding(Node.padding)
                             }
-                            .blockScrollPropagation()
+                            .disabled(!isSelected)
                             .onAppear {
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                     withAnimation {
@@ -286,6 +287,7 @@ struct NodeView: View {
                 isTitleFocused = false
                 isEditingTitle = false
                 isEditingDescription = false
+                // Scroll detection now uses ViewModel's selectedNodeId - no first responder needed
             }
         }
         .allowsHitTesting(!modalCoordinator.isModalPresented) // Disable all interaction when modal is open
@@ -424,11 +426,12 @@ struct NodeView: View {
             // Add Team Member button (only show if no team member exists)
             if shouldShowTeamMemberTray && node.teamMember == nil {
                 Button(action: { 
-                    // Clear all focus states to disengage scroll
+                    // Clear SwiftUI focus states
                     isTitleFocused = false
                     isPromptFocused = false
                     isDescFocused = false
                     
+                    // Show modal - sheet detection will handle scroll
                     modalCoordinator.showTeamMemberModal(
                         existingMember: nil,
                         projectTeamMembers: projectTeamMembers,
