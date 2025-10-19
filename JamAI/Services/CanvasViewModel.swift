@@ -124,19 +124,20 @@ class CanvasViewModel: ObservableObject {
         if Config.enableVerboseLogging { print("📝 [NoteCreate] edge id=\(edge.id) color=\(String(describing: edge.color))") }
         
         // Force edge refresh immediately to ensure wire appears
-        positionsVersion &+= 1
-        if Config.enableVerboseLogging { print("📝 [NoteCreate] positionsVersion=\(positionsVersion)") }
+        Task { @MainActor in
+            self.positionsVersion += 1
+        }
         
-        // Save to database asynchronously on background queue
+        // Use debounced write system for reliable persistence
+        self.scheduleDebouncedWrite(edgeId: edge.id)
+        
+        // Save node atomically
         let dbActor = self.dbActor
-        if Config.enableVerboseLogging { print("📝 [NoteCreate] saving node=\(note.id) edge=\(edge.id)") }
-        Task { [dbActor, note, edge] in
+        Task { [dbActor, note] in
             do {
                 if Config.enableVerboseLogging { print("📝 [NoteCreate] save begin node=\(note.id)") }
                 try await dbActor.saveNode(note)
                 if Config.enableVerboseLogging { print("📝 [NoteCreate] save node ok=\(note.id)") }
-                try await dbActor.saveEdge(edge)
-                if Config.enableVerboseLogging { print("📝 [NoteCreate] save edge ok=\(edge.id)") }
             } catch {
                 if Config.enableVerboseLogging { print("⚠️ Failed to save note: \(error.localizedDescription)") }
             }
@@ -184,7 +185,7 @@ class CanvasViewModel: ObservableObject {
             showDots = project.showDots
             
             // Force edge refresh to ensure wires render correctly on load
-            positionsVersion &+= 1
+            positionsVersion += 1
         } catch {
             errorMessage = "Failed to load project: \(error.localizedDescription)"
         }
@@ -226,16 +227,8 @@ class CanvasViewModel: ObservableObject {
                 let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
                 self.edges[edge.id] = edge
                 self.undoManager.record(.createEdge(edge))
-                let dbActor = self.dbActor
-                Task { [weak self, dbActor, edge] in
-                    do {
-                        try await dbActor.saveEdge(edge)
-                    } catch {
-                        await MainActor.run {
-                            self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
-                        }
-                    }
-                }
+                // Use debounced write system to ensure reliable persistence
+                self.scheduleDebouncedWrite(edgeId: edge.id)
             }
             
             self.nodes[node.id] = node
@@ -276,16 +269,8 @@ class CanvasViewModel: ObservableObject {
             let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
             self.edges[edge.id] = edge
             self.undoManager.record(.createEdge(edge))
-            let dbActor = self.dbActor
-            Task { [weak self, dbActor, edge] in
-                do {
-                    try await dbActor.saveEdge(edge)
-                } catch {
-                    await MainActor.run {
-                        self?.errorMessage = "Failed to save edge: \(error.localizedDescription)"
-                    }
-                }
-            }
+            // Use debounced write system to ensure reliable persistence
+            self.scheduleDebouncedWrite(edgeId: edge.id)
         }
 
         self.nodes[node.id] = node
@@ -665,31 +650,22 @@ class CanvasViewModel: ObservableObject {
         // Explicitly trigger objectWillChange before mutation
         objectWillChange.send()
         edges[edge.id] = edge
+        positionsVersion += 1
         
-        // Debounce database write unless immediate
-        if immediate {
-            let dbActor = self.dbActor
-            Task { [weak self, dbActor, edge] in
-                do {
-                    try await dbActor.saveEdge(edge)
-                } catch {
-                    await MainActor.run {
-                        self?.errorMessage = "Failed to update edge: \(error.localizedDescription)"
-                    }
-                }
-            }
-        } else {
-            scheduleDebouncedWrite(edgeId: edge.id)
-        }
+        // Always use debounced write for reliable persistence
+        scheduleDebouncedWrite(edgeId: edge.id)
     }
     
     func deleteNode(_ nodeId: UUID) {
         guard let node = nodes[nodeId] else { return }
         
-        // Delete connected edges
+        // Delete connected edges (remove from pending writes and schedule deletion)
         let connectedEdges = edges.values.filter { $0.sourceId == nodeId || $0.targetId == nodeId }
         for edge in connectedEdges {
             edges.removeValue(forKey: edge.id)
+            // Remove from pending writes if queued
+            pendingEdgeWrites.remove(edge.id)
+            // Immediate delete for node deletion
             let dbActor = self.dbActor
             Task { [dbActor, edgeId = edge.id] in
                 try? await dbActor.deleteEdge(id: edgeId)
@@ -1026,12 +1002,10 @@ class CanvasViewModel: ObservableObject {
                 Task { [dbActor, node] in
                     try? await dbActor.saveNode(node)
                 }
-                // Restore all connected edges
+                // Restore all connected edges using debounced write
                 for edge in connectedEdges {
                     edges[edge.id] = edge
-                    Task { [dbActor, edge] in
-                        try? await dbActor.saveEdge(edge)
-                    }
+                    scheduleDebouncedWrite(edgeId: edge.id)
                 }
             } else {
                 // Redo: delete node and connected edges
@@ -1043,6 +1017,7 @@ class CanvasViewModel: ObservableObject {
                 // Delete all connected edges
                 for edge in connectedEdges {
                     edges.removeValue(forKey: edge.id)
+                    pendingEdgeWrites.remove(edge.id)
                     Task { [dbActor, edgeId = edge.id] in
                         try? await dbActor.deleteEdge(id: edgeId)
                     }
@@ -1071,27 +1046,23 @@ class CanvasViewModel: ObservableObject {
         case .createEdge(let edge):
             if reverse {
                 edges.removeValue(forKey: edge.id)
+                pendingEdgeWrites.remove(edge.id)
                 let dbActor = self.dbActor
                 Task { [dbActor, edgeId = edge.id] in
                     try? await dbActor.deleteEdge(id: edgeId)
                 }
             } else {
                 edges[edge.id] = edge
-                let dbActor = self.dbActor
-                Task { [dbActor, edge] in
-                    try? await dbActor.saveEdge(edge)
-                }
+                scheduleDebouncedWrite(edgeId: edge.id)
             }
             
         case .deleteEdge(let edge):
             if reverse {
                 edges[edge.id] = edge
-                let dbActor = self.dbActor
-                Task { [dbActor, edge] in
-                    try? await dbActor.saveEdge(edge)
-                }
+                scheduleDebouncedWrite(edgeId: edge.id)
             } else {
                 edges.removeValue(forKey: edge.id)
+                pendingEdgeWrites.remove(edge.id)
                 let dbActor = self.dbActor
                 Task { [dbActor, edgeId = edge.id] in
                     try? await dbActor.deleteEdge(id: edgeId)

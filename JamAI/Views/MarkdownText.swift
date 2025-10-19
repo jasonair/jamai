@@ -118,8 +118,8 @@ private struct FormattedTextView: View {
     var body: some View {
         if #available(macOS 12.0, *) {
             let formatted = formatText(content)
-            Text(formatted)
-                .textSelection(.enabled)
+            let nsAttributed = convertToNSAttributedString(formatted)
+            NSTextViewWrapper(attributedString: nsAttributed)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
@@ -128,6 +128,22 @@ private struct FormattedTextView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+    
+    @available(macOS 12.0, *)
+    private func convertToNSAttributedString(_ attributedString: AttributedString) -> NSAttributedString {
+        let nsAttrString = NSMutableAttributedString(attributedString)
+        
+        // Ensure font attributes are properly converted
+        nsAttrString.enumerateAttribute(.font, in: NSRange(location: 0, length: nsAttrString.length)) { value, range, _ in
+            // SwiftUI fonts should already be converted, but we can add fallback if needed
+            if value == nil {
+                // Apply default system font if no font is set
+                nsAttrString.addAttribute(.font, value: NSFont.systemFont(ofSize: NSFont.systemFontSize), range: range)
+            }
+        }
+        
+        return nsAttrString
     }
     
     @available(macOS 12.0, *)
@@ -147,9 +163,41 @@ private struct FormattedTextView: View {
         options.interpretedSyntax = .inlineOnlyPreservingWhitespace
         
         if var attributed = try? AttributedString(markdown: processedText, options: options) {
-            // Increase font size ONLY for standalone section headers (bold text with colon at start of line)
+            // Get full text for processing
             let fullText = String(attributed.characters)
             
+            // Apply hanging indent only to bullet lines
+            let lines = fullText.components(separatedBy: "\n")
+            var charCount = 0
+            
+            for line in lines {
+                let lineLength = line.count
+                let lineEndCount = charCount + lineLength
+                
+                // Check if this line is a bullet item
+                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+                if trimmedLine.hasPrefix("•") {
+                    // Calculate the range for this line
+                    let startIdx = attributed.index(attributed.startIndex, offsetByCharacters: charCount)
+                    let endIdx = attributed.index(attributed.startIndex, offsetByCharacters: min(lineEndCount, attributed.characters.count))
+                    
+                    if startIdx < attributed.endIndex && endIdx <= attributed.endIndex && startIdx < endIdx {
+                        let lineRange = startIdx..<endIdx
+                        
+                        // Apply hanging indent: first line at 0, wrapped lines at 15pt (just after "• ")
+                        let paragraphStyle = NSMutableParagraphStyle()
+                        paragraphStyle.firstLineHeadIndent = 0
+                        paragraphStyle.headIndent = 15
+                        
+                        // Note: NSParagraphStyle Sendable warning is a framework limitation, but usage is safe here
+                        attributed[lineRange].paragraphStyle = paragraphStyle
+                    }
+                }
+                
+                charCount = lineEndCount + 1 // +1 for the newline character
+            }
+            
+            // Increase font size ONLY for standalone section headers (bold text with colon at start of line)
             for run in attributed.runs {
                 if let inlinePresentationIntent = run.inlinePresentationIntent,
                    inlinePresentationIntent.contains(.stronglyEmphasized) {
@@ -175,7 +223,7 @@ private struct FormattedTextView: View {
                         
                         // Only apply larger font if it's a standalone header (not in a bullet)
                         if (isAtStart || isAfterNewline) && !isBulletItem {
-                            attributed[run.range].font = .system(size: 19, weight: .heavy)
+                            attributed[run.range].font = .system(size: 22, weight: .heavy)
                         }
                     }
                 }
@@ -373,5 +421,59 @@ private struct MarkdownTableView: View {
         colorScheme == .dark
             ? Color.white.opacity(0.15)
             : Color.black.opacity(0.15)
+    }
+}
+
+// MARK: - NSTextView Wrapper
+
+@available(macOS 12.0, *)
+private struct NSTextViewWrapper: NSViewRepresentable {
+    let attributedString: NSAttributedString
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return scrollView
+        }
+        
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.drawsBackground = false
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.textContainerInset = .zero
+        
+        // Set base font to match SwiftUI default
+        textView.font = .systemFont(ofSize: NSFont.systemFontSize)
+        textView.allowsUndo = false
+        
+        scrollView.hasVerticalScroller = false
+        scrollView.hasHorizontalScroller = false
+        scrollView.drawsBackground = false
+        
+        return scrollView
+    }
+    
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        guard let textView = scrollView.documentView as? NSTextView else { return }
+        
+        if textView.attributedString() != attributedString {
+            textView.textStorage?.setAttributedString(attributedString)
+            
+            // Force layout to ensure all attributes are applied
+            textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        }
+    }
+    
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
+        guard let textView = nsView.documentView as? NSTextView,
+              let width = proposal.width else {
+            return nil
+        }
+        
+        textView.textContainer?.size = CGSize(width: width, height: .greatestFiniteMagnitude)
+        textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+        let height = textView.layoutManager?.usedRect(for: textView.textContainer!).height ?? 0
+        
+        return CGSize(width: width, height: height)
     }
 }
