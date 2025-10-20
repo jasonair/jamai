@@ -289,9 +289,12 @@ class FirebaseDataService: ObservableObject {
                 .getDocuments()
             
             return snapshot.documents.compactMap { document in
-                let data = document.data()
-                let jsonData = try? JSONSerialization.data(withJSONObject: data)
-                return jsonData.flatMap { try? JSONDecoder().decode(CreditTransaction.self, from: $0) }
+                do {
+                    return try document.data(as: CreditTransaction.self)
+                } catch {
+                    print("Failed to decode transaction \(document.documentID): \(error)")
+                    return nil
+                }
             }
         } catch {
             print("Failed to get credit history: \(error)")

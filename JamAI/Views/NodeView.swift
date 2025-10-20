@@ -49,6 +49,10 @@ struct NodeView: View {
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
+    @State private var hasInitiallyLoaded = false
+    @State private var processingMessageIndex = 0
+    @State private var processingOpacity: Double = 1.0
+    @State private var processingTimer: Timer?
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -107,7 +111,7 @@ struct NodeView: View {
                                                 Spacer(minLength: 0)
                                                 Text(node.description)
                                                     .font(.system(size: 15))
-                                                    .frame(maxWidth: 800)
+                                                    .frame(maxWidth: 700)
                                                 Spacer(minLength: 0)
                                             }
                                         }
@@ -119,6 +123,17 @@ struct NodeView: View {
                                     .padding(Node.padding)
                                 }
                                 .disabled(!isSelected)
+                                .onAppear {
+                                    // Only auto-scroll on initial load to prevent scroll spam
+                                    if !hasInitiallyLoaded {
+                                        hasInitiallyLoaded = true
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            if let last = node.conversation.last {
+                                                proxy.scrollTo(last.id, anchor: .bottom)
+                                            }
+                                        }
+                                    }
+                                }
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
@@ -146,7 +161,7 @@ struct NodeView: View {
                                     HStack {
                                         Spacer(minLength: 0)
                                         descriptionView
-                                            .frame(maxWidth: 800)
+                                            .frame(maxWidth: 700)
                                         Spacer(minLength: 0)
                                     }
                                     
@@ -158,8 +173,10 @@ struct NodeView: View {
                             }
                             .disabled(!isSelected)
                             .onAppear {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    withAnimation {
+                                // Only auto-scroll on initial load to prevent scroll spam
+                                if !hasInitiallyLoaded {
+                                    hasInitiallyLoaded = true
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                         if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
                                             proxy.scrollTo(lastAssistantId, anchor: .bottom)
                                         } else if let lastMessageId = node.conversation.last?.id {
@@ -584,6 +601,11 @@ struct NodeView: View {
                         .id(message.id)
                 }
             }
+            
+            // Show processing message when AI is generating
+            if isGenerating {
+                processingMessageView
+            }
         }
     }
     
@@ -731,6 +753,7 @@ struct NodeView: View {
                 // Text field with full area - minimal bottom padding
                 TextField("Ask a question...", text: $promptText, axis: .vertical)
                     .textFieldStyle(PlainTextFieldStyle())
+                    .font(.system(size: 15))
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
                     .padding(.bottom, 24) // Just enough for button row
@@ -774,7 +797,7 @@ struct NodeView: View {
                 .frame(maxWidth: .infinity, alignment: .bottom)
             }
             }
-            .frame(maxWidth: 800)
+            .frame(maxWidth: 700)
             Spacer(minLength: 0)
         }
     }
@@ -935,4 +958,59 @@ struct NodeView: View {
             isPromptFocused = true // Keep focus in input
         }
     }
+    
+    // MARK: - Processing Message Animation
+    
+    private var processingMessageView: some View {
+        HStack {
+            Spacer(minLength: 0)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Jam")
+                    .font(.system(size: 12, weight: .semibold))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.accentColor)
+                    .frame(maxWidth: 700, alignment: .leading)
+                    .padding(.horizontal, 8)
+                
+                HStack {
+                    Text(processingMessages[processingMessageIndex])
+                        .font(.system(size: 15))
+                        .foregroundColor(.secondary)
+                        .opacity(processingOpacity)
+                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: 700)
+            Spacer(minLength: 0)
+        }
+        .onAppear {
+            // Start pulsing animation
+            processingOpacity = 0.4
+            // Rotate through messages
+            processingTimer = Timer.scheduledTimer(withTimeInterval: 2.5, repeats: true) { _ in
+                processingMessageIndex = (processingMessageIndex + 1) % processingMessages.count
+            }
+        }
+        .onDisappear {
+            // Clean up timer
+            processingTimer?.invalidate()
+            processingTimer = nil
+            // Reset states
+            processingOpacity = 1.0
+            processingMessageIndex = 0
+        }
+    }
+    
+    private let processingMessages = [
+        "Jamming...",
+        "Cooking up something good...",
+        "Thinking deeply...",
+        "Brewing ideas...",
+        "Crafting a response...",
+        "Working on it...",
+        "Almost there..."
+    ]
 }

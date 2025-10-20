@@ -339,10 +339,18 @@ struct UserSettingsView: View {
         isLoadingHistory = true
         
         Task {
-            let history = await dataService.getCreditHistory(userId: userId)
-            await MainActor.run {
-                creditHistory = history
-                isLoadingHistory = false
+            do {
+                let history = await dataService.getCreditHistory(userId: userId)
+                await MainActor.run {
+                    creditHistory = history
+                    isLoadingHistory = false
+                }
+            } catch {
+                print("Error loading credit history: \(error)")
+                await MainActor.run {
+                    creditHistory = []
+                    isLoadingHistory = false
+                }
             }
         }
     }
