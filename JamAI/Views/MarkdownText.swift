@@ -49,8 +49,9 @@ struct MarkdownText: View {
                 Group {
                     switch block.type {
                     case .table(let headers, let rows):
-                        // Tables are always rasterized for performance
-                        MarkdownTableView(headers: headers, rows: rows)
+                        // CALayer-based rendering for 60fps performance
+                        // Eliminates SwiftUI layout overhead during zoom/pan/drag
+                        CATableView(headers: headers, rows: rows)
                             .padding(.bottom, 20)
                     case .codeBlock(let code, let language):
                         // Code blocks with syntax highlighting
@@ -576,7 +577,362 @@ private struct CodeBlockView: View {
     }
 }
 
-// MARK: - Table View
+// MARK: - CALayer-Based High-Performance Table View
+
+// Custom NSView that uses CALayer for GPU-accelerated table rendering
+// This approach eliminates SwiftUI layout overhead for 60fps performance
+private class TableLayerView: NSView {
+    var headers: [String] = []
+    var rows: [[String]] = []
+    var columnWidths: [CGFloat] = []
+    var isDarkMode: Bool = false
+    
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        wantsLayer = true
+        layer?.shouldRasterize = true // GPU-accelerated cache
+        layer?.rasterizationScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        layer?.masksToBounds = true
+    }
+    
+    // CRITICAL: Flip coordinate system so y=0 is at TOP (headers first)
+    override var isFlipped: Bool { return true }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    func updateTable(headers: [String], rows: [[String]], isDarkMode: Bool) {
+        guard self.headers != headers || self.rows != rows || self.isDarkMode != isDarkMode else {
+            return // Skip update if nothing changed
+        }
+        
+        self.headers = headers
+        self.rows = rows
+        self.isDarkMode = isDarkMode
+        calculateColumnWidths()
+        rebuildLayers()
+    }
+    
+    private func calculateColumnWidths() {
+        // Pre-calculate all widths using NSAttributedString measurement
+        // This happens ONCE when table content changes, not every frame
+        guard bounds.width > 0 else {
+            columnWidths = []
+            return
+        }
+        
+        let totalWidth = bounds.width
+        let columnCount = CGFloat(max(headers.count, 1))
+        
+        // For now, use equal column widths
+        // Could be enhanced with content-based sizing later
+        let columnWidth = totalWidth / columnCount
+        columnWidths = Array(repeating: columnWidth, count: headers.count)
+    }
+    
+    private func rebuildLayers() {
+        // Remove all existing sublayers
+        layer?.sublayers?.forEach { $0.removeFromSuperlayer() }
+        
+        guard !headers.isEmpty, !columnWidths.isEmpty else { return }
+        
+        var yOffset: CGFloat = 0
+        let rowHeight: CGFloat = 32
+        
+        // Header row with darker background
+        for (index, header) in headers.enumerated() {
+            let xOffset = columnWidths[..<index].reduce(0, +)
+            let cellLayer = createCellLayer(
+                text: header,
+                frame: CGRect(x: xOffset, y: yOffset, 
+                            width: columnWidths[index], height: rowHeight),
+                isHeader: true
+            )
+            layer?.addSublayer(cellLayer)
+        }
+        
+        yOffset += rowHeight
+        
+        // Data rows
+        for row in rows {
+            for (index, cell) in row.enumerated() {
+                guard index < columnWidths.count else { break }
+                let xOffset = columnWidths[..<index].reduce(0, +)
+                let cellLayer = createCellLayer(
+                    text: cell,
+                    frame: CGRect(x: xOffset, y: yOffset, 
+                                width: columnWidths[index], height: rowHeight),
+                    isHeader: false
+                )
+                layer?.addSublayer(cellLayer)
+            }
+            yOffset += rowHeight
+        }
+        
+        // Update container height
+        let totalHeight = CGFloat(rows.count + 1) * rowHeight
+        invalidateIntrinsicContentSize()
+    }
+    
+    private func createCellLayer(text: String, frame: CGRect, isHeader: Bool) -> CALayer {
+        let container = CALayer()
+        container.frame = frame
+        
+        // Border color based on dark mode
+        let borderColor: CGColor = isDarkMode 
+            ? NSColor.white.withAlphaComponent(0.15).cgColor
+            : NSColor.black.withAlphaComponent(0.15).cgColor
+        
+        container.borderColor = borderColor
+        container.borderWidth = 0.5
+        
+        // Background for header cells
+        if isHeader {
+            let bgColor: CGColor = isDarkMode
+                ? NSColor.white.withAlphaComponent(0.08).cgColor
+                : NSColor.black.withAlphaComponent(0.05).cgColor
+            container.backgroundColor = bgColor
+        }
+        
+        // Text layer with proper sizing and positioning
+        let textLayer = CATextLayer()
+        textLayer.frame = container.bounds.insetBy(dx: 12, dy: 8)
+        
+        // Parse markdown bold syntax and create attributed string
+        let attributedText = parseMarkdownBold(text, isHeader: isHeader)
+        textLayer.string = attributedText
+        
+        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+        textLayer.isWrapped = true
+        textLayer.truncationMode = .end
+        textLayer.alignmentMode = .left
+        
+        // Fix text rendering on Retina displays
+        textLayer.contentsGravity = .topLeft
+        
+        container.addSublayer(textLayer)
+        return container
+    }
+    
+    // Parse markdown bold syntax **text** and return NSAttributedString
+    private func parseMarkdownBold(_ text: String, isHeader: Bool) -> NSAttributedString {
+        let fontSize: CGFloat = isHeader ? 14 : 13
+        let baseFont = isHeader 
+            ? NSFont.systemFont(ofSize: fontSize, weight: .semibold)
+            : NSFont.systemFont(ofSize: fontSize)
+        let boldFont = NSFont.systemFont(ofSize: fontSize, weight: .bold)
+        
+        let textColor: NSColor = isDarkMode ? .white : .black
+        
+        let attributedString = NSMutableAttributedString()
+        
+        // Simple regex-based markdown bold parser
+        let pattern = "\\*\\*([^*]+)\\*\\*"
+        let regex = try? NSRegularExpression(pattern: pattern)
+        
+        var lastIndex = text.startIndex
+        let nsString = text as NSString
+        let matches = regex?.matches(in: text, range: NSRange(location: 0, length: nsString.length)) ?? []
+        
+        for match in matches {
+            // Add text before bold
+            let beforeRange = lastIndex..<text.index(text.startIndex, offsetBy: match.range.location)
+            if !beforeRange.isEmpty {
+                let beforeText = String(text[beforeRange])
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: baseFont,
+                    .foregroundColor: textColor
+                ]
+                attributedString.append(NSAttributedString(string: beforeText, attributes: attrs))
+            }
+            
+            // Add bold text (without ** markers)
+            if match.numberOfRanges > 1 {
+                let boldRange = match.range(at: 1)
+                let boldText = nsString.substring(with: boldRange)
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: boldFont,
+                    .foregroundColor: textColor
+                ]
+                attributedString.append(NSAttributedString(string: boldText, attributes: attrs))
+            }
+            
+            lastIndex = text.index(text.startIndex, offsetBy: match.range.location + match.range.length)
+        }
+        
+        // Add remaining text after last bold
+        if lastIndex < text.endIndex {
+            let remainingText = String(text[lastIndex...])
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: baseFont,
+                .foregroundColor: textColor
+            ]
+            attributedString.append(NSAttributedString(string: remainingText, attributes: attrs))
+        }
+        
+        // If no bold markers found, return plain attributed string
+        if attributedString.length == 0 {
+            let attrs: [NSAttributedString.Key: Any] = [
+                .font: baseFont,
+                .foregroundColor: textColor
+            ]
+            return NSAttributedString(string: text, attributes: attrs)
+        }
+        
+        return attributedString
+    }
+    
+    override var intrinsicContentSize: NSSize {
+        let rowHeight: CGFloat = 32
+        let totalHeight = CGFloat(rows.count + 1) * rowHeight
+        return NSSize(width: NSView.noIntrinsicMetric, height: totalHeight)
+    }
+    
+    override func layout() {
+        super.layout()
+        // Recalculate layout when view bounds change (e.g., during resize)
+        if columnWidths.isEmpty || bounds.width != columnWidths.reduce(0, +) {
+            calculateColumnWidths()
+            rebuildLayers()
+        }
+    }
+}
+
+// SwiftUI wrapper with copy-as-image functionality
+private struct CATableView: View {
+    let headers: [String]
+    let rows: [[String]]
+    @State private var isHovering = false
+    @State private var showCopied = false
+    
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            // The actual table view
+            CATableViewRepresentable(headers: headers, rows: rows)
+            
+            // Copy button (appears on hover)
+            if isHovering {
+                Button(action: copyTableAsImage) {
+                    HStack(spacing: 4) {
+                        Image(systemName: showCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 11))
+                        if showCopied {
+                            Text("Copied")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                    }
+                    .foregroundColor(showCopied ? .green : .secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color(nsColor: .controlBackgroundColor).opacity(0.95))
+                    .cornerRadius(4)
+                    .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+                .help("Copy table as image")
+                .transition(.opacity)
+            }
+        }
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
+    }
+    
+    private func copyTableAsImage() {
+        // Find the TableLayerView and render it to an image
+        guard let window = NSApp.keyWindow,
+              let contentView = window.contentView else { return }
+        
+        // Search for TableLayerView in the view hierarchy
+        var tableView: TableLayerView?
+        func findTableView(in view: NSView) {
+            if let found = view as? TableLayerView {
+                tableView = found
+                return
+            }
+            for subview in view.subviews {
+                findTableView(in: subview)
+                if tableView != nil { return }
+            }
+        }
+        findTableView(in: contentView)
+        
+        guard let tableView = tableView else { return }
+        
+        // Render to image
+        let bounds = tableView.bounds
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        
+        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        
+        guard let bitmap = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: Int(size.width),
+            pixelsHigh: Int(size.height),
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ) else { return }
+        
+        bitmap.size = size
+        
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: bitmap)
+        
+        if let context = NSGraphicsContext.current?.cgContext {
+            // CRITICAL: Flip coordinate system to match isFlipped view
+            // Without this, the image appears mirrored/backwards
+            context.translateBy(x: 0, y: bounds.height * scale)
+            context.scaleBy(x: scale, y: -scale)  // Negative y flips the coordinate system
+            tableView.layer?.render(in: context)
+        }
+        
+        NSGraphicsContext.restoreGraphicsState()
+        
+        let image = NSImage(size: bounds.size)
+        image.addRepresentation(bitmap)
+        
+        // Copy to pasteboard
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.writeObjects([image])
+        
+        // Show "Copied" feedback
+        showCopied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            showCopied = false
+        }
+    }
+}
+
+// Internal NSViewRepresentable for CALayer-based table view
+private struct CATableViewRepresentable: NSViewRepresentable {
+    let headers: [String]
+    let rows: [[String]]
+    @Environment(\.colorScheme) var colorScheme
+    
+    func makeNSView(context: Context) -> TableLayerView {
+        let view = TableLayerView()
+        return view
+    }
+    
+    func updateNSView(_ nsView: TableLayerView, context: Context) {
+        nsView.updateTable(
+            headers: headers, 
+            rows: rows, 
+            isDarkMode: colorScheme == .dark
+        )
+    }
+}
+
+// MARK: - Table View (Legacy SwiftUI Grid - Kept for Reference)
 
 private struct MarkdownTableView: View {
     let headers: [String]
