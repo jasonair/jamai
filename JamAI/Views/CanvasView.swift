@@ -316,6 +316,7 @@ struct CanvasView: View {
                 edges: visibleEdges,
                 frames: nodeFrames
             )
+            .id(viewModel.positionsVersion)  // Force redraw when positions/edges update
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .compositingGroup()  // Flatten the layer hierarchy first
             .scaleEffect(currentZoom, anchor: .topLeading)
@@ -579,14 +580,19 @@ struct CanvasView: View {
     private func handleColorChange(_ colorId: String, for nodeId: UUID) {
         guard var node = viewModel.nodes[nodeId] else { return }
         node.color = colorId
-        viewModel.updateNode(node)
         
         // Update all outgoing edges to match the new node color
         let edgeColor = colorId != "none" ? colorId : nil
-        for (_, var edge) in viewModel.edges where edge.sourceId == nodeId {
+        let outgoingEdges = viewModel.edges.values.filter { $0.sourceId == nodeId }
+        
+        // Update edges first (each updateEdge increments positionsVersion)
+        for var edge in outgoingEdges {
             edge.color = edgeColor
             viewModel.updateEdge(edge)
         }
+        
+        // Update the node last
+        viewModel.updateNode(node, immediate: true)
     }
     
     private func handleExpandSelection(_ selectedText: String, for nodeId: UUID) {
