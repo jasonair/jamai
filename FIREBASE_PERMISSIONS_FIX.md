@@ -38,18 +38,24 @@ service cloud.firestore {
     
     // Users collection - users can read/write their own data
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
-    // Credit transactions - users can read their own, write requires auth
+    // Credit transactions - authenticated users can create transactions for themselves
     match /credit_transactions/{transactionId} {
+      // Users can read their own transactions
       allow read: if request.auth != null && 
-                     request.auth.uid == resource.data.userId;
-      allow create: if request.auth != null;
+                     resource.data.userId == request.auth.uid;
+      
+      // Users can create transactions where userId matches their auth.uid
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      // No updates or deletes (audit trail should be immutable)
+      allow update, delete: if false;
     }
     
-    // App config - everyone can read, only admins can write
+    // App config - everyone can read, only console can write
     match /config/{document} {
       allow read: if true;
       allow write: if false; // Update via Firebase Console only

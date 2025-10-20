@@ -1,0 +1,40 @@
+🔥 FIRESTORE PERMISSION FIX - COPY/PASTE THIS 🔥
+
+1. Open: https://console.firebase.google.com
+2. Go to: Firestore Database → Rules tab
+3. Replace ALL rules with this:
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Users collection
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Credit transactions - KEY FIX HERE
+    match /credit_transactions/{transactionId} {
+      allow read: if request.auth != null && 
+                     resource.data.userId == request.auth.uid;
+      
+      allow create: if request.auth != null && 
+                       request.resource.data.userId == request.auth.uid;
+      
+      allow update, delete: if false;
+    }
+    
+    // App config
+    match /config/{document} {
+      allow read: if true;
+      allow write: if false;
+    }
+  }
+}
+
+4. Click "Publish"
+5. Wait 10-20 seconds
+6. Try your app again - errors should be gone!
+
+KEY CHANGE: Changed "allow create: if request.auth != null;" to validate 
+that the userId field matches the authenticated user using request.resource.data
