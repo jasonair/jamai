@@ -331,6 +331,65 @@ class AppState: ObservableObject {
                 self?.recentProjects = projects
             }
             .store(in: &cancellables)
+        
+        // Register for app termination to save all tabs
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.saveAllTabsBeforeQuit()
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+    
+    /// Save all open tabs synchronously before app quits
+    private func saveAllTabsBeforeQuit() {
+        if Config.enableVerboseLogging {
+            print("🔄 Saving all \(tabs.count) open tabs before quit...")
+        }
+        
+        for tab in tabs {
+            guard let viewModel = tab.viewModel, let database = tab.database else { continue }
+            
+            // Synchronous save using a semaphore to block until complete
+            let semaphore = DispatchSemaphore(value: 0)
+            
+            Task {
+                do {
+                    try? DocumentManager.shared.saveProject(
+                        viewModel.project,
+                        to: tab.projectURL.deletingPathExtension(),
+                        database: database
+                    )
+                    await viewModel.saveAndWait()
+                    
+                    if Config.enableVerboseLogging {
+                        print("✅ Saved tab: \(tab.projectURL.lastPathComponent)")
+                    }
+                } catch {
+                    if Config.enableVerboseLogging {
+                        print("⚠️ Error saving tab on quit: \(error.localizedDescription)")
+                    }
+                }
+                semaphore.signal()
+            }
+            
+            // Wait up to 5 seconds for this tab to save
+            let timeout = DispatchTime.now() + .seconds(5)
+            if semaphore.wait(timeout: timeout) == .timedOut {
+                if Config.enableVerboseLogging {
+                    print("⚠️ Timeout saving tab: \(tab.projectURL.lastPathComponent)")
+                }
+            }
+        }
+        
+        if Config.enableVerboseLogging {
+            print("✅ All tabs saved before quit")
+        }
     }
     
     func recordRecent(url: URL) {
@@ -359,26 +418,61 @@ class AppState: ObservableObject {
         guard let tabIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
         let tab = tabs[tabIndex]
         
-        // Save project before closing
+        // Save project before closing - MUST complete before tab removal
         if let viewModel = tab.viewModel, let database = tab.database {
-            Task {
-                try? DocumentManager.shared.saveProject(
-                    viewModel.project,
-                    to: tab.projectURL.deletingPathExtension(),
-                    database: database
-                )
-                await viewModel.saveAndWait()
+            // Capture references to prevent deallocation during save
+            let capturedViewModel = viewModel
+            let capturedDatabase = database
+            let capturedURL = tab.projectURL
+            
+            Task { @MainActor in
+                do {
+                    // Save project metadata
+                    try? DocumentManager.shared.saveProject(
+                        capturedViewModel.project,
+                        to: capturedURL.deletingPathExtension(),
+                        database: capturedDatabase
+                    )
+                    
+                    // CRITICAL: Wait for all pending writes to complete
+                    // This ensures edges in the debounce queue are flushed to disk
+                    await capturedViewModel.saveAndWait()
+                    
+                    if Config.enableVerboseLogging {
+                        print("✅ Tab saved successfully before close: \(capturedURL.lastPathComponent)")
+                    }
+                    
+                    // Now safe to cleanup resources
+                    await MainActor.run {
+                        self.performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
+                    }
+                } catch {
+                    if Config.enableVerboseLogging {
+                        print("⚠️ Error saving tab before close: \(error.localizedDescription)")
+                    }
+                    // Still cleanup even on error
+                    await MainActor.run {
+                        self.performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
+                    }
+                }
             }
+        } else {
+            // No save needed, cleanup immediately
+            performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
         }
-        
+    }
+    
+    private func performTabCleanup(id: UUID, tabIndex: Int, tab: ProjectTab) {
         // Stop security-scoped access
         if accessingResources.contains(tab.projectURL) {
             tab.projectURL.stopAccessingSecurityScopedResource()
             accessingResources.remove(tab.projectURL)
         }
         
-        // Remove tab
-        tabs.remove(at: tabIndex)
+        // Remove tab - now safe because save completed
+        if tabIndex < tabs.count && tabs[tabIndex].id == id {
+            tabs.remove(at: tabIndex)
+        }
         
         // Update active tab
         if activeTabId == id {
