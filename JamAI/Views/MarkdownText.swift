@@ -466,7 +466,14 @@ private func parseTable(_ lines: [String]) -> (headers: [String], rows: [[String
     
     // First line is headers
     let headerLine = cleanLines[0]
-    let headers = parseTableRow(headerLine)
+    var headers = parseTableRow(headerLine)
+    
+    // Remove trailing empty headers (fixes extra column issue)
+    while headers.last?.isEmpty == true {
+        headers.removeLast()
+    }
+    
+    guard !headers.isEmpty else { return nil }
     
     // Second line should be separator (|---|---|), skip it
     let separatorLine = cleanLines[1]
@@ -476,7 +483,24 @@ private func parseTable(_ lines: [String]) -> (headers: [String], rows: [[String
     // Remaining lines are data rows
     var rows: [[String]] = []
     for i in startIndex..<cleanLines.count {
-        let row = parseTableRow(cleanLines[i])
+        var row = parseTableRow(cleanLines[i])
+        
+        // Normalize row length to match headers
+        // Remove trailing empty cells
+        while row.count > headers.count && row.last?.isEmpty == true {
+            row.removeLast()
+        }
+        
+        // Pad with empty strings if row is shorter than headers
+        while row.count < headers.count {
+            row.append("")
+        }
+        
+        // Truncate if row is longer than headers
+        if row.count > headers.count {
+            row = Array(row.prefix(headers.count))
+        }
+        
         if !row.isEmpty {
             rows.append(row)
         }
@@ -654,13 +678,13 @@ private class TableLayerView: NSView {
         
         yOffset += rowHeight
         
-        // Data rows
+        // Data rows - render ALL cells including empty ones
         for row in rows {
-            for (index, cell) in row.enumerated() {
-                guard index < columnWidths.count else { break }
+            for index in 0..<headers.count {
+                let cellText = index < row.count ? row[index] : ""
                 let xOffset = columnWidths[..<index].reduce(0, +)
                 let cellLayer = createCellLayer(
-                    text: cell,
+                    text: cellText,
                     frame: CGRect(x: xOffset, y: yOffset, 
                                 width: columnWidths[index], height: rowHeight),
                     isHeader: false
@@ -678,6 +702,7 @@ private class TableLayerView: NSView {
     private func createCellLayer(text: String, frame: CGRect, isHeader: Bool) -> CALayer {
         let container = CALayer()
         container.frame = frame
+        container.masksToBounds = true  // Clip text to cell bounds
         
         // Border color based on dark mode
         let borderColor: CGColor = isDarkMode 
@@ -695,24 +720,91 @@ private class TableLayerView: NSView {
             container.backgroundColor = bgColor
         }
         
-        // Text layer with proper sizing and positioning
-        let textLayer = CATextLayer()
-        textLayer.frame = container.bounds.insetBy(dx: 12, dy: 8)
+        // Render text to image for reliable display with truncation
+        // CATextLayer has issues with truncation, so we pre-render to bitmap
+        let textFrame = container.bounds.insetBy(dx: 12, dy: 8)
         
-        // Parse markdown bold syntax and create attributed string
-        let attributedText = parseMarkdownBold(text, isHeader: isHeader)
-        textLayer.string = attributedText
+        if let textImage = renderTextToImage(text: text, frame: textFrame, isHeader: isHeader) {
+            let imageLayer = CALayer()
+            imageLayer.frame = textFrame
+            imageLayer.contents = textImage
+            imageLayer.contentsGravity = .resizeAspect
+            imageLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
+            container.addSublayer(imageLayer)
+        }
         
-        textLayer.contentsScale = NSScreen.main?.backingScaleFactor ?? 2.0
-        textLayer.isWrapped = true
-        textLayer.truncationMode = .end
-        textLayer.alignmentMode = .left
-        
-        // Fix text rendering on Retina displays
-        textLayer.contentsGravity = .topLeft
-        
-        container.addSublayer(textLayer)
         return container
+    }
+    
+    // Render text to image using NSString drawing for reliable truncation
+    private func renderTextToImage(text: String, frame: CGRect, isHeader: Bool) -> CGImage? {
+        guard frame.width > 0 && frame.height > 0 else { return nil }
+        
+        // Parse markdown and create attributed string
+        let attributedText = parseMarkdownBold(text, isHeader: isHeader)
+        
+        // Add paragraph style for truncation
+        let mutableAttrString = NSMutableAttributedString(attributedString: attributedText)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byTruncatingTail
+        paragraphStyle.alignment = .left
+        mutableAttrString.addAttribute(
+            .paragraphStyle,
+            value: paragraphStyle,
+            range: NSRange(location: 0, length: mutableAttrString.length)
+        )
+        
+        // Create bitmap context
+        let scale = NSScreen.main?.backingScaleFactor ?? 2.0
+        let pixelWidth = Int(frame.width * scale)
+        let pixelHeight = Int(frame.height * scale)
+        
+        guard let context = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: pixelWidth * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return nil }
+        
+        // Scale for retina
+        context.scaleBy(x: scale, y: scale)
+        
+        // Create flipped graphics context (y=0 at top, matching TableLayerView)
+        let nsGraphicsContext = NSGraphicsContext(cgContext: context, flipped: true)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = nsGraphicsContext
+        
+        // Draw text in flipped coordinate system - text will be right-side up
+        mutableAttrString.draw(in: CGRect(x: 0, y: 0, width: frame.width, height: frame.height))
+        
+        NSGraphicsContext.restoreGraphicsState()
+        
+        // Create image from the context
+        guard let cgImage = context.makeImage() else { return nil }
+        
+        // CRITICAL: The rendered image is now in standard coordinates (not flipped)
+        // We need to flip it vertically so it displays correctly in our flipped view
+        let flippedSize = CGSize(width: pixelWidth, height: pixelHeight)
+        
+        guard let flippedContext = CGContext(
+            data: nil,
+            width: pixelWidth,
+            height: pixelHeight,
+            bitsPerComponent: 8,
+            bytesPerRow: pixelWidth * 4,
+            space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+        ) else { return cgImage }
+        
+        // Flip the image vertically
+        flippedContext.translateBy(x: 0, y: CGFloat(pixelHeight))
+        flippedContext.scaleBy(x: 1, y: -1)
+        flippedContext.draw(cgImage, in: CGRect(x: 0, y: 0, width: CGFloat(pixelWidth), height: CGFloat(pixelHeight)))
+        
+        return flippedContext.makeImage() ?? cgImage
     }
     
     // Parse markdown bold syntax **text** and return NSAttributedString
