@@ -24,9 +24,8 @@ struct MarkdownText: View {
                 Group {
                     switch block.type {
                     case .table(let headers, let rows):
-                        // Tables take full width with small horizontal margin
+                        // Tables take full width
                         MarkdownTableView(headers: headers, rows: rows)
-                            .padding(.horizontal, 12)
                             .padding(.bottom, 20)
                     case .codeBlock(let code, let language):
                         // Code blocks with syntax highlighting
@@ -561,65 +560,99 @@ private struct MarkdownTableView: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header row
-            HStack(spacing: 0) {
-                ForEach(0..<headers.count, id: \.self) { index in
-                    ZStack {
-                        headerBackground
-                        Text(headers[index])
-                            .font(.system(size: 14, weight: .semibold))
-                            .textSelection(.enabled)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 6)
-                            .frame(maxWidth: .infinity, alignment: .leading)
+        if #available(macOS 12.0, *) {
+            // Use Grid for automatic column alignment (industry best practice)
+            Grid(alignment: .topLeading, horizontalSpacing: 0, verticalSpacing: 0) {
+                // Header row
+                GridRow(alignment: .top) {
+                    ForEach(0..<headers.count, id: \.self) { index in
+                        ZStack(alignment: .topLeading) {
+                            headerBackground
+                            Text(headers[index])
+                                .font(.system(size: 14, weight: .semibold))
+                                .textSelection(.enabled)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
+                        .overlay(
+                            Rectangle()
+                                .stroke(borderColor, lineWidth: 1)
+                        )
+                        .gridColumnAlignment(.leading)
                     }
-                    .frame(maxWidth: .infinity)
-                    
-                    if index < headers.count - 1 {
-                        Divider()
+                }
+                
+                // Data rows
+                ForEach(0..<rows.count, id: \.self) { rowIndex in
+                    GridRow(alignment: .top) {
+                        ForEach(0..<headers.count, id: \.self) { colIndex in
+                            let cellText = colIndex < rows[rowIndex].count ? rows[rowIndex][colIndex] : ""
+                            ZStack(alignment: .topLeading) {
+                                Color.clear
+                                Text(.init(cellText))
+                                    .font(.system(size: 13))
+                                    .textSelection(.enabled)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            }
+                            .overlay(
+                                Rectangle()
+                                    .stroke(borderColor, lineWidth: 1)
+                            )
+                            .gridColumnAlignment(.leading)
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity)
+            .overlay(
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(borderColor, lineWidth: 1)
+            )
+            .cornerRadius(4)
+            .clipped()
+        } else {
+            // Fallback for older macOS versions
+            VStack(spacing: 0) {
+                // Header row
+                HStack(alignment: .top, spacing: 0) {
+                    ForEach(0..<headers.count, id: \.self) { index in
+                        Text(headers[index])
+                            .font(.system(size: 14, weight: .semibold))
+                            .textSelection(.enabled)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(headerBackground)
+                    }
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                
+                // Data rows
+                ForEach(0..<rows.count, id: \.self) { rowIndex in
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(0..<headers.count, id: \.self) { colIndex in
+                            let cellText = colIndex < rows[rowIndex].count ? rows[rowIndex][colIndex] : ""
+                            Text(cellText)
+                                .font(.system(size: 13))
+                                .textSelection(.enabled)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                        }
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity)
             .overlay(
                 Rectangle()
                     .stroke(borderColor, lineWidth: 1)
             )
-            
-            // Data rows
-            ForEach(0..<rows.count, id: \.self) { rowIndex in
-                HStack(spacing: 0) {
-                    ForEach(0..<min(headers.count, rows[rowIndex].count), id: \.self) { colIndex in
-                        let cellText = rows[rowIndex][colIndex]
-                        if #available(macOS 12.0, *) {
-                            Text(.init(cellText))
-                                .font(.body)
-                                .textSelection(.enabled)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        } else {
-                            Text(cellText)
-                                .font(.body)
-                                .textSelection(.enabled)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        
-                        if colIndex < headers.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-                .overlay(
-                    Rectangle()
-                        .stroke(borderColor, lineWidth: 1)
-                )
-            }
+            .cornerRadius(4)
         }
-        .cornerRadius(4)
-        .fixedSize(horizontal: false, vertical: true)
     }
     
     private var headerBackground: Color {
