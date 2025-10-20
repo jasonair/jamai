@@ -40,6 +40,20 @@ struct UndoStateObserver: View {
     }
 }
 
+// Helper view to observe appearance mode changes
+struct AppearanceObserver: View {
+    @ObservedObject var viewModel: CanvasViewModel
+    @Binding var refreshId: UUID
+    
+    var body: some View {
+        Color.clear
+            .onChange(of: viewModel.appearanceMode) { oldValue, newValue in
+                print("🎨 AppearanceObserver detected change: \(oldValue.rawValue) -> \(newValue.rawValue)")
+                refreshId = UUID()
+            }
+    }
+}
+
 @main
 struct JamAIApp: App {
     @StateObject private var appState = AppState()
@@ -50,6 +64,7 @@ struct JamAIApp: App {
     @State private var showingMaintenanceAlert = false
     @State private var maintenanceMessage = ""
     @State private var isLoadingUserAccount = false
+    @State private var appearanceRefreshId = UUID()
     
     init() {
         // Configure Firebase on app launch
@@ -123,12 +138,21 @@ struct JamAIApp: App {
                 .focusedSceneValue(\.canvasViewModel, appState.viewModel)
                 .frame(minWidth: 1200, minHeight: 800)
                 .background(
-                    UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
+                    ZStack {
+                        UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
+                        if let vm = appState.viewModel {
+                            AppearanceObserver(viewModel: vm, refreshId: $appearanceRefreshId)
+                        }
+                    }
                 )
                 }
             }
-            .preferredColorScheme(appState.viewModel?.project.appearanceMode.colorScheme)
-            .id(appState.viewModel?.project.appearanceMode.rawValue ?? "system")
+            .preferredColorScheme(appState.viewModel?.appearanceMode.colorScheme)
+            .onChange(of: appState.viewModel?.appearanceMode) { oldValue, newValue in
+                print("🎨 Main App detected appearance change: \(oldValue?.rawValue ?? "nil") -> \(newValue?.rawValue ?? "nil")")
+                appearanceRefreshId = UUID()
+            }
+            .id(appearanceRefreshId)
             .onAppear {
                 // Load user account when authenticated
                 if let userId = authService.currentUser?.uid {

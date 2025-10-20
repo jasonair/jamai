@@ -64,14 +64,14 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    Picker("", selection: $viewModel.project.appearanceMode) {
+                    Picker("", selection: $viewModel.appearanceMode) {
                         ForEach(AppearanceMode.allCases, id: \.self) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: viewModel.project.appearanceMode) { _, _ in
-                        viewModel.save()
+                    .onChange(of: viewModel.appearanceMode) { oldValue, newValue in
+                        print("🎨 Settings Picker changed: \(oldValue.rawValue) -> \(newValue.rawValue)")
                     }
                 }
                 .padding(16)
