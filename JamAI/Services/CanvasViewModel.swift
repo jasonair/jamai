@@ -9,6 +9,7 @@ import Foundation
 import SwiftUI
 import Combine
 import AppKit
+import FirebaseAuth
 
 @MainActor
 class CanvasViewModel: ObservableObject {
@@ -144,6 +145,19 @@ class CanvasViewModel: ObservableObject {
                 if Config.enableVerboseLogging { print("📝 [NoteCreate] save begin node=\(note.id)") }
                 try await dbActor.saveNode(note)
                 if Config.enableVerboseLogging { print("📝 [NoteCreate] save node ok=\(note.id)") }
+                
+                // Track note creation analytics
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    await AnalyticsService.shared.trackNodeCreation(
+                        userId: userId,
+                        projectId: note.projectId,
+                        nodeId: note.id,
+                        nodeType: "note",
+                        creationMethod: .note,
+                        parentNodeId: parentId,
+                        teamMemberRoleId: note.teamMember?.roleId
+                    )
+                }
             } catch {
                 if Config.enableVerboseLogging { print("⚠️ Failed to save note: \(error.localizedDescription)") }
             }
@@ -291,6 +305,19 @@ class CanvasViewModel: ObservableObject {
         Task { [weak self, dbActor, node] in
             do {
                 try await dbActor.saveNode(node)
+                
+                // Track node creation analytics
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    await AnalyticsService.shared.trackNodeCreation(
+                        userId: userId,
+                        projectId: node.projectId,
+                        nodeId: node.id,
+                        nodeType: "standard",
+                        creationMethod: parentId != nil ? .childNode : .manual,
+                        parentNodeId: parentId,
+                        teamMemberRoleId: node.teamMember?.roleId
+                    )
+                }
             } catch {
                 await MainActor.run {
                     self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
@@ -484,6 +511,16 @@ class CanvasViewModel: ObservableObject {
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
                     finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                    
+                    // Track team member usage in generation
+                    self.trackTeamMemberUsage(
+                        nodeId: nodeId,
+                        roleId: role.id,
+                        roleName: role.name,
+                        roleCategory: role.category.rawValue,
+                        experienceLevel: teamMember.experienceLevel.rawValue,
+                        actionType: .used
+                    )
                 } else {
                     finalSystemPrompt = baseSystemPrompt
                 }
@@ -519,11 +556,15 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                // Track credit usage
+                                // Track credit usage and analytics
                                 await CreditTracker.shared.trackGeneration(
                                     promptText: prompt,
                                     responseText: fullResponse,
-                                    nodeId: nodeId
+                                    nodeId: nodeId,
+                                    projectId: self?.project.id ?? UUID(),
+                                    teamMemberRoleId: finalNode.teamMember?.roleId,
+                                    teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                    generationType: "expand"
                                 )
                                 
                                 // Auto-generate title based on selected text
@@ -787,6 +828,16 @@ class CanvasViewModel: ObservableObject {
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
                     finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                    
+                    // Track team member usage in generation
+                    self.trackTeamMemberUsage(
+                        nodeId: nodeId,
+                        roleId: role.id,
+                        roleName: role.name,
+                        roleCategory: role.category.rawValue,
+                        experienceLevel: teamMember.experienceLevel.rawValue,
+                        actionType: .used
+                    )
                 } else {
                     finalSystemPrompt = baseSystemPrompt
                 }
@@ -823,11 +874,15 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                // Track credit usage
+                                // Track credit usage and analytics
                                 await CreditTracker.shared.trackGeneration(
                                     promptText: prompt,
                                     responseText: fullResponse,
-                                    nodeId: nodeId
+                                    nodeId: nodeId,
+                                    projectId: self?.project.id ?? UUID(),
+                                    teamMemberRoleId: finalNode.teamMember?.roleId,
+                                    teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                    generationType: "chat"
                                 )
                                 
                                 // Auto-generate title and description if empty
@@ -1424,5 +1479,39 @@ class CanvasViewModel: ObservableObject {
         debounceWorkItem = nil
     }
     
+    // MARK: - Analytics Tracking
     
+    /// Track team member attachment/change for analytics
+    func trackTeamMemberUsage(
+        nodeId: UUID,
+        roleId: String,
+        roleName: String,
+        roleCategory: String,
+        experienceLevel: String,
+        actionType: TeamMemberUsageEvent.ActionType
+    ) {
+        guard let userId = FirebaseAuthService.shared.currentUser?.uid else { return }
+        guard let node = nodes[nodeId] else { return }
+        
+        Task {
+            await AnalyticsService.shared.trackTeamMemberUsage(
+                userId: userId,
+                projectId: project.id,
+                nodeId: nodeId,
+                roleId: roleId,
+                roleName: roleName,
+                roleCategory: roleCategory,
+                experienceLevel: experienceLevel,
+                actionType: actionType
+            )
+            
+            // If team member was used in generation, update metadata
+            if actionType == .used {
+                if var metadata = FirebaseDataService.shared.userAccount?.metadata {
+                    metadata.totalTeamMembersUsed += 1
+                    await FirebaseDataService.shared.updateUserMetadata(userId: userId, metadata: metadata)
+                }
+            }
+        }
+    }
 }

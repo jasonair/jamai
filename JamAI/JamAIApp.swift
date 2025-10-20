@@ -464,6 +464,18 @@ class AppState: ObservableObject {
             tabs.append(newTab)
             activeTabId = newTab.id
             recordRecent(url: normalizedURL)
+            
+            // Track project opened analytics
+            if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                Task {
+                    await AnalyticsService.shared.trackProjectActivity(
+                        userId: userId,
+                        projectId: project.id,
+                        projectName: project.name,
+                        activityType: .opened
+                    )
+                }
+            }
         } catch {
             showError("Failed to open project: \(error.localizedDescription)")
         }
@@ -492,6 +504,23 @@ class AppState: ObservableObject {
                         let finalURL = (url.pathExtension == Config.jamFileExtension)
                             ? url
                             : url.appendingPathExtension(Config.jamFileExtension)
+                        
+                        // Track project created analytics
+                        if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                            Task {
+                                // Get the project from the URL after opening
+                                if let tab = self.tabs.first(where: { $0.projectURL == finalURL }),
+                                   let project = tab.viewModel?.project {
+                                    await AnalyticsService.shared.trackProjectActivity(
+                                        userId: userId,
+                                        projectId: project.id,
+                                        projectName: project.name,
+                                        activityType: .created
+                                    )
+                                }
+                            }
+                        }
+                        
                         self.openProjectInNewTab(url: finalURL)
                     } catch {
                         self.showError("Failed to create project: \(error.localizedDescription)")

@@ -55,15 +55,26 @@ class CreditTracker {
         return max(1, (totalTokens + 999) / 1000 * creditsPerThousandTokens)
     }
     
-    /// Deduct credits after AI generation
-    func trackGeneration(promptText: String, responseText: String, nodeId: UUID) async {
+    /// Deduct credits and track detailed token usage after AI generation
+    func trackGeneration(
+        promptText: String,
+        responseText: String,
+        nodeId: UUID,
+        projectId: UUID,
+        teamMemberRoleId: String? = nil,
+        teamMemberExperienceLevel: String? = nil,
+        generationType: String = "chat"
+    ) async {
         guard let userId = FirebaseAuthService.shared.currentUser?.uid else {
             print("⚠️ CreditTracker: No authenticated user, skipping credit tracking")
             return
         }
         
+        let inputTokens = estimateTokens(text: promptText)
+        let outputTokens = estimateTokens(text: responseText)
         let credits = calculateCredits(promptText: promptText, responseText: responseText)
         
+        // Deduct credits
         let success = await FirebaseDataService.shared.deductCredits(
             userId: userId,
             amount: credits,
@@ -79,6 +90,31 @@ class CreditTracker {
             metadata.totalMessagesGenerated += 1
             await FirebaseDataService.shared.updateUserMetadata(userId: userId, metadata: metadata)
         }
+        
+        // Track detailed token usage for analytics
+        let genType: TokenUsageEvent.GenerationType
+        switch generationType {
+        case "expand":
+            genType = .expand
+        case "auto_title":
+            genType = .autoTitle
+        case "auto_description":
+            genType = .autoDescription
+        default:
+            genType = .chat
+        }
+        
+        await AnalyticsService.shared.trackTokenUsage(
+            userId: userId,
+            projectId: projectId,
+            nodeId: nodeId,
+            teamMemberRoleId: teamMemberRoleId,
+            teamMemberExperienceLevel: teamMemberExperienceLevel,
+            inputTokens: inputTokens,
+            outputTokens: outputTokens,
+            modelUsed: Config.geminiModel,
+            generationType: genType
+        )
     }
     
     /// Get remaining credits as a formatted string
