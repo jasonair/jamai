@@ -28,6 +28,8 @@ class CanvasViewModel: ObservableObject {
     @Published var showDots: Bool = false
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
+    @Published var isZooming: Bool = false // true during active zoom gesture for performance optimization
+    @Published var isPanning: Bool = false // true during active pan gesture for performance optimization
     @Published var selectedTool: CanvasTool = .select
     @Published var viewportSize: CGSize = CGSize(width: 1200, height: 800) // updated by CanvasView
     

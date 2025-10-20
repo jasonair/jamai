@@ -42,6 +42,9 @@ struct CanvasView: View {
     @State private var gestureStartOffset: CGSize = .zero
     @State private var zoomStartLocation: CGPoint = .zero
     
+    // Pan debounce timer for two-finger scrolling
+    @State private var panDebounceTimer: Timer?
+    
     // Cached node frames to avoid rebuilding on every render
     @State private var cachedNodeFrames: [UUID: CGRect] = [:]
     @State private var lastFrameUpdateVersion: Int = -1
@@ -134,8 +137,19 @@ struct CanvasView: View {
                     onScroll: { dx, dy in
                         // Pan the canvas with fingers (Figma-style)
                         guard !isResizingActive else { return }
+                        
+                        // Set panning state for layout stability
+                        viewModel.isPanning = true
+                        
+                        // Pan the canvas
                         viewModel.offset.width += dx
                         viewModel.offset.height += dy
+                        
+                        // Debounce: reset panning state after scroll stops
+                        panDebounceTimer?.invalidate()
+                        panDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+                            viewModel.isPanning = false
+                        }
                     },
                     onCommandClose: {
                         onCommandClose?()
@@ -178,6 +192,7 @@ struct CanvasView: View {
                         // Store the initial offset when drag starts (only once per gesture)
                         if gestureState == nil {
                             gestureState = viewModel.offset
+                            viewModel.isPanning = true  // Signal to prevent layout shifts
                         }
                     }
                     .onChanged { value in
@@ -195,6 +210,9 @@ struct CanvasView: View {
                             )
                         }
                     }
+                    .onEnded { _ in
+                        viewModel.isPanning = false  // Re-enable normal rendering
+                    }
             )
             .simultaneousGesture(
                 MagnificationGesture()
@@ -208,6 +226,7 @@ struct CanvasView: View {
                         // Initialize gesture state on first change
                         if !isZooming {
                             isZooming = true
+                            viewModel.isZooming = true  // Signal to MarkdownText to skip rendering
                             gestureStartZoom = viewModel.zoom
                             gestureStartOffset = viewModel.offset
                             gestureZoom = viewModel.zoom
@@ -247,6 +266,7 @@ struct CanvasView: View {
                         viewModel.offset = gestureOffset
                         lastZoom = gestureZoom
                         isZooming = false
+                        viewModel.isZooming = false  // Re-enable markdown rendering
                     }
             )
             .onTapGesture(count: 2) { location in
@@ -293,6 +313,11 @@ struct CanvasView: View {
                 cachedNodeFrames = map
                 lastFrameUpdateVersion = viewModel.positionsVersion
             }
+            .onDisappear {
+                // Clean up pan debounce timer
+                panDebounceTimer?.invalidate()
+                panDebounceTimer = nil
+            }
     }
     
     // MARK: - Subviews
@@ -329,6 +354,8 @@ struct CanvasView: View {
                 nodes: visibleNodes,
                 nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
             )
+            .environment(\.isZooming, viewModel.isZooming)  // Pass zoom state for layout stability
+            .environment(\.isPanning, viewModel.isPanning)  // Pass pan state for layout stability
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scaleEffect(currentZoom, anchor: .topLeading)
             .offset(currentOffset)

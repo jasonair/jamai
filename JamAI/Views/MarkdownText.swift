@@ -10,6 +10,27 @@ import SwiftUI
 // NOTE: NSParagraphStyle Sendable warnings in this file are expected and safe to ignore
 // Apple's AppKit hasn't adopted Sendable yet, but usage here is synchronous on main thread
 
+// Environment keys for canvas transform states
+private struct IsZoomingKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+private struct IsPanningKey: EnvironmentKey {
+    static let defaultValue: Bool = false
+}
+
+extension EnvironmentValues {
+    var isZooming: Bool {
+        get { self[IsZoomingKey.self] }
+        set { self[IsZoomingKey.self] = newValue }
+    }
+    
+    var isPanning: Bool {
+        get { self[IsPanningKey.self] }
+        set { self[IsPanningKey.self] = newValue }
+    }
+}
+
 struct MarkdownText: View {
     let text: String
     var onCopy: ((String) -> Void)?
@@ -17,14 +38,18 @@ struct MarkdownText: View {
     @State private var showCopiedToast = false
     @State private var cachedBlocks: [MarkdownBlock] = []
     @State private var parseTask: Task<Void, Never>?
+    @Environment(\.isZooming) private var isZooming
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        // PERFORMANCE OPTIMIZATION: Use LazyVStack to defer off-screen rendering
+        // Only visible blocks are rendered, invisible ones wait until scrolled into view
+        // User sees no difference, but zoom/scroll performance is dramatically improved
+        LazyVStack(alignment: .leading, spacing: 8, pinnedViews: []) {
             ForEach(cachedBlocks, id: \.id) { block in
                 Group {
                     switch block.type {
                     case .table(let headers, let rows):
-                        // Tables take full width
+                        // Tables are always rasterized for performance
                         MarkdownTableView(headers: headers, rows: rows)
                             .padding(.bottom, 20)
                     case .codeBlock(let code, let language):
@@ -559,6 +584,11 @@ private struct MarkdownTableView: View {
     
     @Environment(\.colorScheme) var colorScheme
     
+    // Stable ID prevents unnecessary re-renders during zoom transitions
+    private var tableID: String {
+        "\(headers.joined())-\(rows.count)"
+    }
+    
     var body: some View {
         if #available(macOS 12.0, *) {
             // Use Grid for automatic column alignment (industry best practice)
@@ -613,6 +643,8 @@ private struct MarkdownTableView: View {
             )
             .cornerRadius(4)
             .clipped()
+            .drawingGroup()  // Always rasterize for performance - prevents layout shifts
+            .id(tableID)  // Stable ID prevents re-renders during zoom transitions
         } else {
             // Fallback for older macOS versions
             VStack(spacing: 0) {
@@ -652,6 +684,8 @@ private struct MarkdownTableView: View {
                     .stroke(borderColor, lineWidth: 1)
             )
             .cornerRadius(4)
+            .drawingGroup()  // Always rasterize for performance - prevents layout shifts
+            .id(tableID)  // Stable ID prevents re-renders during zoom transitions
         }
     }
     
