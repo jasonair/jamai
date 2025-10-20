@@ -940,11 +940,12 @@ private struct CATableView: View {
     let rows: [[String]]
     @State private var isHovering = false
     @State private var showCopied = false
+    @State private var tableViewRef: TableLayerView?
     
     var body: some View {
         ZStack(alignment: .topTrailing) {
             // The actual table view
-            CATableViewRepresentable(headers: headers, rows: rows)
+            CATableViewRepresentable(headers: headers, rows: rows, tableViewRef: $tableViewRef)
             
             // Copy button (appears on hover)
             if isHovering {
@@ -978,25 +979,8 @@ private struct CATableView: View {
     }
     
     private func copyTableAsImage() {
-        // Find the TableLayerView and render it to an image
-        guard let window = NSApp.keyWindow,
-              let contentView = window.contentView else { return }
-        
-        // Search for TableLayerView in the view hierarchy
-        var tableView: TableLayerView?
-        func findTableView(in view: NSView) {
-            if let found = view as? TableLayerView {
-                tableView = found
-                return
-            }
-            for subview in view.subviews {
-                findTableView(in: subview)
-                if tableView != nil { return }
-            }
-        }
-        findTableView(in: contentView)
-        
-        guard let tableView = tableView else { return }
+        // Use the specific TableLayerView reference for this table
+        guard let tableView = tableViewRef else { return }
         
         // Force layout to ensure all content is rendered
         tableView.layoutSubtreeIfNeeded()
@@ -1061,14 +1045,26 @@ private struct CATableView: View {
 private struct CATableViewRepresentable: NSViewRepresentable {
     let headers: [String]
     let rows: [[String]]
+    @Binding var tableViewRef: TableLayerView?
     @Environment(\.colorScheme) var colorScheme
     
     func makeNSView(context: Context) -> TableLayerView {
         let view = TableLayerView()
+        // Store reference to this specific table view
+        DispatchQueue.main.async {
+            tableViewRef = view
+        }
         return view
     }
     
     func updateNSView(_ nsView: TableLayerView, context: Context) {
+        // Update reference in case it changed
+        if tableViewRef !== nsView {
+            DispatchQueue.main.async {
+                tableViewRef = nsView
+            }
+        }
+        
         nsView.updateTable(
             headers: headers, 
             rows: rows, 
