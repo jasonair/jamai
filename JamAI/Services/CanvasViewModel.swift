@@ -82,6 +82,12 @@ class CanvasViewModel: ObservableObject {
         loadProjectData()
         setupAutosave()
     }
+    
+    deinit {
+        // Cleanup GeminiClient to prevent hanging on app quit
+        geminiClient.cleanup()
+        autosaveTimer?.invalidate()
+    }
 
     func createNoteFromSelection(parentId: UUID, selectedText: String) {
         guard let parent = nodes[parentId] else { return }

@@ -22,6 +22,16 @@ class GeminiClient: ObservableObject {
         self.apiKey = try? KeychainHelper.retrieve(forKey: Config.geminiAPIKeyIdentifier)
     }
     
+    deinit {
+        // Cancel all pending tasks and invalidate session
+        cleanup()
+    }
+    
+    /// Cleanup URLSession
+    func cleanup() {
+        session.invalidateAndCancel()
+    }
+    
     // MARK: - API Key Management
     
     func setAPIKey(_ key: String) throws {

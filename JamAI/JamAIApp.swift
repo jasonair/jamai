@@ -331,65 +331,10 @@ class AppState: ObservableObject {
                 self?.recentProjects = projects
             }
             .store(in: &cancellables)
-        
-        // Register for app termination to save all tabs
-        NotificationCenter.default.addObserver(
-            forName: NSApplication.willTerminateNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.saveAllTabsBeforeQuit()
-        }
     }
     
     deinit {
         NotificationCenter.default.removeObserver(self)
-    }
-    
-    /// Save all open tabs synchronously before app quits
-    private func saveAllTabsBeforeQuit() {
-        if Config.enableVerboseLogging {
-            print("🔄 Saving all \(tabs.count) open tabs before quit...")
-        }
-        
-        for tab in tabs {
-            guard let viewModel = tab.viewModel, let database = tab.database else { continue }
-            
-            // Synchronous save using a semaphore to block until complete
-            let semaphore = DispatchSemaphore(value: 0)
-            
-            Task {
-                do {
-                    try? DocumentManager.shared.saveProject(
-                        viewModel.project,
-                        to: tab.projectURL.deletingPathExtension(),
-                        database: database
-                    )
-                    await viewModel.saveAndWait()
-                    
-                    if Config.enableVerboseLogging {
-                        print("✅ Saved tab: \(tab.projectURL.lastPathComponent)")
-                    }
-                } catch {
-                    if Config.enableVerboseLogging {
-                        print("⚠️ Error saving tab on quit: \(error.localizedDescription)")
-                    }
-                }
-                semaphore.signal()
-            }
-            
-            // Wait up to 5 seconds for this tab to save
-            let timeout = DispatchTime.now() + .seconds(5)
-            if semaphore.wait(timeout: timeout) == .timedOut {
-                if Config.enableVerboseLogging {
-                    print("⚠️ Timeout saving tab: \(tab.projectURL.lastPathComponent)")
-                }
-            }
-        }
-        
-        if Config.enableVerboseLogging {
-            print("✅ All tabs saved before quit")
-        }
     }
     
     func recordRecent(url: URL) {

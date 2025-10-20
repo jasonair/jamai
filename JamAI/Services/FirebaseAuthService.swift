@@ -55,15 +55,21 @@ class FirebaseAuthService: ObservableObject {
     @Published var isLoading = false
     
     private let auth = Auth.auth()
-    private var authStateListener: AuthStateDidChangeListenerHandle?
+    nonisolated(unsafe) private var authStateListener: AuthStateDidChangeListenerHandle?
     
     private init() {
         setupAuthStateListener()
     }
     
     deinit {
+        cleanup()
+    }
+    
+    /// Cleanup auth listener
+    nonisolated func cleanup() {
         if let listener = authStateListener {
             auth.removeStateDidChangeListener(listener)
+            authStateListener = nil
         }
     }
     

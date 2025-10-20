@@ -20,8 +20,8 @@ class FirebaseDataService: ObservableObject {
     @Published var appConfig: AppConfig?
     
     private let db = Firestore.firestore()
-    private var userListener: ListenerRegistration?
-    private var configListener: ListenerRegistration?
+    nonisolated(unsafe) private var userListener: ListenerRegistration?
+    nonisolated(unsafe) private var configListener: ListenerRegistration?
     
     // Collection references
     private var usersCollection: CollectionReference {
@@ -41,8 +41,15 @@ class FirebaseDataService: ObservableObject {
     }
     
     deinit {
+        cleanup()
+    }
+    
+    /// Cleanup Firestore listeners
+    nonisolated func cleanup() {
         userListener?.remove()
+        userListener = nil
         configListener?.remove()
+        configListener = nil
     }
     
     // MARK: - App Configuration
