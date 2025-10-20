@@ -662,24 +662,40 @@ private class TableLayerView: NSView {
         guard !headers.isEmpty, !columnWidths.isEmpty else { return }
         
         var yOffset: CGFloat = 0
-        let rowHeight: CGFloat = 32
+        let minRowHeight: CGFloat = 32
         
         // Header row with darker background
+        var headerHeight = minRowHeight
+        for (index, header) in headers.enumerated() {
+            let requiredHeight = calculateTextHeight(text: header, width: columnWidths[index], isHeader: true)
+            headerHeight = max(headerHeight, requiredHeight + 16) // +16 for padding
+        }
+        
         for (index, header) in headers.enumerated() {
             let xOffset = columnWidths[..<index].reduce(0, +)
             let cellLayer = createCellLayer(
                 text: header,
                 frame: CGRect(x: xOffset, y: yOffset, 
-                            width: columnWidths[index], height: rowHeight),
+                            width: columnWidths[index], height: headerHeight),
                 isHeader: true
             )
             layer?.addSublayer(cellLayer)
         }
         
-        yOffset += rowHeight
+        yOffset += headerHeight
         
-        // Data rows - render ALL cells including empty ones
+        // Data rows - calculate height per row based on content
         for row in rows {
+            var rowHeight = minRowHeight
+            
+            // Calculate max height needed for this row
+            for index in 0..<headers.count {
+                let cellText = index < row.count ? row[index] : ""
+                let requiredHeight = calculateTextHeight(text: cellText, width: columnWidths[index], isHeader: false)
+                rowHeight = max(rowHeight, requiredHeight + 16) // +16 for padding
+            }
+            
+            // Render all cells in this row with the calculated height
             for index in 0..<headers.count {
                 let cellText = index < row.count ? row[index] : ""
                 let xOffset = columnWidths[..<index].reduce(0, +)
@@ -695,8 +711,31 @@ private class TableLayerView: NSView {
         }
         
         // Update container height
-        let totalHeight = CGFloat(rows.count + 1) * rowHeight
         invalidateIntrinsicContentSize()
+    }
+    
+    private func calculateTextHeight(text: String, width: CGFloat, isHeader: Bool) -> CGFloat {
+        guard width > 24 else { return 20 } // Min height for very narrow cells
+        
+        let attributedText = parseMarkdownBold(text, isHeader: isHeader)
+        let mutableAttrString = NSMutableAttributedString(attributedString: attributedText)
+        
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineBreakMode = .byWordWrapping
+        paragraphStyle.alignment = .left
+        mutableAttrString.addAttribute(
+            .paragraphStyle,
+            value: paragraphStyle,
+            range: NSRange(location: 0, length: mutableAttrString.length)
+        )
+        
+        let constraintRect = CGSize(width: width - 24, height: .greatestFiniteMagnitude)
+        let boundingBox = mutableAttrString.boundingRect(
+            with: constraintRect,
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        
+        return ceil(boundingBox.height)
     }
     
     private func createCellLayer(text: String, frame: CGRect, isHeader: Bool) -> CALayer {
@@ -743,10 +782,10 @@ private class TableLayerView: NSView {
         // Parse markdown and create attributed string
         let attributedText = parseMarkdownBold(text, isHeader: isHeader)
         
-        // Add paragraph style for truncation
+        // Add paragraph style for word wrapping
         let mutableAttrString = NSMutableAttributedString(attributedString: attributedText)
         let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.lineBreakMode = .byTruncatingTail
+        paragraphStyle.lineBreakMode = .byWordWrapping  // Changed from truncating to wrapping
         paragraphStyle.alignment = .left
         mutableAttrString.addAttribute(
             .paragraphStyle,
@@ -876,9 +915,13 @@ private class TableLayerView: NSView {
     }
     
     override var intrinsicContentSize: NSSize {
-        let rowHeight: CGFloat = 32
-        let totalHeight = CGFloat(rows.count + 1) * rowHeight
-        return NSSize(width: NSView.noIntrinsicMetric, height: totalHeight)
+        // Calculate total height from actual layer positions
+        guard let sublayers = layer?.sublayers, !sublayers.isEmpty else {
+            return NSSize(width: NSView.noIntrinsicMetric, height: 100)
+        }
+        
+        let maxY = sublayers.map { $0.frame.maxY }.max() ?? 100
+        return NSSize(width: NSView.noIntrinsicMetric, height: maxY)
     }
     
     override func layout() {
@@ -955,11 +998,21 @@ private struct CATableView: View {
         
         guard let tableView = tableView else { return }
         
-        // Render to image
+        // Force layout to ensure all content is rendered
+        tableView.layoutSubtreeIfNeeded()
+        
+        // Render to image using actual bounds (full table size)
         let bounds = tableView.bounds
         let scale = NSScreen.main?.backingScaleFactor ?? 2.0
         
-        let size = CGSize(width: bounds.width * scale, height: bounds.height * scale)
+        // Ensure we capture the full table by checking intrinsic size
+        let intrinsicSize = tableView.intrinsicContentSize
+        let captureSize = CGSize(
+            width: max(bounds.width, intrinsicSize.width == NSView.noIntrinsicMetric ? bounds.width : intrinsicSize.width),
+            height: max(bounds.height, intrinsicSize.height)
+        )
+        
+        let size = CGSize(width: captureSize.width * scale, height: captureSize.height * scale)
         
         guard let bitmap = NSBitmapImageRep(
             bitmapDataPlanes: nil,
@@ -982,14 +1035,14 @@ private struct CATableView: View {
         if let context = NSGraphicsContext.current?.cgContext {
             // CRITICAL: Flip coordinate system to match isFlipped view
             // Without this, the image appears mirrored/backwards
-            context.translateBy(x: 0, y: bounds.height * scale)
+            context.translateBy(x: 0, y: captureSize.height * scale)
             context.scaleBy(x: scale, y: -scale)  // Negative y flips the coordinate system
             tableView.layer?.render(in: context)
         }
         
         NSGraphicsContext.restoreGraphicsState()
         
-        let image = NSImage(size: bounds.size)
+        let image = NSImage(size: captureSize)
         image.addRepresentation(bitmap)
         
         // Copy to pasteboard
