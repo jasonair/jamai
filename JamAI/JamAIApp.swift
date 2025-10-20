@@ -40,20 +40,6 @@ struct UndoStateObserver: View {
     }
 }
 
-// Helper view to observe appearance mode changes
-struct AppearanceObserver: View {
-    @ObservedObject var viewModel: CanvasViewModel
-    @Binding var refreshId: UUID
-    
-    var body: some View {
-        Color.clear
-            .onChange(of: viewModel.appearanceMode) { oldValue, newValue in
-                print("🎨 AppearanceObserver detected change: \(oldValue.rawValue) -> \(newValue.rawValue)")
-                refreshId = UUID()
-            }
-    }
-}
-
 @main
 struct JamAIApp: App {
     @StateObject private var appState = AppState()
@@ -64,7 +50,6 @@ struct JamAIApp: App {
     @State private var showingMaintenanceAlert = false
     @State private var maintenanceMessage = ""
     @State private var isLoadingUserAccount = false
-    @State private var appearanceRefreshId = UUID()
     
     init() {
         // Configure Firebase on app launch
@@ -138,21 +123,11 @@ struct JamAIApp: App {
                 .focusedSceneValue(\.canvasViewModel, appState.viewModel)
                 .frame(minWidth: 1200, minHeight: 800)
                 .background(
-                    ZStack {
-                        UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
-                        if let vm = appState.viewModel {
-                            AppearanceObserver(viewModel: vm, refreshId: $appearanceRefreshId)
-                        }
-                    }
+                    UndoStateObserver(viewModel: appState.viewModel, canUndo: $canUndo, canRedo: $canRedo)
                 )
                 }
             }
-            .preferredColorScheme(appState.viewModel?.appearanceMode.colorScheme)
-            .onChange(of: appState.viewModel?.appearanceMode) { oldValue, newValue in
-                print("🎨 Main App detected appearance change: \(oldValue?.rawValue ?? "nil") -> \(newValue?.rawValue ?? "nil")")
-                appearanceRefreshId = UUID()
-            }
-            .id(appearanceRefreshId)
+            .preferredColorScheme(appState.appearanceMode.colorScheme)
             .onAppear {
                 // Load user account when authenticated
                 if let userId = authService.currentUser?.uid {
@@ -301,7 +276,7 @@ struct JamAIApp: App {
         
         Settings {
             if let viewModel = appState.viewModel {
-                SettingsView(viewModel: viewModel)
+                SettingsView(viewModel: viewModel, appState: appState)
             }
         }
     }
@@ -324,6 +299,14 @@ class AppState: ObservableObject {
     @Published var tabs: [ProjectTab] = []
     @Published var activeTabId: UUID?
     @Published var recentProjects: [URL] = []
+    
+    // App-level appearance mode (persisted in UserDefaults)
+    @Published var appearanceMode: AppearanceMode {
+        didSet {
+            print("🎨 AppState appearance mode changed to: \(appearanceMode.rawValue)")
+            UserDefaults.standard.set(appearanceMode.rawValue, forKey: "appAppearanceMode")
+        }
+    }
     
     // Convenience computed properties for backward compatibility
     var viewModel: CanvasViewModel? {
@@ -350,6 +333,14 @@ class AppState: ObservableObject {
     private var accessingResources: Set<URL> = []
     
     init() {
+        // Load appearance mode from UserDefaults
+        if let savedMode = UserDefaults.standard.string(forKey: "appAppearanceMode"),
+           let mode = AppearanceMode(rawValue: savedMode) {
+            self.appearanceMode = mode
+        } else {
+            self.appearanceMode = .system
+        }
+        
         // Sync published property with manager to ensure SwiftUI reactivity
         recentProjectsManager.$recentProjects
             .sink { [weak self] projects in

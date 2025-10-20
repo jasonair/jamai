@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var viewModel: CanvasViewModel
+    @ObservedObject var appState: AppState
     @State private var apiKey: String = ""
     @State private var showAPIKey = false
     @State private var saveStatus: String?
@@ -60,19 +61,16 @@ struct SettingsView: View {
                 // Appearance Section
                 sectionHeader("Appearance")
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Theme")
+                    Text("Theme (applies to entire app)")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                     
-                    Picker("", selection: $viewModel.appearanceMode) {
+                    Picker("", selection: $appState.appearanceMode) {
                         ForEach(AppearanceMode.allCases, id: \.self) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
                     }
                     .pickerStyle(.segmented)
-                    .onChange(of: viewModel.appearanceMode) { oldValue, newValue in
-                        print("🎨 Settings Picker changed: \(oldValue.rawValue) -> \(newValue.rawValue)")
-                    }
                 }
                 .padding(16)
                 .background(Color(nsColor: .controlBackgroundColor))

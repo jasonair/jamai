@@ -22,18 +22,6 @@ class CanvasViewModel: ObservableObject {
     @Published var generatingNodeId: UUID?
     @Published var errorMessage: String?
     
-    // Appearance mode with explicit change notification
-    var appearanceMode: AppearanceMode {
-        get { project.appearanceMode }
-        set {
-            print("🎨 AppearanceMode changing from \(project.appearanceMode.rawValue) to \(newValue.rawValue)")
-            objectWillChange.send()
-            project.appearanceMode = newValue
-            save()
-            print("🎨 AppearanceMode changed and saved")
-        }
-    }
-    
     // Canvas state
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
