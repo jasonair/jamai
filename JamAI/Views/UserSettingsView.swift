@@ -125,10 +125,18 @@ struct UserSettingsView: View {
                             }
                             .frame(height: 8)
                             
-                            // Additional info
-                            Text("Usage since \(formattedMonthStart())")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
+                            // Additional info with renewal date
+                            HStack {
+                                Text("Usage since \(formattedMonthStart())")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                
+                                Spacer()
+                                
+                                Text(renewalDateText(for: account))
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
                         }
                         .padding()
                         .background(Color(nsColor: .controlBackgroundColor))
@@ -177,39 +185,57 @@ struct UserSettingsView: View {
                         }
                     }
                     
-                    // Credit history
+                    // Account Activity
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Credit History")
-                                .font(.system(size: 18, weight: .semibold))
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Account Activity")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Your JamAI usage this month")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
                             
                             Spacer()
-                            
-                            Button {
-                                loadCreditHistory(userId: user.uid)
-                            } label: {
-                                Image(systemName: "arrow.clockwise")
-                                    .font(.system(size: 14))
-                            }
-                            .buttonStyle(.plain)
                         }
                         
-                        if isLoadingHistory {
-                            ProgressView()
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else if creditHistory.isEmpty {
-                            Text("No transactions yet")
-                                .font(.system(size: 14))
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else {
-                            VStack(spacing: 8) {
-                                ForEach(creditHistory) { transaction in
-                                    CreditTransactionRow(transaction: transaction)
-                                }
-                            }
+                        // Grid of stat cards
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            StatCard(
+                                label: "Nodes Created",
+                                value: "\(account.metadata.totalNodesCreated)",
+                                icon: "square.on.square"
+                            )
+                            
+                            StatCard(
+                                label: "AI Messages",
+                                value: "\(account.metadata.totalMessagesGenerated)",
+                                icon: "wand.and.stars"
+                            )
+                            
+                            StatCard(
+                                label: "Notes Created",
+                                value: "\(account.metadata.totalNotesCreated)",
+                                icon: "note.text"
+                            )
+                            
+                            StatCard(
+                                label: "Child Nodes",
+                                value: "\(account.metadata.totalChildNodesCreated)",
+                                icon: "arrow.triangle.branch"
+                            )
+                            
+                            StatCard(
+                                label: "Expand Actions",
+                                value: "\(account.metadata.totalExpandActions)",
+                                icon: "arrow.up.right.square"
+                            )
+                            
+                            StatCard(
+                                label: "AI Team Members",
+                                value: "\(account.metadata.totalTeamMembersUsed)",
+                                icon: "person.2.fill"
+                            )
                         }
                     }
                     
@@ -327,6 +353,33 @@ struct UserSettingsView: View {
         return "this month"
     }
     
+    private func renewalDateText(for account: UserAccount) -> String {
+        let calendar = Calendar.current
+        
+        if account.plan == .trial, let expiresAt = account.planExpiresAt {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            formatter.timeStyle = .none
+            let daysRemaining = calendar.dateComponents([.day], from: Date(), to: expiresAt).day ?? 0
+            return "Trial ends in \(max(0, daysRemaining)) days (\(formatter.string(from: expiresAt)))"
+        } else {
+            // Calculate next month start
+            let now = Date()
+            var components = calendar.dateComponents([.year, .month], from: now)
+            components.month! += 1
+            
+            if let nextMonth = calendar.date(from: components) {
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .none
+                let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextMonth).day ?? 0
+                return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextMonth)))"
+            }
+            
+            return "Renews next month"
+        }
+    }
+    
     private func upgradePlan(to plan: UserPlan) {
         guard let userId = authService.currentUser?.uid else { return }
         
@@ -363,6 +416,38 @@ struct UserSettingsView: View {
         } catch {
             print("Sign out failed: \(error)")
         }
+    }
+}
+
+// MARK: - Stat Card
+
+struct StatCard: View {
+    let label: String
+    let value: String
+    let icon: String
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: icon)
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+                
+                Spacer()
+            }
+            
+            Text(label)
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+            
+            Text(value)
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(12)
     }
 }
 
@@ -454,7 +539,7 @@ struct CreditTransactionRow: View {
                 Text(transaction.description)
                     .font(.system(size: 13, weight: .medium))
                 
-                Text(transaction.timestamp, style: .relative)
+                Text(formatTimestamp(transaction.timestamp))
                     .font(.system(size: 11))
                     .foregroundColor(.secondary)
             }
@@ -479,6 +564,13 @@ struct CreditTransactionRow: View {
         case .adminAdjustment: return "wrench"
         case .refund: return "arrow.counterclockwise"
         }
+    }
+    
+    private func formatTimestamp(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short  // Shows hours and minutes only, no seconds
+        return formatter.string(from: date)
     }
 }
 

@@ -114,6 +114,10 @@ struct UserMetadata: Codable {
     var totalNodesCreated: Int
     var totalMessagesGenerated: Int
     var totalEdgesCreated: Int
+    var totalNotesCreated: Int
+    var totalTeamMembersUsed: Int
+    var totalExpandActions: Int
+    var totalChildNodesCreated: Int
     var lastAppVersion: String
     var deviceInfo: String
     
@@ -121,6 +125,10 @@ struct UserMetadata: Codable {
         self.totalNodesCreated = 0
         self.totalMessagesGenerated = 0
         self.totalEdgesCreated = 0
+        self.totalNotesCreated = 0
+        self.totalTeamMembersUsed = 0
+        self.totalExpandActions = 0
+        self.totalChildNodesCreated = 0
         self.lastAppVersion = ""
         self.deviceInfo = ""
     }
@@ -131,6 +139,10 @@ struct UserMetadata: Codable {
         self.totalNodesCreated = try container.decodeIfPresent(Int.self, forKey: .totalNodesCreated) ?? 0
         self.totalMessagesGenerated = try container.decodeIfPresent(Int.self, forKey: .totalMessagesGenerated) ?? 0
         self.totalEdgesCreated = try container.decodeIfPresent(Int.self, forKey: .totalEdgesCreated) ?? 0
+        self.totalNotesCreated = try container.decodeIfPresent(Int.self, forKey: .totalNotesCreated) ?? 0
+        self.totalTeamMembersUsed = try container.decodeIfPresent(Int.self, forKey: .totalTeamMembersUsed) ?? 0
+        self.totalExpandActions = try container.decodeIfPresent(Int.self, forKey: .totalExpandActions) ?? 0
+        self.totalChildNodesCreated = try container.decodeIfPresent(Int.self, forKey: .totalChildNodesCreated) ?? 0
         self.lastAppVersion = try container.decodeIfPresent(String.self, forKey: .lastAppVersion) ?? ""
         self.deviceInfo = try container.decodeIfPresent(String.self, forKey: .deviceInfo) ?? ""
     }
