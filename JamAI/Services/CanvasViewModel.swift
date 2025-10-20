@@ -1283,6 +1283,55 @@ class CanvasViewModel: ObservableObject {
         zoomToCenter(newZoom: Config.defaultZoom)
     }
     
+    func zoomToFit() {
+        guard !nodes.isEmpty else {
+            resetZoom()
+            return
+        }
+        
+        // Calculate bounding box of all nodes
+        var minX = CGFloat.greatestFiniteMagnitude
+        var minY = CGFloat.greatestFiniteMagnitude
+        var maxX = -CGFloat.greatestFiniteMagnitude
+        var maxY = -CGFloat.greatestFiniteMagnitude
+        
+        for node in nodes.values {
+            let nodeWidth = node.width
+            let nodeHeight = node.height
+            
+            minX = min(minX, node.x)
+            minY = min(minY, node.y)
+            maxX = max(maxX, node.x + nodeWidth)
+            maxY = max(maxY, node.y + nodeHeight)
+        }
+        
+        let contentWidth = maxX - minX
+        let contentHeight = maxY - minY
+        let contentCenterX = (minX + maxX) / 2
+        let contentCenterY = (minY + maxY) / 2
+        
+        // Add padding (20% of content size)
+        let padding: CGFloat = 1.2
+        
+        // Calculate zoom to fit content with padding
+        let zoomX = viewportSize.width / (contentWidth * padding)
+        let zoomY = viewportSize.height / (contentHeight * padding)
+        let newZoom = max(Config.minZoom, min(Config.maxZoom, min(zoomX, zoomY)))
+        
+        // Calculate offset to center content
+        let viewportCenterX = viewportSize.width / 2
+        let viewportCenterY = viewportSize.height / 2
+        let newOffset = CGSize(
+            width: viewportCenterX - contentCenterX * newZoom,
+            height: viewportCenterY - contentCenterY * newZoom
+        )
+        
+        withAnimation(.easeOut(duration: 0.3)) {
+            zoom = newZoom
+            offset = newOffset
+        }
+    }
+    
     private func zoomToCenter(newZoom: CGFloat) {
         let oldZoom = zoom
         // Calculate viewport center

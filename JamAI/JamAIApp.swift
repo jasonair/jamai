@@ -98,7 +98,6 @@ struct JamAIApp: App {
                     // Active project canvas (bottom layer)
                     if let viewModel = appState.viewModel {
                         CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
-                            .preferredColorScheme(viewModel.project.appearanceMode.colorScheme)
                             .id(appState.activeTabId) // Force refresh when tab changes
                     }
                     
@@ -128,6 +127,8 @@ struct JamAIApp: App {
                 )
                 }
             }
+            .preferredColorScheme(appState.viewModel?.project.appearanceMode.colorScheme)
+            .id(appState.viewModel?.project.appearanceMode.rawValue ?? "system")
             .onAppear {
                 // Load user account when authenticated
                 if let userId = authService.currentUser?.uid {

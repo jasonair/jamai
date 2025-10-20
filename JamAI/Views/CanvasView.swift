@@ -430,6 +430,22 @@ struct CanvasView: View {
                     .padding(.bottom, 20)
                 }
             }
+            
+            // Zoom controls (top center, always visible)
+            VStack {
+                HStack {
+                    Spacer()
+                    ZoomControlsView(
+                        onZoomIn: { viewModel.zoomIn() },
+                        onZoomOut: { viewModel.zoomOut() },
+                        onZoomReset: { viewModel.resetZoom() },
+                        onZoomFit: { viewModel.zoomToFit() }
+                    )
+                    Spacer()
+                }
+                .padding(.top, 60) // Space for tab bar
+                Spacer()
+            }
         }
         .allowsHitTesting(true)
     }
