@@ -580,6 +580,7 @@ private struct CodeBlockView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(borderColor, lineWidth: 1)
         )
+        .drawingGroup() // GPU rasterization for smooth drag/pan/zoom performance
     }
     
     private var headerBackground: Color {
@@ -846,8 +847,27 @@ private class TableLayerView: NSView {
         return flippedContext.makeImage() ?? cgImage
     }
     
+    // Unescape markdown escape sequences (e.g., \$ -> $, \* -> *)
+    private func unescapeMarkdown(_ text: String) -> String {
+        var result = text
+        // Remove backslashes before common markdown special characters
+        result = result.replacingOccurrences(of: "\\$", with: "$")
+        result = result.replacingOccurrences(of: "\\*", with: "*")
+        result = result.replacingOccurrences(of: "\\_", with: "_")
+        result = result.replacingOccurrences(of: "\\[", with: "[")
+        result = result.replacingOccurrences(of: "\\]", with: "]")
+        result = result.replacingOccurrences(of: "\\(", with: "(")
+        result = result.replacingOccurrences(of: "\\)", with: ")")
+        result = result.replacingOccurrences(of: "\\#", with: "#")
+        result = result.replacingOccurrences(of: "\\`", with: "`")
+        return result
+    }
+    
     // Parse markdown bold syntax **text** and return NSAttributedString
     private func parseMarkdownBold(_ text: String, isHeader: Bool) -> NSAttributedString {
+        // First unescape markdown escape sequences
+        let unescapedText = unescapeMarkdown(text)
+        
         let fontSize: CGFloat = isHeader ? 14 : 13
         let baseFont = isHeader 
             ? NSFont.systemFont(ofSize: fontSize, weight: .semibold)
@@ -862,15 +882,15 @@ private class TableLayerView: NSView {
         let pattern = "\\*\\*([^*]+)\\*\\*"
         let regex = try? NSRegularExpression(pattern: pattern)
         
-        var lastIndex = text.startIndex
-        let nsString = text as NSString
-        let matches = regex?.matches(in: text, range: NSRange(location: 0, length: nsString.length)) ?? []
+        var lastIndex = unescapedText.startIndex
+        let nsString = unescapedText as NSString
+        let matches = regex?.matches(in: unescapedText, range: NSRange(location: 0, length: nsString.length)) ?? []
         
         for match in matches {
             // Add text before bold
-            let beforeRange = lastIndex..<text.index(text.startIndex, offsetBy: match.range.location)
+            let beforeRange = lastIndex..<unescapedText.index(unescapedText.startIndex, offsetBy: match.range.location)
             if !beforeRange.isEmpty {
-                let beforeText = String(text[beforeRange])
+                let beforeText = String(unescapedText[beforeRange])
                 let attrs: [NSAttributedString.Key: Any] = [
                     .font: baseFont,
                     .foregroundColor: textColor
@@ -889,12 +909,12 @@ private class TableLayerView: NSView {
                 attributedString.append(NSAttributedString(string: boldText, attributes: attrs))
             }
             
-            lastIndex = text.index(text.startIndex, offsetBy: match.range.location + match.range.length)
+            lastIndex = unescapedText.index(unescapedText.startIndex, offsetBy: match.range.location + match.range.length)
         }
         
         // Add remaining text after last bold
-        if lastIndex < text.endIndex {
-            let remainingText = String(text[lastIndex...])
+        if lastIndex < unescapedText.endIndex {
+            let remainingText = String(unescapedText[lastIndex...])
             let attrs: [NSAttributedString.Key: Any] = [
                 .font: baseFont,
                 .foregroundColor: textColor
@@ -908,7 +928,7 @@ private class TableLayerView: NSView {
                 .font: baseFont,
                 .foregroundColor: textColor
             ]
-            return NSAttributedString(string: text, attributes: attrs)
+            return NSAttributedString(string: unescapedText, attributes: attrs)
         }
         
         return attributedString
@@ -1247,6 +1267,12 @@ private struct NSTextViewWrapper: NSViewRepresentable {
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NonPropagatingScrollView()
+        
+        // PERFORMANCE FIX: Enable CALayer rasterization for GPU-accelerated rendering
+        // This prevents layout recalculation during drag/pan/zoom operations
+        scrollView.wantsLayer = true
+        scrollView.layer?.shouldRasterize = true
+        scrollView.layer?.rasterizationScale = NSScreen.main?.backingScaleFactor ?? 2.0
         
         let textView = NSTextView()
         textView.isEditable = false
