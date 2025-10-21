@@ -59,3 +59,7 @@ Icon
 *.tmp
 *.bak
 *~
+
+# Firebase
+firebase-debug.log
+firebase-debug.*.log

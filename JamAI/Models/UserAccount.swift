@@ -11,39 +11,67 @@ import Foundation
 enum UserPlan: String, Codable, CaseIterable {
     case trial = "trial"
     case free = "free"
-    case premium = "premium"
     case pro = "pro"
+    case teams = "teams"
+    case enterprise = "enterprise"
     
     var displayName: String {
         switch self {
         case .trial: return "Trial"
         case .free: return "Free"
-        case .premium: return "Premium"
         case .pro: return "Pro"
+        case .teams: return "Teams"
+        case .enterprise: return "Enterprise"
+        }
+    }
+    
+    var monthlyPrice: String {
+        switch self {
+        case .trial: return "$0" // 2-week Pro trial
+        case .free: return "$0"
+        case .pro: return "$15"
+        case .teams: return "$30"
+        case .enterprise: return "Custom"
         }
     }
     
     var monthlyCredits: Int {
         switch self {
-        case .trial: return 1000
-        case .free: return 500
-        case .premium: return 5000
-        case .pro: return 20000
+        case .trial: return 100 // 2-week Pro trial with Pro features
+        case .free: return 100 // ~100K tokens ≈ $0.06 cost
+        case .pro: return 1000 // ~1M tokens ≈ $0.60 cost
+        case .teams: return 1500 // ~1.5M tokens ≈ $0.90 cost
+        case .enterprise: return 5000 // ~5M tokens ≈ $3 cost
         }
     }
     
-    var maxTeamMembers: Int {
+    var maxTeamMembersPerJam: Int {
         switch self {
-        case .trial: return 3
-        case .free: return 2
-        case .premium: return 5
-        case .pro: return 10
+        case .trial: return 12 // Pro trial features
+        case .free: return 3
+        case .pro: return 12
+        case .teams: return -1 // Unlimited
+        case .enterprise: return -1 // Unlimited
         }
+    }
+    
+    var maxSavedJams: Int {
+        switch self {
+        case .trial: return -1 // Unlimited during trial
+        case .free: return 3
+        case .pro: return -1 // Unlimited
+        case .teams: return -1 // Unlimited
+        case .enterprise: return -1 // Unlimited
+        }
+    }
+    
+    var hasUnlimitedTeamMembers: Bool {
+        return maxTeamMembersPerJam == -1
     }
     
     var canAccessAdvancedFeatures: Bool {
         switch self {
-        case .trial, .premium, .pro: return true
+        case .trial, .pro, .teams, .enterprise: return true
         case .free: return false
         }
     }
@@ -52,9 +80,97 @@ enum UserPlan: String, Codable, CaseIterable {
         switch self {
         case .trial: return "All experience levels"
         case .free: return "Junior & Intermediate"
-        case .premium: return "All experience levels"
         case .pro: return "All experience levels"
+        case .teams: return "All experience levels"
+        case .enterprise: return "All experience levels"
         }
+    }
+    
+    var allowsSeniorAndExpert: Bool {
+        switch self {
+        case .trial, .pro, .teams, .enterprise: return true
+        case .free: return false
+        }
+    }
+    
+    var features: [String] {
+        switch self {
+        case .trial:
+            return [
+                "2-week Pro trial",
+                "100 prompt credits (~100K tokens)",
+                "12 AI Team Members per Jam",
+                "All experience levels",
+                "Gemini 2.5 Flash-Lite + Claude Instant",
+                "Advanced web search",
+                "Image generation (low res)"
+            ]
+        case .free:
+            return [
+                "100 prompt credits/month (~100K tokens)",
+                "3 AI Team Members (Junior & Intermediate)",
+                "Local model + Gemini 2.0 Flash-Lite",
+                "Basic web search (Serper/Tavily)",
+                "Up to 3 saved Jams",
+                "Community support"
+            ]
+        case .pro:
+            return [
+                "Everything in Free, plus:",
+                "1,000 prompt credits/month (~1M tokens)",
+                "Gemini 2.5 Flash-Lite + Claude Instant",
+                "12 AI Team Members per Jam (All levels)",
+                "Advanced web search (Perplexity-style)",
+                "Image generation (low res)",
+                "Priority support"
+            ]
+        case .teams:
+            return [
+                "Everything in Pro, plus:",
+                "1,500 prompt credits per user/month (~1.5M tokens)",
+                "Shared credit pool & add-on purchasing",
+                "Unlimited AI Team Members",
+                "Create Teams from multiple AI Team Members"
+            ]
+        case .enterprise:
+            return [
+                "Everything in Teams, plus:",
+                "5,000 prompt credits per user/month (~5M tokens)",
+                "Private Gemini Vertex",
+                "Dedicated account manager",
+                "Custom integrations",
+                "Priority support"
+            ]
+        }
+    }
+}
+
+/// Stripe subscription status
+enum SubscriptionStatus: String, Codable {
+    case active = "active"
+    case pastDue = "past_due"
+    case canceled = "canceled"
+    case unpaid = "unpaid"
+    case trialing = "trialing"
+    case incomplete = "incomplete"
+    case incompleteExpired = "incomplete_expired"
+    case paused = "paused"
+    
+    var displayName: String {
+        switch self {
+        case .active: return "Active"
+        case .pastDue: return "Past Due"
+        case .canceled: return "Canceled"
+        case .unpaid: return "Unpaid"
+        case .trialing: return "Trial"
+        case .incomplete: return "Incomplete"
+        case .incompleteExpired: return "Expired"
+        case .paused: return "Paused"
+        }
+    }
+    
+    var isActive: Bool {
+        return self == .active || self == .trialing
     }
 }
 
@@ -72,6 +188,12 @@ struct UserAccount: Codable, Identifiable {
     var planExpiresAt: Date?
     var isActive: Bool
     
+    // Stripe integration fields
+    var stripeCustomerId: String?
+    var stripeSubscriptionId: String?
+    var subscriptionStatus: SubscriptionStatus?
+    var nextBillingDate: Date?
+    
     /// User metadata for analytics
     var metadata: UserMetadata
     
@@ -83,7 +205,11 @@ struct UserAccount: Codable, Identifiable {
         plan: UserPlan = .trial,
         credits: Int? = nil,
         createdAt: Date = Date(),
-        lastLoginAt: Date = Date()
+        lastLoginAt: Date = Date(),
+        stripeCustomerId: String? = nil,
+        stripeSubscriptionId: String? = nil,
+        subscriptionStatus: SubscriptionStatus? = nil,
+        nextBillingDate: Date? = nil
     ) {
         self.id = id
         self.email = email
@@ -96,6 +222,10 @@ struct UserAccount: Codable, Identifiable {
         self.lastLoginAt = lastLoginAt
         self.planExpiresAt = plan == .trial ? Calendar.current.date(byAdding: .day, value: 14, to: createdAt) : nil
         self.isActive = true
+        self.stripeCustomerId = stripeCustomerId
+        self.stripeSubscriptionId = stripeSubscriptionId
+        self.subscriptionStatus = subscriptionStatus
+        self.nextBillingDate = nextBillingDate
         self.metadata = UserMetadata()
     }
     

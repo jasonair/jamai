@@ -322,8 +322,9 @@ struct UserSettingsView: View {
         switch plan {
         case .trial: return .orange
         case .free: return .gray
-        case .premium: return .purple
         case .pro: return .blue
+        case .teams: return .purple
+        case .enterprise: return .green
         }
     }
     
@@ -461,13 +462,29 @@ struct PlanCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text(plan.displayName)
-                    .font(.system(size: 16, weight: .bold))
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(plan.displayName)
+                        .font(.system(size: 16, weight: .bold))
+                    
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(plan.monthlyPrice)
+                            .font(.system(size: 24, weight: .bold))
+                        if plan.monthlyPrice != "Custom" && plan.monthlyPrice != "$0" {
+                            Text("/ month")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        } else if plan.monthlyPrice == "$0" {
+                            Text("per user/month")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
                 
                 Spacer()
                 
                 if isCurrentPlan {
-                    Text("Your Current Plan")
+                    Text("Current")
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(.green)
                         .padding(.horizontal, 8)
@@ -477,22 +494,25 @@ struct PlanCard: View {
                 }
             }
             
+            Divider()
+            
             VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 4) {
-                    Text("\(plan.monthlyCredits)")
-                        .font(.system(size: 20, weight: .bold))
-                    Text("credits/month")
-                        .font(.system(size: 12))
-                        .foregroundColor(.secondary)
-                }
+                Text("\(plan.monthlyCredits) prompt credits/month")
+                    .font(.system(size: 12, weight: .medium))
                 
-                Text("• \(plan.maxTeamMembers) AI team members")
-                    .font(.system(size: 12))
+                Text("• \(plan.hasUnlimitedTeamMembers ? "Unlimited" : "\(plan.maxTeamMembersPerJam)") AI team members\(plan.hasUnlimitedTeamMembers ? "" : " per Jam")")
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
                 
                 Text("• \(plan.experienceLevelAccess)")
-                    .font(.system(size: 12))
+                    .font(.system(size: 11))
                     .foregroundColor(.secondary)
+                
+                if plan.maxSavedJams != -1 {
+                    Text("• Up to \(plan.maxSavedJams) saved Jams")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
             }
             
             if !isCurrentPlan {

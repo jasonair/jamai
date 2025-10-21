@@ -28,7 +28,7 @@ struct TeamMemberModal: View {
         // Map UserPlan to PlanTier for experience level access
         switch account.plan {
         case .trial, .pro: return .pro
-        case .premium: return .pro
+        case .teams, .enterprise: return .enterprise
         case .free: return .free
         }
     }

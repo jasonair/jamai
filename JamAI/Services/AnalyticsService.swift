@@ -256,15 +256,20 @@ class AnalyticsService {
                 
                 switch account.plan {
                 case .trial:
-                    analytics.totalTrialUsers += 1
+                    // Trial is part of Free plan (2-week Pro trial)
+                    analytics.totalFreeUsers += 1
+                    analytics.totalTrialUsers += 1 // Track separately for conversion metrics
                 case .free:
                     analytics.totalFreeUsers += 1
-                case .premium:
-                    analytics.totalPaidUsers += 1
-                    analytics.estimatedRevenue += 9.99 // Premium monthly price
                 case .pro:
                     analytics.totalPaidUsers += 1
-                    analytics.estimatedRevenue += 29.99 // Pro monthly price
+                    analytics.estimatedRevenue += 15.00 // Pro monthly price
+                case .teams:
+                    analytics.totalPaidUsers += 1
+                    analytics.estimatedRevenue += 30.00 // Teams monthly price
+                case .enterprise:
+                    analytics.totalPaidUsers += 1
+                    analytics.estimatedRevenue += 99.00 // Enterprise estimated monthly price (custom pricing)
                 }
             }
             

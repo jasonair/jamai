@@ -446,11 +446,14 @@ struct NodeView: View {
                 Button(action: { 
                     // Check team member limit before allowing addition
                     if let account = dataService.userAccount {
-                        let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
-                        if currentTeamMemberCount >= account.plan.maxTeamMembers {
-                            // Show alert about limit reached
-                            showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembers, currentPlan: account.plan)
-                            return
+                        // Skip limit check if unlimited (-1)
+                        if !account.plan.hasUnlimitedTeamMembers {
+                            let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
+                            if currentTeamMemberCount >= account.plan.maxTeamMembersPerJam {
+                                // Show alert about limit reached
+                                showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembersPerJam, currentPlan: account.plan)
+                                return
+                            }
                         }
                     }
                     
@@ -750,22 +753,29 @@ struct NodeView: View {
             
             // Input field with buttons in bottom corners
             ZStack(alignment: .bottomLeading) {
-                // Text field with full area - minimal bottom padding
+                // Text field with full area - better bottom padding for button spacing
                 TextField("Ask a question...", text: $promptText, axis: .vertical)
                     .textFieldStyle(PlainTextFieldStyle())
                     .font(.system(size: 15))
                     .padding(.horizontal, 8)
                     .padding(.top, 8)
-                    .padding(.bottom, 24) // Just enough for button row
+                    .padding(.bottom, 36) // More space between text and buttons
                     .background(Color.secondary.opacity(0.1))
                     .cornerRadius(8)
                     .lineLimit(3...6)
                     .focused($isPromptFocused)
-                    .onSubmit {
-                        submitPrompt()
+                    .onKeyPress(.return, phases: .down) { keyPress in
+                        // Shift+Return: insert newline (default behavior)
+                        // Return alone: submit prompt
+                        if keyPress.modifiers.contains(.shift) {
+                            return .ignored // Let TextField handle newline
+                        } else {
+                            submitPrompt()
+                            return .handled
+                        }
                     }
                 
-                // Button row at bottom - tight to bottom edge
+                // Button row at bottom - aligned with text padding
                 HStack {
                     // Image upload button (bottom left)
                     Button(action: selectImage) {
@@ -790,10 +800,10 @@ struct NodeView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .disabled(promptText.isEmpty && selectedImage == nil)
-                    .keyboardShortcut(.return, modifiers: [])
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                 }
+                .padding(.horizontal, 8) // Match TextField horizontal padding
                 .frame(maxWidth: .infinity, alignment: .bottom)
             }
             }
