@@ -381,7 +381,7 @@ struct UserSettingsView: View {
                             )
                             
                             StatCard(
-                                label: "AI Team Members",
+                                label: "AI Team Members Used",
                                 value: "\(account.metadata.totalTeamMembersUsed)",
                                 icon: "person.2.fill"
                             )

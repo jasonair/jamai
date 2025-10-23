@@ -262,6 +262,19 @@ class CanvasViewModel: ObservableObject {
             Task { [weak self, dbActor, node] in
                 do {
                     try await dbActor.saveNode(node)
+
+                    // Track node creation analytics
+                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                        await AnalyticsService.shared.trackNodeCreation(
+                            userId: userId,
+                            projectId: node.projectId,
+                            nodeId: node.id,
+                            nodeType: "standard",
+                            creationMethod: .manual,
+                            parentNodeId: nil,
+                            teamMemberRoleId: node.teamMember?.roleId
+                        )
+                    }
                 } catch {
                     await MainActor.run {
                         self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
@@ -455,6 +468,11 @@ class CanvasViewModel: ObservableObject {
         // Generate response without adding the prompt to conversation first
         Task { @MainActor [weak self] in
             self?.generateExpandedResponse(for: childId, prompt: expansionPrompt, selectedText: selectedText)
+
+            // Track expand action analytics
+            if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalExpandActions")
+            }
         }
     }
 
