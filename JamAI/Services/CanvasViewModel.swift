@@ -724,6 +724,15 @@ class CanvasViewModel: ObservableObject {
         
         undoManager.record(.updateNode(oldNode: oldNode, newNode: updatedNode))
         
+        // Check if a team member was removed
+        if oldNode.teamMember != nil && updatedNode.teamMember == nil {
+            if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                Task {
+                    await FirebaseDataService.shared.decrementUserMetadata(userId: userId, field: "totalTeamMembersUsed")
+                }
+            }
+        }
+
         // Debounce database write unless immediate
         if immediate {
             let dbActor = self.dbActor
@@ -774,9 +783,35 @@ class CanvasViewModel: ObservableObject {
         // Record node deletion with connected edges for proper undo
         undoManager.record(.deleteNode(node, connectedEdges: Array(connectedEdges)))
         let dbActor = self.dbActor
-        Task { [weak self, dbActor, nodeId] in
+        Task { [weak self, dbActor, nodeId, node] in
             do {
                 try await dbActor.deleteNode(id: nodeId)
+
+                // Decrement the user-facing metadata stat
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    var fieldToDecrement: String?
+                    switch node.type {
+                    case .standard:
+                        if node.parentId != nil {
+                            fieldToDecrement = "totalChildNodesCreated"
+                        } else {
+                            fieldToDecrement = "totalNodesCreated"
+                        }
+                    case .note:
+                        fieldToDecrement = "totalNotesCreated"
+                    default:
+                        break // Other types don't have counters
+                    }
+
+                    if let field = fieldToDecrement {
+                        await FirebaseDataService.shared.decrementUserMetadata(userId: userId, field: field)
+                    }
+
+                    // Also decrement team member count if one was assigned
+                    if node.teamMember != nil {
+                        await FirebaseDataService.shared.decrementUserMetadata(userId: userId, field: "totalTeamMembersUsed")
+                    }
+                }
             } catch {
                 await MainActor.run {
                     self?.errorMessage = "Failed to delete node: \(error.localizedDescription)"

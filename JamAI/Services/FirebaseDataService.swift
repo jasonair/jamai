@@ -423,6 +423,24 @@ class FirebaseDataService: ObservableObject {
         }
     }
 
+    /// Atomically decrement a numeric field in the user's metadata.
+    func decrementUserMetadata(userId: String, field: String, by amount: Int = 1) async {
+        guard !userId.isEmpty else {
+            print("⚠️ Attempted to decrement metadata with empty userId.")
+            return
+        }
+
+        let fieldPath = "metadata.\(field)"
+
+        do {
+            try await usersCollection.document(userId).updateData([
+                fieldPath: FieldValue.increment(Int64(-amount))
+            ])
+        } catch {
+            print("❌ Failed to decrement metadata field '\(field)' for user \(userId). Error: \(error)")
+        }
+    }
+
     // MARK: - Stripe Sync Functions
     
     /// Sync user account with Stripe subscription via HTTPS function
