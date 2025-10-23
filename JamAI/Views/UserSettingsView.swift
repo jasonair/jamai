@@ -167,6 +167,155 @@ struct UserSettingsView: View {
                         }
                     }
                     
+                    // Stripe Subscription Info
+                    if let stripeCustomerId = account.stripeCustomerId {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Subscription")
+                                .font(.system(size: 18, weight: .semibold))
+                            
+                            VStack(spacing: 12) {
+                                // Stripe Customer ID
+                                HStack {
+                                    Image(systemName: "creditcard.fill")
+                                        .foregroundColor(.accentColor)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("Stripe Account")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                        Text(stripeCustomerId)
+                                            .font(.system(size: 13, design: .monospaced))
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                }
+                                
+                                // Subscription Status
+                                if let status = account.subscriptionStatus {
+                                    HStack {
+                                        Image(systemName: statusIcon(for: status))
+                                            .foregroundColor(statusColor(for: status))
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Status")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                            Text(status.displayName)
+                                                .font(.system(size: 14, weight: .semibold))
+                                                .foregroundColor(statusColor(for: status))
+                                        }
+                                        Spacer()
+                                    }
+                                }
+                                
+                                // Next Billing Date
+                                if let nextBilling = account.nextBillingDate {
+                                    HStack {
+                                        Image(systemName: "calendar")
+                                            .foregroundColor(.accentColor)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Next Billing Date")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                            Text(formatDate(nextBilling))
+                                                .font(.system(size: 14))
+                                        }
+                                        Spacer()
+                                    }
+                                }
+                                
+                                // Subscription ID
+                                if let subscriptionId = account.stripeSubscriptionId {
+                                    HStack {
+                                        Image(systemName: "doc.text.fill")
+                                            .foregroundColor(.accentColor)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text("Subscription ID")
+                                                .font(.system(size: 12))
+                                                .foregroundColor(.secondary)
+                                            Text(subscriptionId)
+                                                .font(.system(size: 11, design: .monospaced))
+                                                .lineLimit(1)
+                                        }
+                                        Spacer()
+                                    }
+                                }
+                                
+                                // Manage Subscription Button
+                                Button {
+                                    Task {
+                                        do {
+                                            let portalURL = try await dataService.createStripePortalSession(returnURL: "http://localhost:3000/account")
+                                            NSWorkspace.shared.open(portalURL)
+                                        } catch {
+                                            print("Failed to open Stripe portal: \(error)")
+                                        }
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "gear")
+                                        Text("Manage Subscription")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
+                                    .background(Color.accentColor.opacity(0.1))
+                                    .foregroundColor(.accentColor)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding()
+                            .background(Color(nsColor: .controlBackgroundColor))
+                            .cornerRadius(12)
+                        }
+                    } else {
+                        // No Stripe subscription - show sync message
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("Subscription")
+                                .font(.system(size: 18, weight: .semibold))
+                            
+                            VStack(spacing: 12) {
+                                HStack(spacing: 12) {
+                                    Image(systemName: "info.circle.fill")
+                                        .font(.system(size: 24))
+                                        .foregroundColor(.orange)
+                                    
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text("Not Connected to Stripe")
+                                            .font(.system(size: 14, weight: .semibold))
+                                        Text("Subscribe via the website to unlock paid features")
+                                            .font(.system(size: 12))
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                }
+                                
+                                Button {
+                                    if let url = URL(string: "https://jamai.app/pricing") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                } label: {
+                                    HStack {
+                                        Image(systemName: "arrow.up.right.square")
+                                        Text("View Pricing & Subscribe")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 36)
+                                    .background(Color.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .padding()
+                            .background(Color.orange.opacity(0.05))
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                    }
+                    
                     // Plan comparison
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Plans")
@@ -312,6 +461,13 @@ struct UserSettingsView: View {
                     }
                 }
                 loadCreditHistory(userId: userId)
+                Task {
+                    do {
+                        try await dataService.syncWithStripe(userId: userId, email: authService.currentUser?.email ?? "")
+                    } catch {
+                        // Non-fatal
+                    }
+                }
             }
         }
     }
@@ -417,6 +573,41 @@ struct UserSettingsView: View {
         } catch {
             print("Sign out failed: \(error)")
         }
+    }
+    
+    // MARK: - Stripe Helpers
+    
+    private func statusIcon(for status: SubscriptionStatus) -> String {
+        switch status {
+        case .active: return "checkmark.circle.fill"
+        case .trialing: return "clock.fill"
+        case .pastDue: return "exclamationmark.triangle.fill"
+        case .canceled: return "xmark.circle.fill"
+        case .unpaid: return "exclamationmark.circle.fill"
+        case .incomplete: return "clock.badge.exclamationmark"
+        case .incompleteExpired: return "clock.badge.xmark"
+        case .paused: return "pause.circle.fill"
+        }
+    }
+    
+    private func statusColor(for status: SubscriptionStatus) -> Color {
+        switch status {
+        case .active: return .green
+        case .trialing: return .blue
+        case .pastDue: return .orange
+        case .canceled: return .red
+        case .unpaid: return .red
+        case .incomplete: return .orange
+        case .incompleteExpired: return .red
+        case .paused: return .gray
+        }
+    }
+    
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        return formatter.string(from: date)
     }
 }
 

@@ -9,6 +9,7 @@ import Foundation
 import Combine
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseCore
 
 /// Firestore database service
 @MainActor
@@ -397,5 +398,83 @@ class FirebaseDataService: ObservableObject {
         } catch {
             print("Failed to adjust credits: \(error)")
         }
+    }
+    
+    // MARK: - Stripe Sync Functions
+    
+    /// Sync user account with Stripe subscription via HTTPS function
+    func syncWithStripe(userId: String, email: String) async throws {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
+            throw NSError(domain: "FirebaseDataService", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        let token = try await currentUser.getIDToken()
+        guard let url = URL(string: "https://jamai-stripe-gateway-dexvxx91.ew.gateway.dev/sync") else {
+            throw NSError(domain: "FirebaseDataService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid API Gateway URL"])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.httpBody = Data("{}".utf8)
+        let (_, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw NSError(domain: "FirebaseDataService", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Sync failed with status \(http.statusCode)"])
+        }
+        await refreshUserAccount(userId: userId)
+    }
+
+    /// Create Stripe customer portal session and return URL
+    func createStripePortalSession(returnURL: String? = nil) async throws -> URL {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
+            throw NSError(domain: "FirebaseDataService", code: 401, userInfo: [NSLocalizedDescriptionKey: "Not authenticated"])
+        }
+        let token = try await currentUser.getIDToken()
+        guard let url = URL(string: "https://jamai-stripe-gateway-dexvxx91.ew.gateway.dev/portal") else {
+            throw NSError(domain: "FirebaseDataService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid API Gateway URL"])
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.addValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.addValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        let body: [String: String] = ["returnUrl": returnURL ?? "http://localhost:3000/account"]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
+        let (data, response) = try await URLSession.shared.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            throw NSError(domain: "FirebaseDataService", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "Portal session failed with status \(http.statusCode)"])
+        }
+        let json = try JSONSerialization.jsonObject(with: data, options: []) as? [String: Any]
+        guard let urlString = json?["url"] as? String, let portalURL = URL(string: urlString) else {
+            throw NSError(domain: "FirebaseDataService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Missing portal URL"])
+        }
+        return portalURL
+    }
+    
+    /// Force refresh user account from Firestore
+    /// Useful after webhook events or manual changes
+    func refreshUserAccount(userId: String) async {
+        print("🔄 Refreshing user account from Firestore...")
+        await loadUserAccount(userId: userId)
+    }
+    
+    /// Check if user has an active Stripe subscription
+    var hasActiveSubscription: Bool {
+        guard let account = userAccount,
+              let status = account.subscriptionStatus else {
+            return false
+        }
+        return status.isActive
+    }
+    
+    /// Get user's subscription info for display
+    func getSubscriptionInfo() -> (hasSubscription: Bool, status: String, nextBilling: Date?) {
+        guard let account = userAccount else {
+            return (false, "No account", nil)
+        }
+        
+        if let status = account.subscriptionStatus {
+            return (true, status.displayName, account.nextBillingDate)
+        }
+        
+        return (false, "No subscription", nil)
     }
 }

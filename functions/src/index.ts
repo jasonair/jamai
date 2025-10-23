@@ -3,32 +3,48 @@
  * Handles Stripe webhooks and scheduled tasks
  */
 
-import * as functions from 'firebase-functions';
+import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { setGlobalOptions } from 'firebase-functions/v2';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
+
+// Set the region for all functions
+setGlobalOptions({ region: 'europe-west1' });
 
 // Initialize Firebase Admin
 admin.initializeApp();
 const db = admin.firestore();
 
+// Get Stripe keys from environment variables or Firebase config
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
+const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
 // Initialize Stripe
-const stripeSecretKey = functions.config().stripe?.secret_key;
-const stripeWebhookSecret = functions.config().stripe?.webhook_secret;
-
-if (!stripeSecretKey) {
-  console.warn('⚠️  Stripe secret key not configured. Run: firebase functions:config:set stripe.secret_key="sk_..."');
-}
-
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
   apiVersion: '2023-10-16',
 }) : null;
 
+// Optional env-driven price IDs (supports test/live without code edits)
+const ENV_PRICE_PRO = process.env.STRIPE_PRICE_PRO || '';
+const ENV_PRICE_TEAMS = process.env.STRIPE_PRICE_TEAMS || '';
+const ENV_PRICE_ENTERPRISE = process.env.STRIPE_PRICE_ENTERPRISE || '';
+
 // Plan mapping from Stripe Price IDs to JamAI plans
 const STRIPE_PRICE_TO_PLAN: {[key: string]: string} = {
-  'price_1SKfaPEVeQAdCfriBk3YNvSp': 'pro',        // Pro Monthly - $15
-  'price_1SKfb9EVeQAdCfriqgQ8z0Kl': 'teams',      // Teams Monthly - $30
-  'price_1SKlghEVeQAdCfriOsC3xS1b': 'enterprise', // Enterprise Monthly - $99
+  'price_1SKfaPEVeQAdCfriBk3YNvSp': 'pro',        // Pro Monthly - $15 (example)
+  'price_1SKfb9EVeQAdCfriqgQ8z0Kl': 'teams',      // Teams Monthly - $30 (example)
+  'price_1SKlghEVeQAdCfriOsC3xS1b': 'enterprise', // Enterprise Monthly - $99 (example)
 };
+
+function getPlanFromPrice(priceId?: string | null): string {
+  if (!priceId) return 'free';
+  if (STRIPE_PRICE_TO_PLAN[priceId]) return STRIPE_PRICE_TO_PLAN[priceId];
+  if (ENV_PRICE_PRO && priceId === ENV_PRICE_PRO) return 'pro';
+  if (ENV_PRICE_TEAMS && priceId === ENV_PRICE_TEAMS) return 'teams';
+  if (ENV_PRICE_ENTERPRISE && priceId === ENV_PRICE_ENTERPRISE) return 'enterprise';
+  return 'free';
+}
 
 // Credit amounts per plan
 const PLAN_CREDITS: {[key: string]: number} = {
@@ -39,11 +55,39 @@ const PLAN_CREDITS: {[key: string]: number} = {
   'enterprise': 5000,
 };
 
+// Helper: allow simple CORS for browser calls (website /account)
+
+// Helper: verify Firebase ID token from Authorization: Bearer <token>
+async function verifyFirebaseAuth(req: any): Promise<{ uid: string; email?: string }> {
+  const authHeader = (req.headers['authorization'] || req.headers['Authorization']) as string | undefined;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    throw new Error('Missing Authorization Bearer token');
+  }
+  const idToken = authHeader.substring('Bearer '.length);
+  const decoded = await admin.auth().verifyIdToken(idToken);
+  return { uid: decoded.uid, email: decoded.email };
+}
+
+// Helper: map Stripe subscription status to app values
+function mapSubscriptionStatus(status: Stripe.Subscription.Status): string {
+  switch (status) {
+    case 'active': return 'active';
+    case 'trialing': return 'trialing';
+    case 'past_due': return 'past_due';
+    case 'canceled': return 'canceled';
+    case 'unpaid': return 'unpaid';
+    case 'incomplete': return 'incomplete';
+    case 'incomplete_expired': return 'incomplete_expired';
+    case 'paused': return 'paused'; // not standard in all accounts, keep for compatibility
+    default: return 'active';
+  }
+}
+
 /**
  * Stripe Webhook Handler
  * Handles subscription lifecycle events
  */
-export const stripeWebhook = functions.https.onRequest(async (req, res) => {
+export const stripeWebhook = onRequest(async (req, res) => {
   if (!stripe || !stripeWebhookSecret) {
     console.error('❌ Stripe not configured');
     res.status(500).send('Stripe not configured');
@@ -143,7 +187,8 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   await userDoc.ref.update({
     plan: plan,
     credits: credits,
-    creditsUsedThisMonth: 0,
+    creditsTotal: credits,
+    // Don't reset creditsUsedThisMonth here - only reset on monthly billing (handlePaymentSucceeded)
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: status,
     nextBillingDate: nextBillingDate,
@@ -329,10 +374,7 @@ async function handleCustomerCreated(customer: Stripe.Customer) {
  * when Stripe charges the subscription renewal (respects individual billing cycles).
  * This function only handles trial expirations and cleanup tasks.
  */
-export const dailyMaintenance = functions.pubsub
-  .schedule('0 0 * * *')
-  .timeZone('UTC')
-  .onRun(async (context) => {
+export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'UTC' }, async (context) => {
     console.log('🔄 Starting daily maintenance...');
 
     const now = admin.firestore.Timestamp.now();
@@ -372,5 +414,143 @@ export const dailyMaintenance = functions.pubsub
     }
 
     console.log(`✅ Maintenance complete. Expired trials: ${expiredTrialCount}`);
-    return null;
   });
+
+// Export health check endpoint
+export const syncStripeForUser = onRequest(async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
+
+  if (!stripe) {
+    console.error('❌ Stripe not configured');
+    res.status(500).json({ ok: false, error: 'Stripe not configured' });
+    return;
+  }
+
+  try {
+    const { uid, email: tokenEmail } = await verifyFirebaseAuth(req);
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    const userData = userSnap.exists ? userSnap.data() as any : {};
+    const email = userData.email || tokenEmail || '';
+
+    let customerId: string | undefined = userData.stripeCustomerId;
+    if (!customerId) {
+      let customer: Stripe.Customer | undefined;
+      if (email) {
+        const list = await stripe.customers.list({ email, limit: 1 });
+        if (list.data.length > 0) customer = list.data[0] as Stripe.Customer;
+      }
+      if (!customer) {
+        customer = await stripe.customers.create({ email: email || undefined });
+      }
+      customerId = customer.id;
+      await userRef.set({ stripeCustomerId: customerId }, { merge: true });
+    }
+
+    const subs = await stripe.subscriptions.list({ customer: customerId!, status: 'all', limit: 5 });
+    let sub: Stripe.Subscription | undefined = undefined;
+    const preferredOrder: Array<Stripe.Subscription.Status> = ['active', 'trialing', 'past_due', 'unpaid', 'incomplete'];
+    for (const st of preferredOrder) {
+      sub = subs.data.find(s => s.status === st);
+      if (sub) break;
+    }
+    if (!sub && subs.data.length > 0) {
+      sub = subs.data.sort((a, b) => (b.created || 0) - (a.created || 0))[0];
+    }
+
+    let update: any = {};
+    let resetApplied = false;
+
+    if (sub) {
+      const priceId = sub.items.data[0]?.price?.id || null;
+      const plan = getPlanFromPrice(priceId);
+      const credits = PLAN_CREDITS[plan] || PLAN_CREDITS['free'];
+      const status = mapSubscriptionStatus(sub.status);
+      const nextBilling = sub.current_period_end ? admin.firestore.Timestamp.fromMillis(sub.current_period_end * 1000) : null;
+      const currentPeriodStart = sub.current_period_start ? admin.firestore.Timestamp.fromMillis(sub.current_period_start * 1000) : null;
+
+      update.plan = plan;
+      update.stripeSubscriptionId = sub.id;
+      update.subscriptionStatus = status;
+      update.nextBillingDate = nextBilling;
+
+      const lastCredited = userData.lastCreditedPeriodStart as admin.firestore.Timestamp | undefined;
+      if (currentPeriodStart && (!lastCredited || lastCredited.seconds !== currentPeriodStart.seconds)) {
+        update.credits = credits;
+        update.creditsUsedThisMonth = 0;
+        update.lastCreditedPeriodStart = currentPeriodStart;
+        resetApplied = true;
+
+        await db.collection('credit_transactions').add({
+          userId: uid,
+          amount: credits,
+          type: 'monthly_grant',
+          description: 'Monthly credit refresh (Stripe renewal)',
+          timestamp: admin.firestore.FieldValue.serverTimestamp(),
+          metadata: { stripeSubscriptionId: sub.id, stripePriceId: priceId }
+        });
+      }
+    } else {
+      update.plan = 'free';
+      update.subscriptionStatus = null;
+      update.stripeSubscriptionId = null;
+      update.nextBillingDate = null;
+    }
+
+    await userRef.set(update, { merge: true });
+    res.json({ ok: true, resetApplied, ...update });
+    return;
+  } catch (err: any) {
+    console.error('❌ syncStripeForUser failed', err?.message || err);
+    res.status(400).json({ ok: false, error: err?.message || 'Sync failed' });
+    return;
+  }
+});
+
+export const createCustomerPortalSession = onRequest(async (req, res) => {
+  if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
+
+  if (!stripe) {
+    console.error('❌ Stripe not configured');
+    res.status(500).json({ ok: false, error: 'Stripe not configured' });
+    return;
+  }
+
+  try {
+    const { uid, email: tokenEmail } = await verifyFirebaseAuth(req);
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    const userData = userSnap.exists ? userSnap.data() as any : {};
+    const email = userData.email || tokenEmail || undefined;
+
+    let customerId: string | undefined = userData.stripeCustomerId;
+    if (!customerId) {
+      let customer: Stripe.Customer | undefined;
+      if (email) {
+        const list = await stripe.customers.list({ email, limit: 1 });
+        if (list.data.length > 0) customer = list.data[0] as Stripe.Customer;
+      }
+      if (!customer) {
+        customer = await stripe.customers.create({ email });
+      }
+      customerId = customer.id;
+      await userRef.set({ stripeCustomerId: customerId }, { merge: true });
+    }
+
+    const returnUrl = (req.body && (req.body.returnUrl as string)) || 'http://localhost:3000/account';
+    const session = await stripe.billingPortal.sessions.create({
+      customer: customerId!,
+      return_url: returnUrl,
+    });
+
+    res.json({ ok: true, url: session.url });
+    return;
+  } catch (err: any) {
+    console.error('❌ createCustomerPortalSession failed', err?.message || err);
+    res.status(400).json({ ok: false, error: err?.message || 'Portal creation failed' });
+    return;
+  }
+});
+
+export { health as healthV2 } from './health';
+export { migrateCreditsFields } from './migrate-credits';

@@ -1,0 +1,40 @@
+swagger: '2.0'
+info:
+  title: JamAI Backend API
+  description: Public API Gateway for JamAI Cloud Functions
+  version: 1.0.0
+schemes:
+  - https
+produces:
+  - application/json
+paths:
+  /webhook:
+    post:
+      summary: Stripe webhook endpoint
+      operationId: stripeWebhook
+      x-google-backend:
+        address: https://europe-west1-jamai-dev.cloudfunctions.net/stripeWebhook
+        protocol: h2
+      responses:
+        '200':
+          description: Webhook processed successfully
+  /sync:
+    post:
+      summary: Sync user with Stripe subscription
+      operationId: syncStripeForUser
+      x-google-backend:
+        address: https://europe-west1-jamai-dev.cloudfunctions.net/syncStripeForUser
+        protocol: h2
+      responses:
+        '200':
+          description: Sync successful
+  /portal:
+    post:
+      summary: Create Stripe customer portal session
+      operationId: createCustomerPortalSession
+      x-google-backend:
+        address: https://europe-west1-jamai-dev.cloudfunctions.net/createCustomerPortalSession
+        protocol: h2
+      responses:
+        '200':
+          description: Portal session created

@@ -2,3 +2,6 @@ node_modules/
 lib/
 .runtimeconfig.json
 *.log
+.env
+.env.local
+.env*.local
