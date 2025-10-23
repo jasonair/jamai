@@ -32,7 +32,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		F9E3829F2E995D660097A9E7 /* JamAI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JamAI.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9E3829F2E995D660097A9E7 /* Jam AI.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Jam AI.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9E382AC2E995D670097A9E7 /* JamAITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JamAITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		F9E382B62E995D670097A9E7 /* JamAIUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = JamAIUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -111,7 +111,7 @@
 		F9E382A02E995D660097A9E7 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				F9E3829F2E995D660097A9E7 /* JamAI.app */,
+				F9E3829F2E995D660097A9E7 /* Jam AI.app */,
 				F9E382AC2E995D670097A9E7 /* JamAITests.xctest */,
 				F9E382B62E995D670097A9E7 /* JamAIUITests.xctest */,
 			);
@@ -145,7 +145,7 @@
 				F9126DEF2EA5453200CF5584 /* GoogleSignIn */,
 			);
 			productName = JamAI;
-			productReference = F9E3829F2E995D660097A9E7 /* JamAI.app */;
+			productReference = F9E3829F2E995D660097A9E7 /* Jam AI.app */;
 			productType = "com.apple.product-type.application";
 		};
 		F9E382AB2E995D670097A9E7 /* JamAITests */ = {

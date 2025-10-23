@@ -132,9 +132,8 @@ service cloud.firestore {
         // Beta signups - anyone can create a signup request
     match /beta_signups/{signupId} {
       allow create: if true;
-      // Only admins should be able to read or update (e.g., to approve)
-      allow read, update, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true;
-      allow delete: if false;
+      // Only admins (with custom claim) should be able to read or update
+      allow read, update, delete: if request.auth != null && request.auth.token.admin == true;
     }
 
     match /cached_searches/{queryHash} {
