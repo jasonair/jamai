@@ -264,13 +264,11 @@ class SearchManager {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         
         let body: [String: Any] = [
-            "model": "llama-3.1-sonar-small-128k-online",
+            "model": "sonar",
             "messages": [
                 ["role": "system", "content": "Be precise and concise. Provide factual information with sources."],
                 ["role": "user", "content": query]
-            ],
-            "return_citations": true,
-            "return_related_questions": false
+            ]
         ]
         
         request.httpBody = try? JSONSerialization.data(withJSONObject: body)
@@ -298,14 +296,16 @@ class SearchManager {
                 return nil
             }
             
-            // Parse citations if available
+            // Parse search_results if available
             var results: [SearchResult] = []
             
-            if let citations = json?["citations"] as? [String] {
-                results = citations.enumerated().compactMap { index, url in
+            if let searchResults = json?["search_results"] as? [[String: Any]] {
+                results = searchResults.compactMap { result in
+                    guard let url = result["url"] as? String else { return nil }
+                    let title = result["title"] as? String ?? "Search Result"
                     let domain = extractDomain(from: url)
                     return SearchResult(
-                        title: "Source \(index + 1): \(domain)",
+                        title: title,
                         snippet: content,
                         url: url,
                         source: domain
@@ -313,7 +313,7 @@ class SearchManager {
                 }
             }
             
-            // If no citations, create single result with content
+            // If no search results, create single result with content
             if results.isEmpty {
                 results.append(SearchResult(
                     title: "Perplexity Search Result",

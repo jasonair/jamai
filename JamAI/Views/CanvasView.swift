@@ -587,7 +587,9 @@ struct CanvasView: View {
     }
     
     private func handlePromptSubmit(_ prompt: String, imageData: Data?, imageMimeType: String?, webSearchEnabled: Bool, for nodeId: UUID) {
-        viewModel.generateResponse(for: nodeId, prompt: prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled)
+        Task { @MainActor in
+            viewModel.generateResponse(for: nodeId, prompt: prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled)
+        }
     }
     
     private func handleDeleteNode(_ nodeId: UUID) {
