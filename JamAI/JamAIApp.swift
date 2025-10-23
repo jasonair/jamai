@@ -272,6 +272,15 @@ struct JamAIApp: App {
                 }
                 .disabled(!authService.isAuthenticated)
             }
+            
+            // Replace Settings menu to allow disabling when no project is loaded
+            CommandGroup(replacing: .appSettings) {
+                Button("Settings...") {
+                    appState.showSettings()
+                }
+                .keyboardShortcut(",", modifiers: .command)
+                .disabled(appState.viewModel == nil)
+            }
         }
         
         Settings {
