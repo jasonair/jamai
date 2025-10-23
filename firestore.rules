@@ -85,5 +85,12 @@ service cloud.firestore {
                      exists(/databases/$(database)/documents/admins/$(request.auth.uid));
       allow write: if false; // Only Cloud Functions
     }
+
+    // Analytics collection for global stats
+    match /analytics/{document} {
+      allow read: if request.auth != null && 
+                     exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+      allow write: if false; // Can be managed by Cloud Functions or manually
+    }
   }
 }
