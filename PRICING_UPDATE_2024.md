@@ -13,13 +13,7 @@ The JamAI pricing has been updated to align with the website and provide clearer
   - Basic web search (Serper/Tavily)
   - Up to 3 saved Jams
   - Community support
-
-### Trial Plan (2-week Pro Trial)
-- **Price**: $0 (time-limited)
-- **Duration**: 14 days
-- **Credits**: 100 prompt credits (Pro features enabled)
-- **Team Members**: 12 AI Team Members per Jam (All experience levels)
-- **Features**: Full Pro features during trial period
+- **Note**: New users receive a 14-day trial of Pro features.
 
 ### Pro Plan
 - **Price**: $15 per user/month
@@ -58,11 +52,11 @@ The JamAI pricing has been updated to align with the website and provide clearer
 ## Changes Implemented
 
 ### 1. UserAccount.swift (Models)
-- Updated `UserPlan` enum with 5 tiers: trial, free, pro, teams, enterprise
+- Updated `UserPlan` enum with 4 tiers: free, pro, teams, enterprise
 - Removed deprecated `premium` plan
 - Added `monthlyPrice` property for pricing display
-- Updated `monthlyCredits`: 100 (trial/free), 1000 (pro), 1500 (teams), 5000 (enterprise)
-- Added `maxTeamMembersPerJam`: 3 (free), 12 (trial/pro), unlimited (teams/enterprise)
+- Updated `monthlyCredits`: 100 (free), 1000 (pro), 1500 (teams), 5000 (enterprise)
+- Added `maxTeamMembersPerJam`: 3 (free), 12 (pro), unlimited (teams/enterprise)
 - Added `maxSavedJams`: 3 (free), unlimited (all paid plans)
 - Added `hasUnlimitedTeamMembers` helper for unlimited plans
 - Added `allowsSeniorAndExpert` for experience level gating
@@ -75,8 +69,8 @@ The JamAI pricing has been updated to align with the website and provide clearer
 
 ### 3. TeamMemberModal.swift
 - Updated plan tier mapping:
-  - Free → free tier
-  - Trial/Pro → pro tier
+  - Free → free tier (with trial access to pro features for 14 days)
+  - Pro → pro tier
   - Teams/Enterprise → enterprise tier
 
 ### 4. roles.json
@@ -88,7 +82,7 @@ The JamAI pricing has been updated to align with the website and provide clearer
 - Enhanced PlanCard to display monthly price prominently
 - Added pricing display with `$X / month` format
 - Shows "Custom" for Enterprise pricing
-- Updated plan colors: trial (orange), free (gray), pro (blue), teams (purple), enterprise (green)
+- Updated plan colors: free (gray), pro (blue), teams (purple), enterprise (green)
 - Added saved Jams limit display
 - Shows "Unlimited" for unlimited team members
 
@@ -191,7 +185,7 @@ No database migration required. The app gracefully handles:
 - Missing `maxTeamMembersPerJam` field (defaults via computed property)
 
 Existing user accounts will continue working. When they next open the app:
-- Trial users: Keep trial status until expiration
+- New Free users: Start a 14-day trial of Pro features.
 - Free users: New limits apply (3 team members, 3 saved Jams)
 - Pro users: New benefits apply (12 team members, unlimited Jams)
 
@@ -201,8 +195,8 @@ Existing user accounts will continue working. When they next open the app:
 2. **Implement Phase 2 Stripe Integration** to enable actual payments
 3. **Add webhook handlers** to sync subscription status with Firebase
 4. **Test end-to-end flow**:
-   - User signs up → Trial (14 days)
-   - Trial expires → Convert to Free
+   - User signs up → Free plan with a 14-day trial of Pro features
+   - Trial expires → Continue on Free plan with standard limitations
    - User upgrades to Pro via Stripe → Subscription active
    - Subscription renews → Credits reset monthly
    - Subscription cancelled → Downgrade to Free
