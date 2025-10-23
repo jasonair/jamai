@@ -380,6 +380,7 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
     const now = admin.firestore.Timestamp.now();
     const usersSnapshot = await db.collection('users').get();
     let expiredTrialCount = 0;
+    let totalProjectsCreated = 0;
 
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
@@ -411,9 +412,21 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
           expiredTrialCount++;
         }
       }
+
+      // Aggregate total projects created
+      if (userData.metadata && userData.metadata.totalProjectsCreated) {
+        totalProjectsCreated += userData.metadata.totalProjectsCreated;
+      }
     }
 
-    console.log(`✅ Maintenance complete. Expired free trials: ${expiredTrialCount}`);
+    // Update global analytics document
+    const analyticsRef = db.collection('analytics').doc('global_stats');
+    await analyticsRef.set({ 
+        totalProjectsCreated: totalProjectsCreated,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log(`✅ Maintenance complete. Expired trials: ${expiredTrialCount}. Total projects: ${totalProjectsCreated}.`);
   });
 
 // Export health check endpoint

@@ -141,6 +141,11 @@ class AnalyticsService {
         
         await logEvent(event, to: projectActivityCollection)
         await updateDailyAnalytics(userId: userId, projectActivity: event)
+        
+        // Also increment the user-facing metadata stat
+        if activityType == .created {
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalProjectsCreated")
+        }
     }
     
     // MARK: - Node Creation Tracking
