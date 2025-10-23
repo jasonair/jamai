@@ -1029,7 +1029,7 @@ class CanvasViewModel: ObservableObject {
             
             User question: \(prompt)
             
-            Please provide a comprehensive answer using the information from these sources. Cite sources using [1], [2], etc.
+            Please provide a comprehensive answer using the information from these sources. Do not include citation numbers or brackets in your response - the sources are shown separately to the user.
             """
         }
         

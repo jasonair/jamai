@@ -129,6 +129,23 @@ private func handlePromptSubmit(...) {
 
 This ensures state changes happen outside the view update cycle, eliminating the SwiftUI warning.
 
+### 3. CanvasViewModel.swift (Citation Numbers Removal)
+
+**Issue**: AI responses included inline citation numbers `[1][2][3]` throughout the text, cluttering the reading experience.
+
+**Root Cause**: System prompt at line 1032 explicitly instructed AI to "Cite sources using [1], [2], etc."
+
+**Line 1032**: Updated web search prompt instruction
+```swift
+// Before
+"Please provide a comprehensive answer using the information from these sources. Cite sources using [1], [2], etc."
+
+// After
+"Please provide a comprehensive answer using the information from these sources. Do not include citation numbers or brackets in your response - the sources are shown separately to the user."
+```
+
+**Rationale**: Search result cards are already displayed separately in the UI below the response, making inline citations redundant and visually cluttered.
+
 ## Benefits
 
 1. **Better titles**: Search results now include actual page titles instead of generic "Source 1", "Source 2"
@@ -136,13 +153,17 @@ This ensures state changes happen outside the view update cycle, eliminating the
 3. **Simpler API**: Fewer parameters needed
 4. **Future-proof**: Using current stable model names
 5. **No SwiftUI warnings**: Proper async state management
+6. **Cleaner reading experience**: No citation clutter `[1][2][3]` - sources shown separately
 
 ## Testing
 
 After update, test with:
 1. Enable web search (globe icon)
 2. Try query: "List OpenAI's latest releases as of today 23 Oct 2025"
-3. Should see proper search results with titles and URLs
+3. ✅ Should see proper search results with titles and URLs
+4. ✅ Response text should be clean without `[1][2][3]` citation numbers
+5. ✅ Search result cards displayed separately below the response
+6. ✅ No SwiftUI warnings in console
 
 ## Model Selection Guidance
 
