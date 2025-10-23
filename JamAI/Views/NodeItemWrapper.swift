@@ -13,7 +13,7 @@ struct NodeItemWrapper: View {
     let isGenerating: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let onTap: () -> Void
-    let onPromptSubmit: (String, Data?, String?) -> Void
+    let onPromptSubmit: (String, Data?, String?, Bool) -> Void
     let onTitleEdit: (String) -> Void
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void

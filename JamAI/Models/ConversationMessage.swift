@@ -14,6 +14,8 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
     let timestamp: Date
     let imageData: Data?
     let imageMimeType: String?
+    let webSearchEnabled: Bool
+    let searchResults: [SearchResult]?
     
     nonisolated init(
         id: UUID = UUID(), 
@@ -21,7 +23,9 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
         content: String, 
         timestamp: Date = Date(),
         imageData: Data? = nil,
-        imageMimeType: String? = nil
+        imageMimeType: String? = nil,
+        webSearchEnabled: Bool = false,
+        searchResults: [SearchResult]? = nil
     ) {
         self.id = id
         self.role = role
@@ -29,10 +33,16 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
         self.timestamp = timestamp
         self.imageData = imageData
         self.imageMimeType = imageMimeType
+        self.webSearchEnabled = webSearchEnabled
+        self.searchResults = searchResults
     }
     
     var hasImage: Bool {
         imageData != nil
+    }
+    
+    var hasSearchResults: Bool {
+        searchResults != nil && !(searchResults?.isEmpty ?? true)
     }
 }
 

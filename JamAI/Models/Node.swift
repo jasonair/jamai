@@ -165,13 +165,22 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         }
     }
     
-    mutating func addMessage(role: MessageRole, content: String, imageData: Data? = nil, imageMimeType: String? = nil) {
+    mutating func addMessage(
+        role: MessageRole, 
+        content: String, 
+        imageData: Data? = nil, 
+        imageMimeType: String? = nil,
+        webSearchEnabled: Bool = false,
+        searchResults: [SearchResult]? = nil
+    ) {
         var messages = conversation
         messages.append(ConversationMessage(
             role: role, 
             content: content,
             imageData: imageData,
-            imageMimeType: imageMimeType
+            imageMimeType: imageMimeType,
+            webSearchEnabled: webSearchEnabled,
+            searchResults: searchResults
         ))
         setConversation(messages)
     }

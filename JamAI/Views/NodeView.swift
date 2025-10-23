@@ -14,7 +14,7 @@ struct NodeView: View {
     let isGenerating: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let onTap: () -> Void
-    let onPromptSubmit: (String, Data?, String?) -> Void
+    let onPromptSubmit: (String, Data?, String?, Bool) -> Void
     let onTitleEdit: (String) -> Void
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
@@ -45,6 +45,7 @@ struct NodeView: View {
     @State private var selectedImage: NSImage?
     @State private var selectedImageData: Data?
     @State private var selectedImageMimeType: String?
+    @State private var webSearchEnabled = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
@@ -832,18 +833,32 @@ struct NodeView: View {
                 
                 // Button row at bottom - aligned with text padding
                 HStack {
-                    // Image upload button (bottom left)
-                    if dataService.userAccount?.canAccessAdvancedFeatures ?? false {
-                        Button(action: selectImage) {
-                            Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
+                    // Left side buttons
+                    HStack(spacing: 8) {
+                        // Image upload button
+                        if dataService.userAccount?.canAccessAdvancedFeatures ?? false {
+                            Button(action: selectImage) {
+                                Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
+                                    .font(.system(size: 19))
+                                    .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .help("Upload image")
+                        }
+                        
+                        // Web search toggle button
+                        Button(action: {
+                            webSearchEnabled.toggle()
+                        }) {
+                            Image(systemName: webSearchEnabled ? "globe" : "globe")
                                 .font(.system(size: 19))
-                                .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                                .foregroundColor(webSearchEnabled ? .accentColor : .secondary)
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help("Upload image")
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
+                        .help(webSearchEnabled ? "Web search enabled" : "Enable web search")
                     }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
                     
                     Spacer()
                     
@@ -1017,11 +1032,12 @@ struct NodeView: View {
         // Allow sending with just an image or just text or both
         if !promptText.isEmpty || selectedImage != nil {
             let textToSend = promptText.isEmpty ? "" : promptText
-            onPromptSubmit(textToSend, selectedImageData, selectedImageMimeType)
+            onPromptSubmit(textToSend, selectedImageData, selectedImageMimeType, webSearchEnabled)
             promptText = ""
             selectedImage = nil
             selectedImageData = nil
             selectedImageMimeType = nil
+            webSearchEnabled = false // Reset after submission
             isPromptFocused = true // Keep focus in input
         }
     }

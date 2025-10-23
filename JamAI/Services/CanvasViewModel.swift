@@ -862,7 +862,7 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - AI Generation
     
-    func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil) {
+    func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false) {
         guard var node = nodes[nodeId] else { return }
         
         // Check credit availability before generating
@@ -873,7 +873,48 @@ class CanvasViewModel: ObservableObject {
         
         generatingNodeId = nodeId
         
-        // Add user message to conversation with optional image
+        // Perform web search if enabled
+        var searchResults: [SearchResult]? = nil
+        if webSearchEnabled {
+            Task { @MainActor [weak self] in
+                guard let self = self else { return }
+                
+                let userPlan = FirebaseDataService.shared.userAccount?.plan ?? .free
+                let creditsRemaining = FirebaseDataService.shared.userAccount?.credits ?? 0
+                let enhancedSearch = userPlan != .free // Pro+ can use enhanced search
+                
+                searchResults = await SearchManager.shared.search(
+                    query: prompt,
+                    userPlan: userPlan,
+                    enhancedSearch: enhancedSearch,
+                    creditsRemaining: creditsRemaining
+                )
+                
+                // Add user message with search results
+                guard var node = self.nodes[nodeId] else { return }
+                node.addMessage(
+                    role: .user,
+                    content: prompt,
+                    imageData: imageData,
+                    imageMimeType: imageMimeType,
+                    webSearchEnabled: true,
+                    searchResults: searchResults
+                )
+                self.nodes[nodeId] = node
+                
+                // Continue with AI generation, including search context
+                await self.continueGenerationWithSearch(
+                    nodeId: nodeId,
+                    prompt: prompt,
+                    imageData: imageData,
+                    imageMimeType: imageMimeType,
+                    searchResults: searchResults
+                )
+            }
+            return
+        }
+        
+        // Add user message to conversation without search
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
         // Also update legacy prompt field for backwards compatibility
         Task { [weak self] in
@@ -962,6 +1003,116 @@ class CanvasViewModel: ObservableObject {
                     }
                 )
             }
+        }
+    }
+    
+    private func continueGenerationWithSearch(
+        nodeId: UUID,
+        prompt: String,
+        imageData: Data?,
+        imageMimeType: String?,
+        searchResults: [SearchResult]?
+    ) async {
+        guard var node = nodes[nodeId] else { return }
+        
+        // Build enhanced prompt with search context
+        var enhancedPrompt = prompt
+        if let results = searchResults, !results.isEmpty {
+            let searchContext = results.enumerated().map { index, result in
+                "[\(index + 1)] **\(result.title)** (\(result.source))\n\(result.snippet)\nURL: \(result.url)"
+            }.joined(separator: "\n\n")
+            
+            enhancedPrompt = """
+            Based on the following web search results:
+            
+            \(searchContext)
+            
+            User question: \(prompt)
+            
+            Please provide a comprehensive answer using the information from these sources. Cite sources using [1], [2], etc.
+            """
+        }
+        
+        do {
+            let context = buildContext(for: node)
+            var streamedResponse = ""
+            
+            // Assemble system prompt
+            let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+            let finalSystemPrompt: String
+            if let teamMember = node.teamMember,
+               let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+                finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                
+                // Track team member usage
+                trackTeamMemberUsage(
+                    nodeId: nodeId,
+                    roleId: role.id,
+                    roleName: role.name,
+                    roleCategory: role.category.rawValue,
+                    experienceLevel: teamMember.experienceLevel.rawValue,
+                    actionType: .used
+                )
+            } else {
+                finalSystemPrompt = baseSystemPrompt
+            }
+            
+            geminiClient.generateStreaming(
+                prompt: enhancedPrompt,
+                systemPrompt: finalSystemPrompt,
+                context: context,
+                onChunk: { [weak self] chunk in
+                    Task { @MainActor in
+                        streamedResponse += chunk
+                        guard var currentNode = self?.nodes[nodeId] else { return }
+                        currentNode.response = streamedResponse
+                        self?.nodes[nodeId] = currentNode
+                    }
+                },
+                onComplete: { [weak self] result in
+                    Task { @MainActor in
+                        self?.generatingNodeId = nil
+                        
+                        switch result {
+                        case .success(let fullResponse):
+                            guard var finalNode = self?.nodes[nodeId] else { return }
+                            // Add assistant message to conversation
+                            finalNode.addMessage(role: .assistant, content: fullResponse)
+                            finalNode.response = fullResponse
+                            finalNode.updatedAt = Date()
+                            self?.nodes[nodeId] = finalNode
+                            if let dbActor = self?.dbActor {
+                                Task { [dbActor, finalNode] in
+                                    try? await dbActor.saveNode(finalNode)
+                                }
+                            }
+                            
+                            // Deduct credits
+                            if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message (Web Search)")
+                            }
+                            
+                            // Track analytics
+                            await CreditTracker.shared.trackGeneration(
+                                promptText: prompt,
+                                responseText: fullResponse,
+                                nodeId: nodeId,
+                                projectId: self?.project.id ?? UUID(),
+                                teamMemberRoleId: finalNode.teamMember?.roleId,
+                                teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                generationType: "chat_with_search"
+                            )
+                            
+                            // Auto-generate title and description
+                            await self?.autoGenerateTitleAndDescription(for: nodeId)
+                            
+                        case .failure(let error):
+                            self?.errorMessage = error.localizedDescription
+                        }
+                    }
+                }
+            )
         }
     }
     
