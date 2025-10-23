@@ -16,17 +16,11 @@ struct WelcomeView: View {
         VStack(spacing: 30) {
             // Logo/Title
             VStack(spacing: 8) {
-                // Custom logo if available, otherwise fallback to SF Symbol
-                if let logo = NSImage(named: "AppLogo") {
-                    Image(nsImage: logo)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 120, height: 120)
-                } else {
-                    Image(systemName: "brain.head.profile")
-                        .font(.system(size: 60))
-                        .foregroundColor(.accentColor)
-                }
+                // App logo - automatically adapts to light/dark mode
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 120, height: 120)
                 
                 Text("Jam AI")
                     .font(.system(size: 40, weight: .bold))

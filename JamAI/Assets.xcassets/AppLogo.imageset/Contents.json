@@ -1,8 +1,18 @@
 {
   "images" : [
     {
-      "idiom" : "universal",
-      "filename" : "jam-ai-logo-blue.svg"
+      "filename" : "jam-ai-logo-blue.svg",
+      "idiom" : "universal"
+    },
+    {
+      "appearances" : [
+        {
+          "appearance" : "luminosity",
+          "value" : "dark"
+        }
+      ],
+      "filename" : "jam-ai-logo-white.svg",
+      "idiom" : "universal"
     }
   ],
   "info" : {
