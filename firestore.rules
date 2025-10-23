@@ -129,6 +129,14 @@ service cloud.firestore {
     }
     
     // Cached web searches - shared cache for all authenticated users
+        // Beta signups - anyone can create a signup request
+    match /beta_signups/{signupId} {
+      allow create: if true;
+      // Only admins should be able to read or update (e.g., to approve)
+      allow read, update, delete: if get(/databases/$(database)/documents/users/$(request.auth.uid)).data.admin == true;
+      allow delete: if false;
+    }
+
     match /cached_searches/{queryHash} {
       // All authenticated users can read the cache (shared across users)
       allow read: if request.auth != null;

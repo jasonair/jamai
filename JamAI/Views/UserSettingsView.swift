@@ -127,7 +127,7 @@ struct UserSettingsView: View {
                             
                             // Additional info with renewal date
                             HStack {
-                                Text("Usage since \(formattedMonthStart())")
+                                Text("Usage since \(formattedPeriodStart(for: account))")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                                 
@@ -182,7 +182,7 @@ struct UserSettingsView: View {
                         }
                         
                         // Grid of stat cards
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
                             StatCard(
                                 label: "Nodes Created",
                                 value: "\(account.metadata.totalNodesCreated)",
@@ -220,7 +220,7 @@ struct UserSettingsView: View {
                             )
                             
                             StatCard(
-                                label: "Projects Created",
+                                label: "Jams Created",
                                 value: "\(account.metadata.totalProjectsCreated)",
                                 icon: "folder.badge.plus"
                             )
@@ -497,14 +497,21 @@ struct UserSettingsView: View {
         }
     }
     
-    private func formattedMonthStart() -> String {
+    private func formattedPeriodStart(for account: UserAccount) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMM d, yyyy"
+        
+        // Use actual billing period start from Stripe if available
+        if let periodStart = account.currentPeriodStart {
+            return formatter.string(from: periodStart)
+        }
+        
+        // Fallback to calendar month start for legacy users
         let calendar = Calendar.current
         let now = Date()
         let components = calendar.dateComponents([.year, .month], from: now)
         
         if let monthStart = calendar.date(from: components) {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "MMM d, yyyy"
             return formatter.string(from: monthStart)
         }
         
@@ -513,29 +520,33 @@ struct UserSettingsView: View {
     
     private func renewalDateText(for account: UserAccount) -> String {
         let calendar = Calendar.current
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
         
+        // Free trial users
         if account.plan == .free, let expiresAt = account.planExpiresAt, !account.isTrialExpired {
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            formatter.timeStyle = .none
             let daysRemaining = calendar.dateComponents([.day], from: Date(), to: expiresAt).day ?? 0
             return "Trial ends in \(max(0, daysRemaining)) days (\(formatter.string(from: expiresAt)))"
-        } else {
-            // Calculate next month start
-            let now = Date()
-            var components = calendar.dateComponents([.year, .month], from: now)
-            components.month! += 1
-            
-            if let nextMonth = calendar.date(from: components) {
-                let formatter = DateFormatter()
-                formatter.dateStyle = .medium
-                formatter.timeStyle = .none
-                let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextMonth).day ?? 0
-                return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextMonth)))"
-            }
-            
-            return "Renews next month"
         }
+        
+        // Use actual Stripe billing date for paid plans
+        if let nextBilling = account.nextBillingDate {
+            let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextBilling).day ?? 0
+            return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextBilling)))"
+        }
+        
+        // Fallback to calendar month calculation (legacy)
+        let now = Date()
+        var components = calendar.dateComponents([.year, .month], from: now)
+        components.month! += 1
+        
+        if let nextMonth = calendar.date(from: components) {
+            let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextMonth).day ?? 0
+            return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextMonth)))"
+        }
+        
+        return "Renews next month"
     }
     
     private func upgradePlan(to plan: UserPlan) {

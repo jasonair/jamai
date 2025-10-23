@@ -163,7 +163,8 @@ struct UserAccount: Codable, Identifiable {
     var stripeCustomerId: String?
     var stripeSubscriptionId: String?
     var subscriptionStatus: SubscriptionStatus?
-    var nextBillingDate: Date?
+    var currentPeriodStart: Date? // When current billing period started
+    var nextBillingDate: Date? // When current billing period ends / next billing
     
     /// User metadata for analytics
     var metadata: UserMetadata
@@ -180,6 +181,7 @@ struct UserAccount: Codable, Identifiable {
         stripeCustomerId: String? = nil,
         stripeSubscriptionId: String? = nil,
         subscriptionStatus: SubscriptionStatus? = nil,
+        currentPeriodStart: Date? = nil,
         nextBillingDate: Date? = nil
     ) {
         self.id = id
@@ -200,6 +202,7 @@ struct UserAccount: Codable, Identifiable {
         self.stripeCustomerId = stripeCustomerId
         self.stripeSubscriptionId = stripeSubscriptionId
         self.subscriptionStatus = subscriptionStatus
+        self.currentPeriodStart = currentPeriodStart
         self.nextBillingDate = nextBillingDate
         self.metadata = UserMetadata()
     }

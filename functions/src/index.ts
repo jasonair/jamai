@@ -178,7 +178,10 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
   const userDoc = usersSnapshot.docs[0];
   const userId = userDoc.id;
 
-  // Calculate next billing date
+  // Calculate billing period dates
+  const currentPeriodStart = subscription.current_period_start
+    ? admin.firestore.Timestamp.fromMillis(subscription.current_period_start * 1000)
+    : null;
   const nextBillingDate = subscription.current_period_end 
     ? admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000)
     : null;
@@ -191,6 +194,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
     // Don't reset creditsUsedThisMonth here - only reset on monthly billing (handlePaymentSucceeded)
     stripeSubscriptionId: subscription.id,
     subscriptionStatus: status,
+    currentPeriodStart: currentPeriodStart,
     nextBillingDate: nextBillingDate,
     planExpiresAt: null, // Clear trial expiration
     lastLoginAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -241,6 +245,7 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
     creditsUsedThisMonth: 0,
     stripeSubscriptionId: null,
     subscriptionStatus: 'canceled',
+    currentPeriodStart: null,
     nextBillingDate: null,
   });
 
@@ -430,7 +435,7 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
   });
 
 // Export health check endpoint
-export const syncStripeForUser = onRequest(async (req, res) => {
+export const syncStripeForUser = onRequest({ invoker: 'public' }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
 
   if (!stripe) {
@@ -485,6 +490,7 @@ export const syncStripeForUser = onRequest(async (req, res) => {
       update.plan = plan;
       update.stripeSubscriptionId = sub.id;
       update.subscriptionStatus = status;
+      update.currentPeriodStart = currentPeriodStart;
       update.nextBillingDate = nextBilling;
 
       const lastCredited = userData.lastCreditedPeriodStart as admin.firestore.Timestamp | undefined;
@@ -507,6 +513,7 @@ export const syncStripeForUser = onRequest(async (req, res) => {
       update.plan = 'free';
       update.subscriptionStatus = null;
       update.stripeSubscriptionId = null;
+      update.currentPeriodStart = null;
       update.nextBillingDate = null;
     }
 
@@ -520,7 +527,7 @@ export const syncStripeForUser = onRequest(async (req, res) => {
   }
 });
 
-export const createCustomerPortalSession = onRequest(async (req, res) => {
+export const createCustomerPortalSession = onRequest({ invoker: 'public' }, async (req, res) => {
   if (req.method !== 'POST') { res.status(405).send('Method Not Allowed'); return; }
 
   if (!stripe) {

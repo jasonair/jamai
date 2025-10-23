@@ -763,11 +763,95 @@ struct NodeView: View {
                             })
                                 .font(.system(size: 15))
                         }
+                        
+                        // Show search results if available
+                        if let searchResults = conversationMsg?.searchResults, !searchResults.isEmpty {
+                            searchResultsView(results: searchResults)
+                                .padding(.top, 12)
+                        }
+                        
+                        // Show web search footer if this message used search
+                        if conversationMsg?.webSearchEnabled == true {
+                            HStack {
+                                Spacer()
+                                Text("Generated using web search")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(.secondary.opacity(0.7))
+                                    .padding(.top, 8)
+                                Spacer()
+                            }
+                            .frame(maxWidth: 700)
+                        }
                     }
                     .padding(.vertical, 8)
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
             )
+        }
+    }
+    
+    private func searchResultsView(results: [SearchResult]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Spacer()
+                Text("Sources")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                Spacer()
+            }
+            .frame(maxWidth: 700)
+            
+            // Vertical stack of source cards - safe, no nested scrolling
+            VStack(spacing: 8) {
+                ForEach(Array(results.prefix(5).enumerated()), id: \.offset) { index, result in
+                    Button(action: {
+                        if let url = URL(string: result.url) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }) {
+                        HStack(alignment: .top, spacing: 10) {
+                            // Number badge
+                            Text("\(index + 1)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(.accentColor)
+                                .frame(width: 20, height: 20)
+                                .background(Color.accentColor.opacity(0.1))
+                                .clipShape(Circle())
+                            
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(result.title)
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                
+                                Text(result.source)
+                                    .font(.system(size: 10))
+                                    .foregroundColor(.secondary)
+                                    .lineLimit(1)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 10))
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(10)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color.secondary.opacity(0.06))
+                        .cornerRadius(8)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.secondary.opacity(0.15), lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(result.url)
+                }
+            }
+            .padding(.horizontal, 8)
+            .frame(maxWidth: 700)
         }
     }
     
@@ -846,16 +930,38 @@ struct NodeView: View {
                             .help("Upload image")
                         }
                         
-                        // Web search toggle button
+                        // Web search toggle button - PRO SEARCH for premium users
+                        let userPlan = dataService.userAccount?.plan ?? .free
+                        let isPremiumUser = userPlan == .pro || userPlan == .teams || userPlan == .enterprise
+                        let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
+                        
                         Button(action: {
                             webSearchEnabled.toggle()
                         }) {
-                            Image(systemName: webSearchEnabled ? "globe" : "globe")
-                                .font(.system(size: 19))
-                                .foregroundColor(webSearchEnabled ? .accentColor : .secondary)
+                            HStack(spacing: 4) {
+                                Image(systemName: "globe")
+                                    .font(.system(size: isPremiumUser ? 11 : 19))
+                                
+                                if isPremiumUser {
+                                    Text("PRO SEARCH")
+                                        .font(.system(size: 10, weight: .semibold))
+                                }
+                            }
+                            .foregroundColor(isSearchActive ? .accentColor : .secondary)
+                            .padding(.horizontal, isPremiumUser ? 8 : 0)
+                            .padding(.vertical, isPremiumUser ? 4 : 0)
+                            .background(Color.clear)
+                            .cornerRadius(12)
+                            .overlay(
+                                isPremiumUser ? AnyView(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isSearchActive ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
+                                ) : AnyView(EmptyView())
+                            )
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help(webSearchEnabled ? "Web search enabled" : "Enable web search")
+                        .help(isPremiumUser ? (isSearchActive ? "PRO search enabled" : "Enable PRO search") : (isSearchActive ? "Web search enabled" : "Enable web search"))
+                        .disabled(isGenerating)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
@@ -1055,12 +1161,31 @@ struct NodeView: View {
                     .frame(maxWidth: 700, alignment: .leading)
                     .padding(.horizontal, 8)
                 
-                HStack {
-                    Text(processingMessages[processingMessageIndex])
-                        .font(.system(size: 15))
-                        .foregroundColor(.secondary)
-                        .opacity(processingOpacity)
-                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(processingMessages[processingMessageIndex])
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary)
+                            .opacity(processingOpacity)
+                            .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)
+                    }
+                    
+                    // Show web search indicator if the last user message had web search enabled
+                    if let lastUserMsg = node.conversation.last(where: { $0.role == .user }),
+                       lastUserMsg.webSearchEnabled {
+                        HStack(spacing: 5) {
+                            Image(systemName: "globe")
+                                .font(.system(size: 11))
+                                .foregroundColor(.accentColor)
+                                .rotationEffect(.degrees(processingOpacity == 0.4 ? 360 : 0))
+                                .animation(.linear(duration: 2.0).repeatForever(autoreverses: false), value: processingOpacity)
+                            
+                            Text("Searching the web...")
+                                .font(.system(size: 12))
+                                .foregroundColor(.accentColor.opacity(0.8))
+                                .opacity(processingOpacity)
+                        }
+                    }
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 8)
