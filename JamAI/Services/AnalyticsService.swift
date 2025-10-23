@@ -281,10 +281,6 @@ class AnalyticsService {
                 analytics.totalCreditsUsed += account.creditsUsedThisMonth
                 
                 switch account.plan {
-                case .trial:
-                    // Trial is part of Free plan (2-week Pro trial)
-                    analytics.totalFreeUsers += 1
-                    analytics.totalTrialUsers += 1 // Track separately for conversion metrics
                 case .free:
                     analytics.totalFreeUsers += 1
                 case .pro:

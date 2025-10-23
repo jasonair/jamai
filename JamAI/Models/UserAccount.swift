@@ -9,7 +9,6 @@ import Foundation
 
 /// User subscription plan tiers
 enum UserPlan: String, Codable, CaseIterable {
-    case trial = "trial"
     case free = "free"
     case pro = "pro"
     case teams = "teams"
@@ -17,7 +16,6 @@ enum UserPlan: String, Codable, CaseIterable {
     
     var displayName: String {
         switch self {
-        case .trial: return "Trial"
         case .free: return "Free"
         case .pro: return "Pro"
         case .teams: return "Teams"
@@ -27,7 +25,6 @@ enum UserPlan: String, Codable, CaseIterable {
     
     var monthlyPrice: String {
         switch self {
-        case .trial: return "$0" // 2-week Pro trial
         case .free: return "$0"
         case .pro: return "$15"
         case .teams: return "$30"
@@ -37,7 +34,6 @@ enum UserPlan: String, Codable, CaseIterable {
     
     var monthlyCredits: Int {
         switch self {
-        case .trial: return 100 // 2-week Pro trial with Pro features
         case .free: return 100 // ~100K tokens ≈ $0.06 cost
         case .pro: return 1000 // ~1M tokens ≈ $0.60 cost
         case .teams: return 1500 // ~1.5M tokens ≈ $0.90 cost
@@ -47,7 +43,6 @@ enum UserPlan: String, Codable, CaseIterable {
     
     var maxTeamMembersPerJam: Int {
         switch self {
-        case .trial: return 12 // Pro trial features
         case .free: return 3
         case .pro: return 12
         case .teams: return -1 // Unlimited
@@ -57,7 +52,6 @@ enum UserPlan: String, Codable, CaseIterable {
     
     var maxSavedJams: Int {
         switch self {
-        case .trial: return -1 // Unlimited during trial
         case .free: return 3
         case .pro: return -1 // Unlimited
         case .teams: return -1 // Unlimited
@@ -69,16 +63,9 @@ enum UserPlan: String, Codable, CaseIterable {
         return maxTeamMembersPerJam == -1
     }
     
-    var canAccessAdvancedFeatures: Bool {
-        switch self {
-        case .trial, .pro, .teams, .enterprise: return true
-        case .free: return false
-        }
-    }
     
     var experienceLevelAccess: String {
         switch self {
-        case .trial: return "All experience levels"
         case .free: return "Junior & Intermediate"
         case .pro: return "All experience levels"
         case .teams: return "All experience levels"
@@ -86,25 +73,9 @@ enum UserPlan: String, Codable, CaseIterable {
         }
     }
     
-    var allowsSeniorAndExpert: Bool {
-        switch self {
-        case .trial, .pro, .teams, .enterprise: return true
-        case .free: return false
-        }
-    }
     
     var features: [String] {
         switch self {
-        case .trial:
-            return [
-                "2-week Pro trial",
-                "100 prompt credits (~100K tokens)",
-                "12 AI Team Members per Jam",
-                "All experience levels",
-                "Gemini 2.5 Flash-Lite + Claude Instant",
-                "Advanced web search",
-                "Image generation (low res)"
-            ]
         case .free:
             return [
                 "100 prompt credits/month (~100K tokens)",
@@ -202,7 +173,7 @@ struct UserAccount: Codable, Identifiable {
         email: String,
         displayName: String? = nil,
         photoURL: String? = nil,
-        plan: UserPlan = .trial,
+        plan: UserPlan = .free,
         credits: Int? = nil,
         createdAt: Date = Date(),
         lastLoginAt: Date = Date(),
@@ -220,7 +191,7 @@ struct UserAccount: Codable, Identifiable {
         self.creditsUsedThisMonth = 0
         self.createdAt = createdAt
         self.lastLoginAt = lastLoginAt
-        self.planExpiresAt = plan == .trial ? Calendar.current.date(byAdding: .day, value: 14, to: createdAt) : nil
+        self.planExpiresAt = plan == .free ? Calendar.current.date(byAdding: .day, value: 14, to: createdAt) : nil
         self.isActive = true
         self.stripeCustomerId = stripeCustomerId
         self.stripeSubscriptionId = stripeSubscriptionId
@@ -234,8 +205,24 @@ struct UserAccount: Codable, Identifiable {
     }
     
     var isTrialExpired: Bool {
-        guard plan == .trial, let expiresAt = planExpiresAt else { return false }
+        guard plan == .free, let expiresAt = planExpiresAt else { return false }
         return Date() > expiresAt
+    }
+
+    var canAccessAdvancedFeatures: Bool {
+        switch self.plan {
+        case .pro, .teams, .enterprise: return true
+        case .free:
+            return !isTrialExpired
+        }
+    }
+
+    var allowsSeniorAndExpert: Bool {
+        switch self.plan {
+        case .pro, .teams, .enterprise: return true
+        case .free:
+            return !isTrialExpired
+        }
     }
 }
 

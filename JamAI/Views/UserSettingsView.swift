@@ -167,6 +167,60 @@ struct UserSettingsView: View {
                         }
                     }
                     
+                    // Account Activity
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Account Activity")
+                                    .font(.system(size: 18, weight: .semibold))
+                                Text("Your JamAI usage this month")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            Spacer()
+                        }
+                        
+                        // Grid of stat cards
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                            StatCard(
+                                label: "Nodes Created",
+                                value: "\(account.metadata.totalNodesCreated)",
+                                icon: "square.on.square"
+                            )
+                            
+                            StatCard(
+                                label: "AI Messages",
+                                value: "\(account.metadata.totalMessagesGenerated)",
+                                icon: "wand.and.stars"
+                            )
+                            
+                            StatCard(
+                                label: "Notes Created",
+                                value: "\(account.metadata.totalNotesCreated)",
+                                icon: "note.text"
+                            )
+                            
+                            StatCard(
+                                label: "Child Nodes",
+                                value: "\(account.metadata.totalChildNodesCreated)",
+                                icon: "arrow.triangle.branch"
+                            )
+                            
+                            StatCard(
+                                label: "Expand Actions",
+                                value: "\(account.metadata.totalExpandActions)",
+                                icon: "arrow.up.right.square"
+                            )
+                            
+                            StatCard(
+                                label: "AI Team Members Used",
+                                value: "\(account.metadata.totalTeamMembersUsed)",
+                                icon: "person.2.fill"
+                            )
+                        }
+                    }
+                    
                     // Stripe Subscription Info
                     if let stripeCustomerId = account.stripeCustomerId {
                         VStack(alignment: .leading, spacing: 12) {
@@ -290,7 +344,7 @@ struct UserSettingsView: View {
                                 }
                                 
                                 Button {
-                                    if let url = URL(string: "https://jamai.app/pricing") {
+                                    if let url = URL(string: "http://localhost:3000/account") {
                                         NSWorkspace.shared.open(url)
                                     }
                                 } label: {
@@ -334,59 +388,6 @@ struct UserSettingsView: View {
                         }
                     }
                     
-                    // Account Activity
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("Account Activity")
-                                    .font(.system(size: 18, weight: .semibold))
-                                Text("Your JamAI usage this month")
-                                    .font(.system(size: 12))
-                                    .foregroundColor(.secondary)
-                            }
-                            
-                            Spacer()
-                        }
-                        
-                        // Grid of stat cards
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            StatCard(
-                                label: "Nodes Created",
-                                value: "\(account.metadata.totalNodesCreated)",
-                                icon: "square.on.square"
-                            )
-                            
-                            StatCard(
-                                label: "AI Messages",
-                                value: "\(account.metadata.totalMessagesGenerated)",
-                                icon: "wand.and.stars"
-                            )
-                            
-                            StatCard(
-                                label: "Notes Created",
-                                value: "\(account.metadata.totalNotesCreated)",
-                                icon: "note.text"
-                            )
-                            
-                            StatCard(
-                                label: "Child Nodes",
-                                value: "\(account.metadata.totalChildNodesCreated)",
-                                icon: "arrow.triangle.branch"
-                            )
-                            
-                            StatCard(
-                                label: "Expand Actions",
-                                value: "\(account.metadata.totalExpandActions)",
-                                icon: "arrow.up.right.square"
-                            )
-                            
-                            StatCard(
-                                label: "AI Team Members Used",
-                                value: "\(account.metadata.totalTeamMembersUsed)",
-                                icon: "person.2.fill"
-                            )
-                        }
-                    }
                     
                     // Sign out button
                     Button {
@@ -476,7 +477,6 @@ struct UserSettingsView: View {
     
     private func planColor(for plan: UserPlan) -> Color {
         switch plan {
-        case .trial: return .orange
         case .free: return .gray
         case .pro: return .blue
         case .teams: return .purple
@@ -513,7 +513,7 @@ struct UserSettingsView: View {
     private func renewalDateText(for account: UserAccount) -> String {
         let calendar = Calendar.current
         
-        if account.plan == .trial, let expiresAt = account.planExpiresAt {
+        if account.plan == .free, let expiresAt = account.planExpiresAt, !account.isTrialExpired {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
             formatter.timeStyle = .none

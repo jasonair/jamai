@@ -317,8 +317,7 @@ class FirebaseDataService: ObservableObject {
         do {
             // Calculate new credits based on plan
             let newCredits = plan.monthlyCredits
-            let expiresAt: Timestamp? = plan == .trial ? 
-                Timestamp(date: Calendar.current.date(byAdding: .day, value: 14, to: Date()) ?? Date()) : nil
+            let expiresAt: Timestamp? = nil
             
             var updateData: [String: Any] = [
                 "plan": plan.rawValue,

@@ -27,7 +27,7 @@ struct TeamMemberModal: View {
         guard let account = dataService.userAccount else { return .free }
         // Map UserPlan to PlanTier for experience level access
         switch account.plan {
-        case .trial, .pro: return .pro
+        case .pro: return .pro
         case .teams, .enterprise: return .enterprise
         case .free: return .free
         }
