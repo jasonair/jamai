@@ -239,6 +239,7 @@ struct UserMetadata: Codable {
     var totalTeamMembersUsed: Int
     var totalExpandActions: Int
     var totalChildNodesCreated: Int
+    var totalProjectsCreated: Int
     var lastAppVersion: String
     var deviceInfo: String
     
@@ -250,6 +251,7 @@ struct UserMetadata: Codable {
         self.totalTeamMembersUsed = 0
         self.totalExpandActions = 0
         self.totalChildNodesCreated = 0
+        self.totalProjectsCreated = 0
         self.lastAppVersion = ""
         self.deviceInfo = ""
     }
@@ -264,6 +266,7 @@ struct UserMetadata: Codable {
         self.totalTeamMembersUsed = try container.decodeIfPresent(Int.self, forKey: .totalTeamMembersUsed) ?? 0
         self.totalExpandActions = try container.decodeIfPresent(Int.self, forKey: .totalExpandActions) ?? 0
         self.totalChildNodesCreated = try container.decodeIfPresent(Int.self, forKey: .totalChildNodesCreated) ?? 0
+        self.totalProjectsCreated = try container.decodeIfPresent(Int.self, forKey: .totalProjectsCreated) ?? 0
         self.lastAppVersion = try container.decodeIfPresent(String.self, forKey: .lastAppVersion) ?? ""
         self.deviceInfo = try container.decodeIfPresent(String.self, forKey: .deviceInfo) ?? ""
     }

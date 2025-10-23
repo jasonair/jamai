@@ -542,6 +542,13 @@ class AppState: ObservableObject {
                         let finalURL = (url.pathExtension == Config.jamFileExtension)
                             ? url
                             : url.appendingPathExtension(Config.jamFileExtension)
+
+                        // Increment the total projects created counter
+                        if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                            Task {
+                                await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalProjectsCreated")
+                            }
+                        }
                         
                         // Track project created analytics
                         if let userId = FirebaseAuthService.shared.currentUser?.uid {

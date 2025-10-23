@@ -218,6 +218,12 @@ struct UserSettingsView: View {
                                 value: "\(account.metadata.totalTeamMembersUsed)",
                                 icon: "person.2.fill"
                             )
+                            
+                            StatCard(
+                                label: "Projects Created",
+                                value: "\(account.metadata.totalProjectsCreated)",
+                                icon: "folder.badge.plus"
+                            )
                         }
                     }
                     
