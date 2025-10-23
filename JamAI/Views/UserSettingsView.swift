@@ -296,18 +296,13 @@ struct UserSettingsView: View {
                                 
                                 // Manage Subscription Button
                                 Button {
-                                    Task {
-                                        do {
-                                            let portalURL = try await dataService.createStripePortalSession(returnURL: "http://localhost:3000/account")
-                                            NSWorkspace.shared.open(portalURL)
-                                        } catch {
-                                            print("Failed to open Stripe portal: \(error)")
-                                        }
+                                    if let url = URL(string: "http://localhost:3000/account") {
+                                        NSWorkspace.shared.open(url)
                                     }
                                 } label: {
                                     HStack {
-                                        Image(systemName: "gear")
-                                        Text("Manage Subscription")
+                                        Image(systemName: "arrow.up.right.square")
+                                        Text("Jam AI account (\(account.email))")
                                     }
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
