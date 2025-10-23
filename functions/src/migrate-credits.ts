@@ -11,6 +11,103 @@
 import * as admin from 'firebase-admin';
 import { onRequest } from 'firebase-functions/v2/https';
 
+/**
+ * One-time migration script to backfill user metadata from analytics collections.
+ * This should be run once to correct historical data.
+ */
+export const migrateUserStats = onRequest({ invoker: 'private' }, async (req, res) => {
+  const db = admin.firestore();
+  const usersRef = db.collection("users");
+  const analyticsNodeRef = db.collection("analytics_node_creation");
+  const analyticsTokenRef = db.collection("analytics_token_usage");
+  const analyticsTeamRef = db.collection("analytics_team_member_usage");
+
+  console.log("Starting user stats migration...");
+
+  try {
+    // 1. Aggregate analytics data
+    const userStats: { [key: string]: any } = {};
+
+    const nodeSnapshot = await analyticsNodeRef.get();
+    nodeSnapshot.forEach(doc => {
+      const data = doc.data();
+      const userId = data.userId;
+      if (!userStats[userId]) userStats[userId] = {};
+
+      switch (data.creationMethod) {
+        case 'manual':
+          userStats[userId].totalNodesCreated = (userStats[userId].totalNodesCreated || 0) + 1;
+          break;
+        case 'note':
+          userStats[userId].totalNotesCreated = (userStats[userId].totalNotesCreated || 0) + 1;
+          break;
+        case 'child_node':
+        case 'expand':
+          userStats[userId].totalChildNodesCreated = (userStats[userId].totalChildNodesCreated || 0) + 1;
+          break;
+      }
+    });
+
+    const tokenSnapshot = await analyticsTokenRef.get();
+    tokenSnapshot.forEach(doc => {
+      const data = doc.data();
+      const userId = data.userId;
+      if (!userStats[userId]) userStats[userId] = {};
+
+      switch (data.generationType) {
+        case 'chat':
+          userStats[userId].totalMessagesGenerated = (userStats[userId].totalMessagesGenerated || 0) + 1;
+          break;
+        case 'expand':
+          userStats[userId].totalExpandActions = (userStats[userId].totalExpandActions || 0) + 1;
+          break;
+      }
+    });
+
+    const teamSnapshot = await analyticsTeamRef.where('actionType', '==', 'attached').get();
+    teamSnapshot.forEach(doc => {
+      const data = doc.data();
+      const userId = data.userId;
+      if (!userStats[userId]) userStats[userId] = {};
+      userStats[userId].totalTeamMembersUsed = (userStats[userId].totalTeamMembersUsed || 0) + 1;
+    });
+
+    // 2. Update user documents
+    const batch = db.batch();
+    let migratedCount = 0;
+
+    for (const userId in userStats) {
+      const userRef = usersRef.doc(userId);
+      const stats = userStats[userId];
+      const updateData: { [key: string]: any } = {};
+
+      for (const field in stats) {
+        updateData[`metadata.${field}`] = stats[field];
+      }
+
+      batch.update(userRef, updateData);
+      migratedCount++;
+    }
+
+    await batch.commit();
+
+    console.log('✅ User stats migration complete!');
+    res.status(200).json({
+      success: true,
+      migratedUsers: migratedCount,
+      message: 'User stats migration completed successfully'
+    });
+
+  } catch (error: any) {
+    console.error('❌ User stats migration failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+
 // Use the already-initialized admin instance
 const db = admin.firestore();
 

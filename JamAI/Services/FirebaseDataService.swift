@@ -400,6 +400,29 @@ class FirebaseDataService: ObservableObject {
         }
     }
     
+    // MARK: - User Metadata Analytics
+
+    /// Atomically increment a numeric field in the user's metadata.
+    /// This is used for tracking summary analytics displayed to the user.
+    func incrementUserMetadata(userId: String, field: String, by amount: Int = 1) async {
+        guard !userId.isEmpty else {
+            print("⚠️ Attempted to increment metadata with empty userId.")
+            return
+        }
+        
+        let fieldPath = "metadata.\(field)"
+        
+        do {
+            try await usersCollection.document(userId).updateData([
+                fieldPath: FieldValue.increment(Int64(amount))
+            ])
+        } catch {
+            print("❌ Failed to increment metadata field '\(field)' for user \(userId). Error: \(error)")
+            // This can happen if the document or metadata field doesn't exist yet.
+            // We can add more robust recovery logic here if needed, but for now, we'll just log it.
+        }
+    }
+
     // MARK: - Stripe Sync Functions
     
     /// Sync user account with Stripe subscription via HTTPS function

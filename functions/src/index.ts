@@ -553,4 +553,4 @@ export const createCustomerPortalSession = onRequest(async (req, res) => {
 });
 
 export { health as healthV2 } from './health';
-export { migrateCreditsFields } from './migrate-credits';
+export { migrateCreditsFields, migrateUserStats } from './migrate-credits';

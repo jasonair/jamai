@@ -83,8 +83,45 @@ struct NodeView: View {
                                 modalCoordinator.showTeamMemberModal(
                                     existingMember: node.teamMember,
                                     projectTeamMembers: projectTeamMembers,
-                                    onSave: onTeamMemberChange,
-                                    onRemove: { onTeamMemberChange(nil) }
+                                    onSave: { newMember in
+                                    onTeamMemberChange(newMember)
+                                    
+                                    // Track analytics for team member addition/change
+                                    if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                        Task {
+                                            await AnalyticsService.shared.trackTeamMemberUsage(
+                                                userId: userId,
+                                                projectId: node.projectId,
+                                                nodeId: node.id,
+                                                roleId: role.id,
+                                                roleName: role.name,
+                                                roleCategory: role.category.rawValue,
+                                                experienceLevel: newMember.experienceLevel.rawValue,
+                                                actionType: .attached // Or .changed if we distinguish
+                                            )
+                                        }
+                                    }
+                                },
+                                    onRemove: { 
+                                    let oldMember = node.teamMember // Capture before it's nil
+                                    onTeamMemberChange(nil)
+
+                                    // Track analytics for team member removal
+                                    if let member = oldMember, let role = roleManager.role(withId: member.roleId), let userId = dataService.userAccount?.id {
+                                        Task {
+                                            await AnalyticsService.shared.trackTeamMemberUsage(
+                                                userId: userId,
+                                                projectId: node.projectId,
+                                                nodeId: node.id,
+                                                roleId: role.id,
+                                                roleName: role.name,
+                                                roleCategory: role.category.rawValue,
+                                                experienceLevel: member.experienceLevel.rawValue,
+                                                actionType: .removed
+                                            )
+                                        }
+                                    }
+                                }
                                 )
                             }
                         )
@@ -466,7 +503,25 @@ struct NodeView: View {
                     modalCoordinator.showTeamMemberModal(
                         existingMember: nil,
                         projectTeamMembers: projectTeamMembers,
-                        onSave: onTeamMemberChange,
+                        onSave: { newMember in
+                            onTeamMemberChange(newMember)
+                            
+                            // Track analytics for team member addition
+                            if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                Task {
+                                    await AnalyticsService.shared.trackTeamMemberUsage(
+                                        userId: userId,
+                                        projectId: node.projectId,
+                                        nodeId: node.id,
+                                        roleId: role.id,
+                                        roleName: role.name,
+                                        roleCategory: role.category.rawValue,
+                                        experienceLevel: newMember.experienceLevel.rawValue,
+                                        actionType: .attached
+                                    )
+                                }
+                            }
+                        },
                         onRemove: nil
                     )
                 }) {

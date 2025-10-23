@@ -558,6 +558,12 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
+                                // Deduct credits before logging analytics
+                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Expand Action")
+                                }
+
                                 // Track credit usage and analytics
                                 await CreditTracker.shared.trackGeneration(
                                     promptText: prompt,
@@ -876,6 +882,12 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
+                                // Deduct credits before logging analytics
+                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message")
+                                }
+
                                 // Track credit usage and analytics
                                 await CreditTracker.shared.trackGeneration(
                                     promptText: prompt,

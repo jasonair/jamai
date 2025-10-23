@@ -72,6 +72,16 @@ class AnalyticsService {
         
         await logEvent(event, to: tokenUsageCollection)
         await updateDailyAnalytics(userId: userId, tokenEvent: event)
+
+        // Also increment the user-facing metadata stat
+        switch generationType {
+        case .chat:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalMessagesGenerated")
+        case .expand:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalExpandActions")
+        default:
+            break // Other types don't have a user-facing counter yet
+        }
     }
     
     // MARK: - Team Member Usage Tracking
@@ -100,6 +110,11 @@ class AnalyticsService {
         
         await logEvent(event, to: teamMemberUsageCollection)
         
+        // Also increment the user-facing metadata stat when a member is added
+        if actionType == .attached {
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalTeamMembersUsed")
+        }
+
         // Update daily analytics if team member was used in generation
         if actionType == .used {
             await updateDailyAnalytics(userId: userId, teamMemberRoleId: roleId)
@@ -152,6 +167,17 @@ class AnalyticsService {
         
         await logEvent(event, to: nodeCreationCollection)
         await updateDailyAnalytics(userId: userId, nodeCreation: event)
+
+        // Also increment the user-facing metadata stat
+        switch creationMethod {
+        case .manual:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalNodesCreated")
+        case .note:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalNotesCreated")
+        case .childNode, .expand:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalChildNodesCreated")
+        }
+
     }
     
     // MARK: - Daily Analytics Aggregation

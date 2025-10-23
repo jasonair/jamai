@@ -45,8 +45,9 @@ class CreditTracker {
         return max(1, text.count / 4)
     }
     
-    /// Calculate credits needed for prompt and response
-    private func calculateCredits(promptText: String, responseText: String) -> Int {
+    
+    /// Calculates credits needed for a given prompt and response.
+    func calculateCredits(promptText: String, responseText: String) -> Int {
         let promptTokens = estimateTokens(text: promptText)
         let responseTokens = estimateTokens(text: responseText)
         let totalTokens = promptTokens + responseTokens
@@ -54,8 +55,10 @@ class CreditTracker {
         // Calculate credits (1 credit per 1000 tokens, minimum 1)
         return max(1, (totalTokens + 999) / 1000 * creditsPerThousandTokens)
     }
-    
-    /// Deduct credits and track detailed token usage after AI generation
+
+    /// Tracks the detailed token usage for an AI generation event.
+    /// This function is now responsible for logging analytics ONLY.
+    /// Credit deduction should be handled by the caller.
     func trackGeneration(
         promptText: String,
         responseText: String,
@@ -72,26 +75,8 @@ class CreditTracker {
         
         let inputTokens = estimateTokens(text: promptText)
         let outputTokens = estimateTokens(text: responseText)
-        let credits = calculateCredits(promptText: promptText, responseText: responseText)
         
-        // Deduct credits
-        let success = await FirebaseDataService.shared.deductCredits(
-            userId: userId,
-            amount: credits,
-            description: "AI generation for node"
-        )
-        
-        if !success {
-            print("⚠️ CreditTracker: Failed to deduct credits (Firebase permissions issue?)")
-        }
-        
-        // Update user metadata
-        if var metadata = FirebaseDataService.shared.userAccount?.metadata {
-            metadata.totalMessagesGenerated += 1
-            await FirebaseDataService.shared.updateUserMetadata(userId: userId, metadata: metadata)
-        }
-        
-        // Track detailed token usage for analytics
+        // Determine the generation type for analytics
         let genType: TokenUsageEvent.GenerationType
         switch generationType {
         case "expand":
@@ -104,6 +89,8 @@ class CreditTracker {
             genType = .chat
         }
         
+        // Log the detailed event. The AnalyticsService will handle both the detailed
+        // log and the user-facing metadata increment.
         await AnalyticsService.shared.trackTokenUsage(
             userId: userId,
             projectId: projectId,
