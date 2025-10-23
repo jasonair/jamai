@@ -833,15 +833,17 @@ struct NodeView: View {
                 // Button row at bottom - aligned with text padding
                 HStack {
                     // Image upload button (bottom left)
-                    Button(action: selectImage) {
-                        Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
-                            .font(.system(size: 19))
-                            .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                    if dataService.userAccount?.canAccessAdvancedFeatures ?? false {
+                        Button(action: selectImage) {
+                            Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
+                                .font(.system(size: 19))
+                                .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Upload image")
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Upload image")
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
                     
                     Spacer()
                     

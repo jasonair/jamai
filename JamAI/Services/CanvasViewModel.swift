@@ -507,6 +507,7 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
         guard let node = nodes[nodeId] else { return }
         
@@ -875,22 +876,21 @@ class CanvasViewModel: ObservableObject {
         // Add user message to conversation with optional image
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
         // Also update legacy prompt field for backwards compatibility
-        node.prompt = prompt
-        nodes[nodeId] = node
-        
-        Task {
+        Task { [weak self] in
+            guard let self = self else { return }
+            
             do {
-                let context = buildContext(for: node)
+                let context = self.buildContext(for: node)
                 var streamedResponse = ""
                 
-                // Assemble system prompt - use team member's prompt if available
-                let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+                // Assemble system prompt
+                let baseSystemPrompt = node.systemPromptSnapshot ?? self.project.systemPrompt
                 let finalSystemPrompt: String
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
                     finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
                     
-                    // Track team member usage in generation
+                    // Track team member usage
                     self.trackTeamMemberUsage(
                         nodeId: nodeId,
                         roleId: role.id,
@@ -903,7 +903,7 @@ class CanvasViewModel: ObservableObject {
                     finalSystemPrompt = baseSystemPrompt
                 }
                 
-                geminiClient.generateStreaming(
+                self.geminiClient.generateStreaming(
                     prompt: prompt,
                     systemPrompt: finalSystemPrompt,
                     context: context,

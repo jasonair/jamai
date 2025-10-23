@@ -108,7 +108,7 @@ class FirebaseDataService: ObservableObject {
                 userId: userId,
                 amount: account.credits,
                 type: .monthlyGrant,
-                description: "Initial trial credits"
+                description: "Initial Pro trial credits"
             )
             
             self.userAccount = account

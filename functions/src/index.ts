@@ -384,8 +384,8 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
     for (const userDoc of usersSnapshot.docs) {
       const userData = userDoc.data();
 
-      // Check for expired trials
-      if (userData.plan === 'trial' && userData.planExpiresAt) {
+      // Check for expired free trials
+      if (userData.plan === 'free' && userData.planExpiresAt) {
         const expiresAt = userData.planExpiresAt;
         
         if (expiresAt.seconds < now.seconds) {
@@ -404,7 +404,7 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
             userId: userDoc.id,
             amount: 100,
             type: 'plan_upgrade',
-            description: 'Trial expired - downgraded to Free plan',
+            description: 'Free trial expired',
             timestamp: admin.firestore.FieldValue.serverTimestamp(),
           });
 
@@ -413,7 +413,7 @@ export const dailyMaintenance = onSchedule({ schedule: '0 0 * * *', timeZone: 'U
       }
     }
 
-    console.log(`✅ Maintenance complete. Expired trials: ${expiredTrialCount}`);
+    console.log(`✅ Maintenance complete. Expired free trials: ${expiredTrialCount}`);
   });
 
 // Export health check endpoint

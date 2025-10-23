@@ -187,7 +187,11 @@ struct UserAccount: Codable, Identifiable {
         self.displayName = displayName
         self.photoURL = photoURL
         self.plan = plan
-        self.credits = credits ?? plan.monthlyCredits
+        if plan == .free, credits == nil { // New user starting a trial
+            self.credits = UserPlan.pro.monthlyCredits
+        } else {
+            self.credits = credits ?? plan.monthlyCredits
+        }
         self.creditsUsedThisMonth = 0
         self.createdAt = createdAt
         self.lastLoginAt = lastLoginAt
