@@ -35,5 +35,5 @@ struct MaintenanceView: View {
 }
 
 #Preview {
-    MaintenanceView(message: "JamAI is currently undergoing maintenance. Please check back later.")
+    MaintenanceView(message: "Jam AI is currently undergoing maintenance. Please check back later.")
 }

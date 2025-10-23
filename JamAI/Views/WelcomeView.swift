@@ -28,7 +28,7 @@ struct WelcomeView: View {
                         .foregroundColor(.accentColor)
                 }
                 
-                Text("JamAI")
+                Text("Jam AI")
                     .font(.system(size: 40, weight: .bold))
                 
                 Text("Visual AI Thinking Canvas")
@@ -150,7 +150,7 @@ struct WelcomeView: View {
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.message = "Select a JamAI project folder (.jam)"
+        panel.message = "Select a Jam AI project folder (.jam)"
         
         panel.begin { [weak appState] response in
             guard let appState = appState else { return }

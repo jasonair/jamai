@@ -39,7 +39,7 @@ struct AuthenticationView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 24))
                         .shadow(color: .black.opacity(0.1), radius: 10, y: 5)
                     
-                    Text("Welcome to JamAI")
+                    Text("Welcome to Jam AI")
                         .font(.system(size: 32, weight: .bold))
                     
                     Text(isSignUpMode ? "Create your account" : "Sign in to continue")

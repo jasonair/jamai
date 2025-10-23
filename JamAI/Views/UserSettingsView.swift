@@ -158,7 +158,7 @@ struct UserSettingsView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "clock.fill")
                                     .foregroundColor(.red)
-                                Text("Your trial has expired. Upgrade to continue using JamAI.")
+                                Text("Your trial has expired. Upgrade to continue using Jam AI.")
                                     .font(.system(size: 13))
                             }
                             .padding(12)
@@ -173,7 +173,7 @@ struct UserSettingsView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("Account Activity")
                                     .font(.system(size: 18, weight: .semibold))
-                                Text("Your JamAI usage this month")
+                                Text("Your Jam AI usage this month")
                                     .font(.system(size: 12))
                                     .foregroundColor(.secondary)
                             }

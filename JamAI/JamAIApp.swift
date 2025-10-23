@@ -537,7 +537,7 @@ class AppState: ObservableObject {
             panel.allowedContentTypes = [.item]
             panel.allowsOtherFileTypes = true
             panel.nameFieldStringValue = "Untitled Project.\(Config.jamFileExtension)"
-            panel.message = "Create a new JamAI project"
+            panel.message = "Create a new Jam AI project"
             
             let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 guard let self = self else { return }
@@ -593,7 +593,7 @@ class AppState: ObservableObject {
             panel.allowsMultipleSelection = false
             panel.canChooseDirectories = true
             panel.canChooseFiles = false
-            panel.message = "Select a JamAI project folder (.jam)"
+            panel.message = "Select a Jam AI project folder (.jam)"
             
             let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 guard let self = self else { return }
