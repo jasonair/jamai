@@ -62,6 +62,12 @@ struct NodeView: View {
     @StateObject private var recordingService = AudioRecordingService()
     
     var body: some View {
+        // Special handling for image nodes - no chrome, just the image
+        if node.type == .image {
+            return AnyView(imageNodeView)
+        }
+        
+        return AnyView(
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
                 // Header
@@ -348,9 +354,126 @@ struct NodeView: View {
             }
         }
         .allowsHitTesting(!modalCoordinator.isModalPresented) // Disable all interaction when modal is open
+        )
     }
     
     // MARK: - Computed Properties
+    
+    private var imageNodeView: some View {
+        let displayWidth = draggedWidth > 0 ? draggedWidth : node.width
+        let displayHeight = draggedHeight > 0 ? draggedHeight : node.height
+        
+        return ZStack(alignment: .topLeading) {  // Changed to topLeading for proper anchor
+            // Display the image
+            if let imageData = node.imageData, let nsImage = NSImage(data: imageData) {
+                Image(nsImage: nsImage)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)  // Changed to .fit to maintain aspect ratio properly
+                    .frame(width: displayWidth, height: displayHeight, alignment: .topLeading)
+                    .clipped()
+                    .overlay(
+                        // Selection border
+                        Rectangle()
+                            .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: isSelected ? 2 : 0)
+                    )
+                    .onTapGesture {
+                        onTap()
+                    }
+                    // Performance: Use faster interpolation during resize
+                    .drawingGroup(opaque: false, colorMode: .nonLinear)
+            } else {
+                // Fallback if image data is missing
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: displayWidth, height: displayHeight)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .font(.system(size: 48))
+                            .foregroundColor(.gray)
+                    )
+            }
+            
+            // Resize grip (only visible when selected) - positioned at bottom right
+            if isSelected {
+                ResizeGripView()
+                    .position(x: displayWidth - 8, y: displayHeight - 8)
+                    .highPriorityGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onChanged { value in
+                                if !isResizing {
+                                    isResizing = true
+                                    resizeStartHeight = node.height
+                                    resizeStartWidth = node.width
+                                    dragStartLocation = value.startLocation
+                                    draggedHeight = node.height
+                                    draggedWidth = node.width
+                                    onResizeActiveChanged(true)
+                                }
+                                
+                                let deltaX = value.location.x - dragStartLocation.x
+                                let deltaY = value.location.y - dragStartLocation.y
+                                
+                                // Calculate aspect ratio from original dimensions
+                                let aspectRatio = resizeStartWidth / resizeStartHeight
+                                
+                                // Determine which dimension changed more (driver dimension)
+                                let xChange = abs(deltaX)
+                                let yChange = abs(deltaY)
+                                
+                                if xChange > yChange {
+                                    // Width is driver - calculate height from width
+                                    let newWidth = max(50, resizeStartWidth + deltaX)
+                                    let newHeight = newWidth / aspectRatio
+                                    draggedWidth = newWidth
+                                    draggedHeight = max(50, newHeight)
+                                } else {
+                                    // Height is driver - calculate width from height
+                                    let newHeight = max(50, resizeStartHeight + deltaY)
+                                    let newWidth = newHeight * aspectRatio
+                                    draggedHeight = newHeight
+                                    draggedWidth = max(50, newWidth)
+                                }
+                            }
+                            .onEnded { value in
+                                if isResizing {
+                                    // Calculate how much size changed
+                                    let widthDelta = draggedWidth - resizeStartWidth
+                                    let heightDelta = draggedHeight - resizeStartHeight
+                                    
+                                    // Adjust position to keep top-left corner fixed
+                                    // Since nodes are positioned by center, we need to shift by half the delta
+                                    let newX = node.x + widthDelta / 2
+                                    let newY = node.y + heightDelta / 2
+                                    
+                                    print("🔧 [Resize] Old: (\(node.x), \(node.y), \(resizeStartWidth)x\(resizeStartHeight))")
+                                    print("🔧 [Resize] New: (\(newX), \(newY), \(draggedWidth)x\(draggedHeight))")
+                                    print("🔧 [Resize] Delta: width=\(widthDelta), height=\(heightDelta), pos shift=(\(widthDelta/2), \(heightDelta/2))")
+                                    
+                                    // Create updated node with new position and size
+                                    var updatedNode = node
+                                    updatedNode.x = newX
+                                    updatedNode.y = newY
+                                    updatedNode.width = draggedWidth
+                                    updatedNode.height = draggedHeight
+                                    
+                                    // Update through binding
+                                    node = updatedNode
+                                    
+                                    // Commit individual changes through callbacks for proper tracking
+                                    onHeightChange(draggedHeight)
+                                    onWidthChange(draggedWidth)
+                                    
+                                    isResizing = false
+                                    draggedHeight = 0
+                                    draggedWidth = 0
+                                    onResizeActiveChanged(false)
+                                }
+                            }
+                    )
+            }
+        }
+        .frame(width: displayWidth, height: displayHeight)
+    }
     
     private var shouldShowTeamMemberTray: Bool {
         // Show tray for standard nodes, or for notes when chat is enabled

@@ -22,6 +22,48 @@ struct MainAppCommands: Commands {
             }
             .keyboardShortcut("z", modifiers: [.command, .shift])
         }
+        
+        // Add Paste Image command - replaces default paste to intercept Cmd+V for images
+        CommandGroup(replacing: .pasteboard) {
+            Button("Paste") {
+                // Check if clipboard has an image
+                let pasteboard = NSPasteboard.general
+                let hasImage = pasteboard.canReadObject(forClasses: [NSImage.self], options: nil)
+                
+                if hasImage {
+                    // Handle image paste
+                    if let vm = focusedVM ?? appState.viewModel {
+                        vm.pasteImageFromClipboard()
+                    }
+                } else {
+                    // Let system handle text paste
+                    NSApp.sendAction(#selector(NSText.paste(_:)), to: nil, from: nil)
+                }
+            }
+            .keyboardShortcut("v", modifiers: .command)
+            
+            // Standard Copy/Cut commands
+            Button("Copy") {
+                NSApp.sendAction(#selector(NSText.copy(_:)), to: nil, from: nil)
+            }
+            .keyboardShortcut("c", modifiers: .command)
+            
+            Button("Cut") {
+                NSApp.sendAction(#selector(NSText.cut(_:)), to: nil, from: nil)
+            }
+            .keyboardShortcut("x", modifiers: .command)
+            
+            Divider()
+            
+            // Delete command
+            Button("Delete") {
+                if let vm = focusedVM ?? appState.viewModel,
+                   let selectedId = vm.selectedNodeId {
+                    vm.deleteNode(selectedId)
+                }
+            }
+            .keyboardShortcut(.delete, modifiers: [])
+        }
 
         CommandGroup(replacing: .newItem) {
             Button("New Project...") {

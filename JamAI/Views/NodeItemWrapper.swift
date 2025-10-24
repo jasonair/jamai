@@ -112,6 +112,8 @@ struct NodeItemWrapper: View {
             return max(40, node.height)
         case .note:
             return node.height
+        case .image:
+            return node.height
         case .standard:
             return node.height
         }

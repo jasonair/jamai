@@ -212,6 +212,12 @@ final class Database: Sendable {
                     t.add(column: "team_member_json", .text)
                 }
             }
+            // Add image_data column if it doesn't exist (migration)
+            if try db.columns(in: "nodes").first(where: { $0.name == "image_data" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "image_data", .blob)
+                }
+            }
             
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
@@ -351,8 +357,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -381,6 +387,7 @@ final class Database: Sendable {
                     node.isBold,
                     node.fontFamily,
                     node.shapeKind?.rawValue,
+                    node.imageData,
                     node.displayOrder,
                     node.createdAt,
                     node.updatedAt
@@ -423,6 +430,7 @@ final class Database: Sendable {
                     isBold: row["is_bold"] ?? false,
                     fontFamily: row["font_family"] as String?,
                     shapeKind: (row["shape_kind"] as String?).flatMap { ShapeKind(rawValue: $0) },
+                    imageData: row["image_data"] as Data?,
                     displayOrder: row["display_order"] as Int?,
                     createdAt: row["created_at"],
                     updatedAt: row["updated_at"]

@@ -32,6 +32,7 @@ class CanvasViewModel: ObservableObject {
     @Published var isPanning: Bool = false // true during active pan gesture for performance optimization
     @Published var selectedTool: CanvasTool = .select
     @Published var viewportSize: CGSize = CGSize(width: 1200, height: 800) // updated by CanvasView
+    @Published var mousePosition: CGPoint = .zero // updated by CanvasView, in screen coordinates
     
     // Forward undo manager state for UI binding
     @Published var canUndo: Bool = false
@@ -409,6 +410,92 @@ class CanvasViewModel: ObservableObject {
                 do { try await dbActor.saveNode(node) }
                 catch {
                     await MainActor.run { self?.errorMessage = "Failed to save shape: \(error.localizedDescription)" }
+                }
+            }
+        }
+    }
+    
+    // MARK: - Image Paste
+    func pasteImageFromClipboard(at position: CGPoint? = nil) {
+        let pasteboard = NSPasteboard.general
+        
+        // Check if clipboard contains an image
+        guard let image = pasteboard.readObjects(forClasses: [NSImage.self], options: nil)?.first as? NSImage else {
+            return
+        }
+        
+        guard let tiffData = image.tiffRepresentation else {
+            return
+        }
+        
+        guard let bitmap = NSBitmapImageRep(data: tiffData) else {
+            return
+        }
+        
+        guard let imageData = bitmap.representation(using: .png, properties: [:]) else {
+            return
+        }
+        
+        // Determine position - use provided position or convert mouse position to canvas coordinates
+        let nodePosition: CGPoint
+        if let position = position {
+            nodePosition = position
+        } else {
+            // Convert screen coordinates (mousePosition) to canvas coordinates
+            // Formula: canvasCoord = (screenCoord - offset) / zoom
+            let canvasX = (mousePosition.x - offset.width) / zoom
+            let canvasY = (mousePosition.y - offset.height) / zoom
+            nodePosition = CGPoint(x: canvasX, y: canvasY)
+        }
+        
+        // Calculate image dimensions while maintaining aspect ratio
+        let imageSize = image.size
+        let maxDimension: CGFloat = 400
+        var width = imageSize.width
+        var height = imageSize.height
+        
+        if width > maxDimension || height > maxDimension {
+            let aspectRatio = width / height
+            if width > height {
+                width = maxDimension
+                height = maxDimension / aspectRatio
+            } else {
+                height = maxDimension
+                width = maxDimension * aspectRatio
+            }
+        }
+        
+        // Create image node
+        Task(priority: .userInitiated) { @MainActor in
+            let node = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                x: nodePosition.x,
+                y: nodePosition.y,
+                width: width,
+                height: height,
+                title: "",
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: false,
+                color: "none",
+                type: .image,
+                imageData: imageData
+            )
+            
+            self.nodes[node.id] = node
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
+            
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do {
+                    try await dbActor.saveNode(node)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save image: \(error.localizedDescription)"
+                    }
                 }
             }
         }

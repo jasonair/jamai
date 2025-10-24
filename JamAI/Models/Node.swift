@@ -24,6 +24,7 @@ enum NodeType: String, Codable, Sendable {
     case note
     case text
     case shape
+    case image
 }
 
 struct Node: Identifiable, Codable, Equatable, Sendable {
@@ -67,6 +68,9 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var fontFamily: String?
     var shapeKind: ShapeKind?
     
+    // Image data (for image nodes)
+    var imageData: Data?
+    
     // Metadata
     var createdAt: Date
     var updatedAt: Date
@@ -99,6 +103,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         isBold: Bool = false,
         fontFamily: String? = nil,
         shapeKind: ShapeKind? = nil,
+        imageData: Data? = nil,
         displayOrder: Int? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -129,6 +134,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.isBold = isBold
         self.fontFamily = fontFamily
         self.shapeKind = shapeKind
+        self.imageData = imageData
         self.displayOrder = displayOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -232,6 +238,7 @@ extension Node {
         case .note: return noteWidth
         case .text: return textWidth
         case .shape: return shapeWidth
+        case .image: return 300 // Default image width
         case .standard: return nodeWidth
         }
     }

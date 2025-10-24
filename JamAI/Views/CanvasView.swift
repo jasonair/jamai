@@ -130,6 +130,9 @@ struct CanvasView: View {
                 viewModel.viewportSize = geometry.size
             }
             // Track mouse and capture two-finger pan scrolling
+            .onChange(of: mouseLocation) { _, newValue in
+                viewModel.mousePosition = newValue
+            }
             .overlay(
                 MouseTrackingView(
                     position: $mouseLocation,
@@ -773,7 +776,7 @@ extension View {
                 guard viewModel.selectedNodeId == nil else { return .ignored }
                 
                 // Calculate center of visible canvas area (accounting for outline if shown)
-                // Note: We can't access geometry or showOutline here, so we approximate
+                // Note: We can't access geometry or outline here, so we approximate
                 // Default window is 1200x800, tab bar is ~36, outline is ~300 when visible
                 let viewportWidth: CGFloat = 1200
                 let viewportHeight: CGFloat = 800
