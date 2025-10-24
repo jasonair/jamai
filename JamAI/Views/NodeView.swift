@@ -1239,7 +1239,9 @@ struct NodeView: View {
                         // Update local state only - smooth without triggering binding updates
                         let minWidth = node.type == .note ? Node.minNoteWidth : Node.minWidth
                         let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
-                        draggedHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + deltaY))
+                        let minHeight = node.type == .note ? Node.minNoteHeight : Node.minHeight
+                        let maxHeight = node.type == .note ? Node.maxNoteHeight : Node.maxHeight
+                        draggedHeight = max(minHeight, min(maxHeight, resizeStartHeight + deltaY))
                         draggedWidth = max(minWidth, min(maxWidth, resizeStartWidth + deltaX))
 
                         // Real-time compensation so top-left is visually pinned (center-based positioning fix)

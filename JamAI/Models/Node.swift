@@ -113,8 +113,16 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.parentId = parentId
         self.x = x
         self.y = y
-        self.width = width ?? Node.width(for: type)
-        self.height = height
+        let resolvedWidth = width ?? Node.width(for: type)
+        let resolvedHeight: CGFloat
+        if type == .note && height == Node.expandedHeight {
+            // Default notes should be square by default
+            resolvedHeight = Node.noteWidth
+        } else {
+            resolvedHeight = height
+        }
+        self.width = resolvedWidth
+        self.height = resolvedHeight
         self.title = title
         self.titleSource = titleSource
         self.description = description
@@ -227,8 +235,10 @@ extension Node {
     nonisolated static let maxHeight: CGFloat = 800 // Maximum height when resizing
     nonisolated static let minWidth: CGFloat = 420 // Minimum width for standard nodes when resizing
     nonisolated static let minNoteWidth: CGFloat = 350 // Minimum width for notes when resizing
+    nonisolated static let minNoteHeight: CGFloat = 200 // Minimum height for notes when resizing
     nonisolated static let maxWidth: CGFloat = 1200 // Maximum width for standard nodes when resizing
     nonisolated static let maxNoteWidth: CGFloat = 700 // Maximum width for notes when resizing
+    nonisolated static let maxNoteHeight: CGFloat = 800 // Maximum height for notes when resizing
     nonisolated static let padding: CGFloat = 16
     nonisolated static let cornerRadius: CGFloat = 12
     nonisolated static let shadowRadius: CGFloat = 8

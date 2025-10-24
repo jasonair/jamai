@@ -138,21 +138,7 @@ struct CanvasView: View {
                     position: $mouseLocation,
                     hasSelectedNode: viewModel.selectedNodeId != nil && !modalCoordinator.isModalPresented,
                     onScroll: { dx, dy in
-                        // Pan the canvas with fingers (Figma-style)
-                        guard !isResizingActive else { return }
-                        
-                        // Set panning state for layout stability
-                        viewModel.isPanning = true
-                        
-                        // Pan the canvas
-                        viewModel.offset.width += dx
-                        viewModel.offset.height += dy
-                        
-                        // Debounce: reset panning state after scroll stops
-                        panDebounceTimer?.invalidate()
-                        panDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                            viewModel.isPanning = false
-                        }
+                        // Do nothing
                     },
                     onCommandClose: {
                         onCommandClose?()
