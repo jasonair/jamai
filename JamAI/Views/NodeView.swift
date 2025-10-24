@@ -1230,6 +1230,7 @@ struct NodeView: View {
                             draggedWidth = node.width
                             dragStartLocation = value.location
                             onResizeActiveChanged(true)
+                            onResizeCompensationChange(.zero)
                         }
                         // Calculate delta from initial drag position (prevents drift)
                         let deltaX = value.location.x - dragStartLocation.x
@@ -1240,12 +1241,19 @@ struct NodeView: View {
                         let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
                         draggedHeight = max(Node.minHeight, min(Node.maxHeight, resizeStartHeight + deltaY))
                         draggedWidth = max(minWidth, min(maxWidth, resizeStartWidth + deltaX))
+
+                        // Real-time compensation so top-left is visually pinned (center-based positioning fix)
+                        let comp = CGSize(width: (draggedWidth - resizeStartWidth) / 2,
+                                          height: (draggedHeight - resizeStartHeight) / 2)
+                        onResizeCompensationChange(comp)
                     }
                     .onEnded { _ in
                         isResizing = false
                         // Only update the binding once at the end
                         onHeightChange(draggedHeight)
                         onWidthChange(draggedWidth)
+                        // Clear compensation after commit to persist top-left pin
+                        onResizeCompensationChange(.zero)
                         onResizeActiveChanged(false)
                     }
             )
