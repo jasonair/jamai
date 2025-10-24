@@ -31,6 +31,7 @@ struct NodeItemWrapper: View {
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     @State private var isResizingActive: Bool = false
+    @State private var resizeCompensation: CGSize = .zero
     
     var body: some View {
         Group {
@@ -71,6 +72,9 @@ struct NodeItemWrapper: View {
                         isResizingActive = active
                         onResizeActiveChanged(active)
                     },
+                    onResizeCompensationChange: { comp in
+                        resizeCompensation = comp
+                    },
                     onMaximizeAndCenter: onMaximizeAndCenter,
                     onTeamMemberChange: onTeamMemberChange
                 )
@@ -80,6 +84,7 @@ struct NodeItemWrapper: View {
             x: node.x + displayWidth / 2,
             y: node.y + displayHeight / 2
         )
+        .offset(resizeCompensation)
         .simultaneousGesture(
             DragGesture(minimumDistance: 3, coordinateSpace: .global)
                 .onChanged { value in
