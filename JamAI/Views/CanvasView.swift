@@ -532,7 +532,10 @@ struct CanvasView: View {
             isSelected: viewModel.selectedNodeId == node.id,
             isGenerating: viewModel.generatingNodeId == node.id,
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
-            onTap: { viewModel.selectedNodeId = node.id },
+            onTap: { 
+                viewModel.bringToFront([node.id])
+                viewModel.selectedNodeId = node.id 
+            },
             onPromptSubmit: { prompt, imageData, imageMimeType, webSearchEnabled in handlePromptSubmit(prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled, for: node.id) },
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
@@ -552,11 +555,13 @@ struct CanvasView: View {
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
         )
+        .zIndex(viewModel.zIndex(for: node.id))
     }
     
     private func handleNodeDrag(_ nodeId: UUID, value: DragGesture.Value) {
         if draggedNodeId == nil {
             draggedNodeId = nodeId
+            viewModel.bringToFront([nodeId])
             if let node = viewModel.nodes[nodeId] {
                 dragStartPosition = CGPoint(x: node.x, y: node.y)
             }

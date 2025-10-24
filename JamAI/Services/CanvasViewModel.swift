@@ -33,6 +33,8 @@ class CanvasViewModel: ObservableObject {
     @Published var selectedTool: CanvasTool = .select
     @Published var viewportSize: CGSize = CGSize(width: 1200, height: 800) // updated by CanvasView
     @Published var mousePosition: CGPoint = .zero // updated by CanvasView, in screen coordinates
+    @Published var zOrder: [UUID: Double] = [:]
+    private var zCounter: Double = 0
     
     // Forward undo manager state for UI binding
     @Published var canUndo: Bool = false
@@ -122,6 +124,7 @@ class CanvasViewModel: ObservableObject {
         if Config.enableVerboseLogging { print("📝 [NoteCreate] note id=\(note.id) x=\(note.x) y=\(note.y)") }
         
         self.nodes[note.id] = note
+        self.bringToFront([note.id])
         self.selectedNodeId = note.id
         self.undoManager.record(.createNode(note))
         
@@ -182,6 +185,14 @@ class CanvasViewModel: ObservableObject {
             let loadedEdges = try database.loadEdges(projectId: project.id)
             
             nodes = Dictionary(uniqueKeysWithValues: loadedNodes.map { ($0.id, $0) })
+            var initialZ: [UUID: Double] = [:]
+            var counter: Double = 0
+            for n in loadedNodes.sorted(by: { $0.createdAt < $1.createdAt }) {
+                counter += 1
+                initialZ[n.id] = counter
+            }
+            zOrder = initialZ
+            zCounter = counter
             
             // Filter out orphaned edges (edges that reference non-existent nodes)
             let validEdges = loadedEdges.filter { edge in
@@ -224,6 +235,19 @@ class CanvasViewModel: ObservableObject {
         return CGPoint(x: centerX, y: centerY)
     }
     
+    // MARK: - Z-Order
+    func zIndex(for id: UUID) -> Double {
+        zOrder[id] ?? 0
+    }
+    
+    func bringToFront(_ ids: [UUID]) {
+        for id in ids {
+            zCounter += 1
+            zOrder[id] = zCounter
+        }
+        objectWillChange.send()
+    }
+    
     func createNode(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) {
         // Defer state changes to avoid publishing during view updates
         // Use .userInitiated QoS to match the calling context and avoid priority inversion
@@ -255,6 +279,7 @@ class CanvasViewModel: ObservableObject {
             }
             
             self.nodes[node.id] = node
+            self.bringToFront([node.id])
             
             // Auto-select newly created node
             self.selectedNodeId = node.id
@@ -310,6 +335,7 @@ class CanvasViewModel: ObservableObject {
         }
 
         self.nodes[node.id] = node
+        self.bringToFront([node.id])
         // Auto-select newly created node
         self.selectedNodeId = node.id
         self.undoManager.record(.createNode(node))
@@ -368,6 +394,7 @@ class CanvasViewModel: ObservableObject {
                 shapeKind: nil
             )
             self.nodes[node.id] = node
+            self.bringToFront([node.id])
             self.selectedNodeId = node.id
             self.undoManager.record(.createNode(node))
             let dbActor = self.dbActor
@@ -403,6 +430,7 @@ class CanvasViewModel: ObservableObject {
                 shapeKind: kind
             )
             self.nodes[node.id] = node
+            self.bringToFront([node.id])
             self.selectedNodeId = node.id
             self.undoManager.record(.createNode(node))
             let dbActor = self.dbActor
@@ -485,6 +513,7 @@ class CanvasViewModel: ObservableObject {
             )
             
             self.nodes[node.id] = node
+            self.bringToFront([node.id])
             self.selectedNodeId = node.id
             self.undoManager.record(.createNode(node))
             
