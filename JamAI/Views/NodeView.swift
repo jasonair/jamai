@@ -27,6 +27,7 @@ struct NodeView: View {
     let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
     let onResizeCompensationChange: (CGSize) -> Void
+    let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     
@@ -435,12 +436,9 @@ struct NodeView: View {
                                         draggedWidth = max(50, newWidth)
                                     }
 
-                                    // Notify wrapper to compensate in real-time so top-left stays pinned
-                                    // Because the wrapper is center-positioned using the original size,
-                                    // the top-left naturally shifts by -delta/2 during drag. Counteract with +delta/2.
-                                    let comp = CGSize(width: (draggedWidth - resizeStartWidth) / 2,
-                                                      height: (draggedHeight - resizeStartHeight) / 2)
-                                    onResizeCompensationChange(comp)
+                                    // Live geometry updates keep top-left pinned; no extra compensation needed
+                                    onResizeCompensationChange(.zero)
+                                    onResizeLiveGeometryChange(draggedWidth, draggedHeight)
                                 }
                                 .onEnded { value in
                                     if isResizing {
@@ -1244,10 +1242,9 @@ struct NodeView: View {
                         draggedHeight = max(minHeight, min(maxHeight, resizeStartHeight + deltaY))
                         draggedWidth = max(minWidth, min(maxWidth, resizeStartWidth + deltaX))
 
-                        // Real-time compensation so top-left is visually pinned (center-based positioning fix)
-                        let comp = CGSize(width: (draggedWidth - resizeStartWidth) / 2,
-                                          height: (draggedHeight - resizeStartHeight) / 2)
-                        onResizeCompensationChange(comp)
+                        // Live geometry updates keep top-left pinned; no extra compensation needed
+                        onResizeCompensationChange(.zero)
+                        onResizeLiveGeometryChange(draggedWidth, draggedHeight)
                     }
                     .onEnded { _ in
                         isResizing = false

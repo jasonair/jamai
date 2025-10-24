@@ -548,6 +548,7 @@ struct CanvasView: View {
             onHeightChange: { height in handleHeightChange(height, for: node.id) },
             onWidthChange: { width in handleWidthChange(width, for: node.id) },
             onResizeActiveChanged: { active in isResizingActive = active },
+            onResizeLiveGeometryChange: { w, h in viewModel.updateNodeGeometryDuringDrag(node.id, width: w, height: h) },
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
         )

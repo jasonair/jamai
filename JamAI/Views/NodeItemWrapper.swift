@@ -28,6 +28,7 @@ struct NodeItemWrapper: View {
     let onHeightChange: (CGFloat) -> Void
     let onWidthChange: (CGFloat) -> Void
     let onResizeActiveChanged: (Bool) -> Void
+    let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     @State private var isResizingActive: Bool = false
@@ -75,6 +76,7 @@ struct NodeItemWrapper: View {
                     onResizeCompensationChange: { comp in
                         resizeCompensation = comp
                     },
+                    onResizeLiveGeometryChange: onResizeLiveGeometryChange,
                     onMaximizeAndCenter: onMaximizeAndCenter,
                     onTeamMemberChange: onTeamMemberChange
                 )

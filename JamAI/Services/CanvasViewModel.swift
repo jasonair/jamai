@@ -810,6 +810,16 @@ class CanvasViewModel: ObservableObject {
         objectWillChange.send()
         nodes[node.id] = updatedNode
         
+        // If geometry changed, force an edge refresh immediately
+        let geometryChanged =
+            oldNode.x != updatedNode.x ||
+            oldNode.y != updatedNode.y ||
+            oldNode.width != updatedNode.width ||
+            oldNode.height != updatedNode.height
+        if geometryChanged {
+            positionsVersion &+= 1
+        }
+        
         undoManager.record(.updateNode(oldNode: oldNode, newNode: updatedNode))
         
         // Check if a team member was removed
@@ -836,6 +846,18 @@ class CanvasViewModel: ObservableObject {
         } else {
             scheduleDebouncedWrite(nodeId: node.id)
         }
+    }
+
+    // Live geometry update during resize/drag: no DB, no undo — just refresh edges immediately
+    func updateNodeGeometryDuringDrag(_ nodeId: UUID, width: CGFloat?, height: CGFloat?) {
+        guard var node = nodes[nodeId] else { return }
+        var changed = false
+        if let w = width, w != node.width { node.width = w; changed = true }
+        if let h = height, h != node.height { node.height = h; changed = true }
+        guard changed else { return }
+        objectWillChange.send()
+        nodes[nodeId] = node
+        positionsVersion &+= 1
     }
     
     func updateEdge(_ edge: Edge, immediate: Bool = false) {
