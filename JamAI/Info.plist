@@ -24,6 +24,8 @@
 	<string>$(MACOSX_DEPLOYMENT_TARGET)</string>
 	<key>LSApplicationCategoryType</key>
 	<string>public.app-category.productivity</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Jam AI needs access to your microphone to transcribe voice input for AI conversations.</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

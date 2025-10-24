@@ -59,6 +59,7 @@ struct NodeView: View {
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
     @StateObject private var roleManager = RoleManager.shared
     @StateObject private var dataService = FirebaseDataService.shared
+    @StateObject private var recordingService = AudioRecordingService()
     
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -859,6 +860,19 @@ struct NodeView: View {
         HStack {
             Spacer(minLength: 0)
             VStack(spacing: 8) {
+            // Voice recording view
+            if recordingService.isRecording {
+                VoiceInputView(recordingService: recordingService) { transcription in
+                    // Append transcription to existing text
+                    if !promptText.isEmpty {
+                        promptText += " " + transcription
+                    } else {
+                        promptText = transcription
+                    }
+                    isPromptFocused = true
+                }
+            }
+            
             // Image preview if selected (smaller thumbnail)
             if let image = selectedImage {
                 HStack {
@@ -968,16 +982,29 @@ struct NodeView: View {
                     
                     Spacer()
                     
-                    // Send button (bottom right)
-                    Button(action: {
-                        submitPrompt()
-                    }) {
-                        Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 22))
-                            .foregroundColor((promptText.isEmpty && selectedImage == nil) ? .secondary : .accentColor)
+                    // Right side buttons (mic + send)
+                    HStack(spacing: 8) {
+                        // Voice input button
+                        Button(action: toggleVoiceRecording) {
+                            Image(systemName: recordingService.isRecording ? "mic.fill" : "mic")
+                                .font(.system(size: 19))
+                                .foregroundColor(recordingService.isRecording ? .red : .secondary)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help(recordingService.isRecording ? "Recording..." : "Voice input")
+                        .disabled(isGenerating)
+                        
+                        // Send button
+                        Button(action: {
+                            submitPrompt()
+                        }) {
+                            Image(systemName: "arrow.up.circle.fill")
+                                .font(.system(size: 22))
+                                .foregroundColor((promptText.isEmpty && selectedImage == nil) ? .secondary : .accentColor)
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .disabled(promptText.isEmpty && selectedImage == nil)
                     }
-                    .buttonStyle(PlainButtonStyle())
-                    .disabled(promptText.isEmpty && selectedImage == nil)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                 }
@@ -1145,6 +1172,30 @@ struct NodeView: View {
             selectedImageMimeType = nil
             webSearchEnabled = false // Reset after submission
             isPromptFocused = true // Keep focus in input
+        }
+    }
+    
+    private func toggleVoiceRecording() {
+        if recordingService.isRecording {
+            // Stop recording - VoiceInputView handles transcription
+            return
+        } else {
+            // Start recording
+            Task {
+                do {
+                    try await recordingService.startRecording()
+                } catch {
+                    // Show error alert on main thread
+                    await MainActor.run {
+                        let alert = NSAlert()
+                        alert.messageText = "Recording Error"
+                        alert.informativeText = error.localizedDescription
+                        alert.alertStyle = .warning
+                        alert.addButton(withTitle: "OK")
+                        alert.runModal()
+                    }
+                }
+            }
         }
     }
     

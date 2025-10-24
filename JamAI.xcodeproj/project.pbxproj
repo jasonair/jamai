@@ -451,6 +451,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Jam AI needs access to your microphone to transcribe voice input for AI conversations.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -494,6 +495,7 @@
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Jam AI needs access to your microphone to transcribe voice input for AI conversations.";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -689,4 +691,3 @@
 	};
 	rootObject = F9E382972E995D660097A9E7 /* Project object */;
 }
-// Cache-busting comment added by Cascade to resolve asset loading issues.
