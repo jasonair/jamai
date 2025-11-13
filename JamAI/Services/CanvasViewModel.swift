@@ -65,6 +65,7 @@ class CanvasViewModel: ObservableObject {
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
         self.undoManager = CanvasUndoManager()
+        AIProviderManager.shared.setClient(GeminiClientAdapter(geminiClient: geminiClient))
         
         // Forward undo manager state changes with logging
         undoManager.$canUndo
@@ -627,10 +628,11 @@ class CanvasViewModel: ObservableObject {
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
         guard let node = nodes[nodeId] else { return }
         
-        // Check credit availability before generating
-        guard CreditTracker.shared.canGenerateResponse() else {
-            errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
-            return
+        if AIProviderManager.shared.activeProvider != .local {
+            guard CreditTracker.shared.canGenerateResponse() else {
+                errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+                return
+            }
         }
         
         generatingNodeId = nodeId
@@ -639,7 +641,7 @@ class CanvasViewModel: ObservableObject {
         
         Task {
             do {
-                let context = buildContext(for: node)
+                let aiContext = buildAIContext(for: node)
                 var streamedResponse = ""
                 
                 // Assemble system prompt - use team member's prompt if available
@@ -662,10 +664,10 @@ class CanvasViewModel: ObservableObject {
                     finalSystemPrompt = baseSystemPrompt
                 }
                 
-                geminiClient.generateStreaming(
+                AIProviderManager.shared.client?.generateStreaming(
                     prompt: prompt,
                     systemPrompt: finalSystemPrompt,
-                    context: context,
+                    context: aiContext,
                     onChunk: { [weak self] chunk in
                         Task { @MainActor in
                             streamedResponse += chunk
@@ -693,22 +695,25 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                // Deduct credits before logging analytics
-                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Expand Action")
+                                if AIProviderManager.shared.activeProvider != .local {
+                                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                        _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Expand Action")
+                                    }
                                 }
 
                                 // Track credit usage and analytics
-                                await CreditTracker.shared.trackGeneration(
-                                    promptText: prompt,
-                                    responseText: fullResponse,
-                                    nodeId: nodeId,
-                                    projectId: self?.project.id ?? UUID(),
-                                    teamMemberRoleId: finalNode.teamMember?.roleId,
-                                    teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
-                                    generationType: "expand"
-                                )
+                                if AIProviderManager.shared.activeProvider != .local {
+                                    await CreditTracker.shared.trackGeneration(
+                                        promptText: prompt,
+                                        responseText: fullResponse,
+                                        nodeId: nodeId,
+                                        projectId: self?.project.id ?? UUID(),
+                                        teamMemberRoleId: finalNode.teamMember?.roleId,
+                                        teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                        generationType: "expand"
+                                    )
+                                }
                                 
                                 // Auto-generate title based on selected text
                                 await self?.autoGenerateTitleForExpansion(for: nodeId, selectedText: selectedText)
@@ -727,9 +732,11 @@ class CanvasViewModel: ObservableObject {
         guard var node = nodes[nodeId] else { return }
         do {
             let prompt = "Create a short, clear title (max 40 chars) based only on this text: \"\(selectedText)\". Return only the title."
-            let result = try await geminiClient.generate(
+            guard let client = AIProviderManager.shared.client else { return }
+            let result = try await client.generate(
                 prompt: prompt,
-                systemPrompt: "You are a helpful assistant that writes concise, descriptive titles."
+                systemPrompt: "You are a helpful assistant that writes concise, descriptive titles.",
+                context: []
             )
             let title = result.trimmingCharacters(in: .whitespacesAndNewlines)
             if !title.isEmpty {
@@ -755,9 +762,11 @@ class CanvasViewModel: ObservableObject {
             DESCRIPTION: <description>
             """
             
-            let result = try await geminiClient.generate(
+            guard let client = AIProviderManager.shared.client else { return }
+            let result = try await client.generate(
                 prompt: prompt,
-                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions."
+                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions.",
+                context: []
             )
             
             if let titleMatch = result.range(of: "TITLE: (.+)", options: .regularExpression),
@@ -1003,10 +1012,11 @@ class CanvasViewModel: ObservableObject {
     func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false) {
         guard var node = nodes[nodeId] else { return }
         
-        // Check credit availability before generating
-        guard CreditTracker.shared.canGenerateResponse() else {
-            errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
-            return
+        if AIProviderManager.shared.activeProvider != .local {
+            guard CreditTracker.shared.canGenerateResponse() else {
+                errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+                return
+            }
         }
         
         generatingNodeId = nodeId
@@ -1059,7 +1069,7 @@ class CanvasViewModel: ObservableObject {
             guard let self = self else { return }
             
             do {
-                let context = self.buildContext(for: node)
+                let aiContext = self.buildAIContext(for: node)
                 var streamedResponse = ""
                 
                 // Assemble system prompt
@@ -1082,10 +1092,10 @@ class CanvasViewModel: ObservableObject {
                     finalSystemPrompt = baseSystemPrompt
                 }
                 
-                self.geminiClient.generateStreaming(
+                AIProviderManager.shared.client?.generateStreaming(
                     prompt: prompt,
                     systemPrompt: finalSystemPrompt,
-                    context: context,
+                    context: aiContext,
                     onChunk: { [weak self] chunk in
                         Task { @MainActor in
                             streamedResponse += chunk
@@ -1114,22 +1124,25 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                // Deduct credits before logging analytics
-                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message")
+                                if AIProviderManager.shared.activeProvider != .local {
+                                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                        _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message")
+                                    }
                                 }
 
                                 // Track credit usage and analytics
-                                await CreditTracker.shared.trackGeneration(
-                                    promptText: prompt,
-                                    responseText: fullResponse,
-                                    nodeId: nodeId,
-                                    projectId: self?.project.id ?? UUID(),
-                                    teamMemberRoleId: finalNode.teamMember?.roleId,
-                                    teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
-                                    generationType: "chat"
-                                )
+                                if AIProviderManager.shared.activeProvider != .local {
+                                    await CreditTracker.shared.trackGeneration(
+                                        promptText: prompt,
+                                        responseText: fullResponse,
+                                        nodeId: nodeId,
+                                        projectId: self?.project.id ?? UUID(),
+                                        teamMemberRoleId: finalNode.teamMember?.roleId,
+                                        teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                        generationType: "chat"
+                                    )
+                                }
                                 
                                 // Auto-generate title and description if empty
                                 await self?.autoGenerateTitleAndDescription(for: nodeId)
@@ -1172,7 +1185,7 @@ class CanvasViewModel: ObservableObject {
         }
         
         do {
-            let context = buildContext(for: node)
+            let aiContext = buildAIContext(for: node)
             var streamedResponse = ""
             
             // Assemble system prompt
@@ -1195,10 +1208,10 @@ class CanvasViewModel: ObservableObject {
                 finalSystemPrompt = baseSystemPrompt
             }
             
-            geminiClient.generateStreaming(
+            AIProviderManager.shared.client?.generateStreaming(
                 prompt: enhancedPrompt,
                 systemPrompt: finalSystemPrompt,
-                context: context,
+                context: aiContext,
                 onChunk: { [weak self] chunk in
                     Task { @MainActor in
                         streamedResponse += chunk
@@ -1225,22 +1238,24 @@ class CanvasViewModel: ObservableObject {
                                 }
                             }
                             
-                            // Deduct credits
-                            if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message (Web Search)")
+                            if AIProviderManager.shared.activeProvider != .local {
+                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
+                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message (Web Search)")
+                                }
                             }
                             
-                            // Track analytics
-                            await CreditTracker.shared.trackGeneration(
-                                promptText: prompt,
-                                responseText: fullResponse,
-                                nodeId: nodeId,
-                                projectId: self?.project.id ?? UUID(),
-                                teamMemberRoleId: finalNode.teamMember?.roleId,
-                                teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
-                                generationType: "chat_with_search"
-                            )
+                            if AIProviderManager.shared.activeProvider != .local {
+                                await CreditTracker.shared.trackGeneration(
+                                    promptText: prompt,
+                                    responseText: fullResponse,
+                                    nodeId: nodeId,
+                                    projectId: self?.project.id ?? UUID(),
+                                    teamMemberRoleId: finalNode.teamMember?.roleId,
+                                    teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                    generationType: "chat_with_search"
+                                )
+                            }
                             
                             // Auto-generate title and description
                             await self?.autoGenerateTitleAndDescription(for: nodeId)
@@ -1256,21 +1271,13 @@ class CanvasViewModel: ObservableObject {
     
     private func buildContext(for node: Node) -> [Message] {
         var messages: [Message] = []
-        
-        // Add parent summary as context if available
         if let parentId = node.parentId,
            let parent = nodes[parentId],
            let summary = parent.summary,
            !summary.isEmpty {
-            messages.append(Message(
-                role: "user",
-                content: "Context from previous conversation: \(summary)"
-            ))
+            messages.append(Message(role: "user", content: "Context from previous conversation: \(summary)"))
         }
-        
-        // Use conversation history if available
         if !node.conversation.isEmpty {
-            // Take last K conversation turns
             let recentMessages = Array(node.conversation.suffix(project.kTurns * 2))
             for msg in recentMessages {
                 messages.append(Message(
@@ -1280,23 +1287,32 @@ class CanvasViewModel: ObservableObject {
                     imageMimeType: msg.imageMimeType
                 ))
             }
-        } else {
-            // Fallback to legacy ancestor-based context
-            let ancestorNodes = node.ancestry.compactMap { nodes[$0] }
-            let recentAncestors = Array(ancestorNodes.suffix(project.kTurns))
-            
-            for ancestor in recentAncestors {
-                if !ancestor.prompt.isEmpty {
-                    messages.append(Message(role: "user", content: ancestor.prompt))
-                }
-                if !ancestor.response.isEmpty {
-                    messages.append(Message(role: "model", content: ancestor.response))
-                }
-            }
         }
-        
         return messages
     }
+
+private func buildAIContext(for node: Node) -> [AIChatMessage] {
+    var messages: [AIChatMessage] = []
+    if let parentId = node.parentId,
+       let parent = nodes[parentId],
+       let summary = parent.summary,
+       !summary.isEmpty {
+        messages.append(AIChatMessage(role: .user, content: "Context from previous conversation: \(summary)"))
+    }
+    if !node.conversation.isEmpty {
+        let recentMessages = Array(node.conversation.suffix(project.kTurns * 2))
+        for msg in recentMessages {
+            messages.append(AIChatMessage(
+                role: msg.role == .user ? .user : .assistant,
+                content: msg.content,
+                imageData: msg.imageData,
+                imageMimeType: msg.imageMimeType
+            ))
+        }
+    }
+    return messages
+}
+
     
     private func autoGenerateTitleAndDescription(for nodeId: UUID) async {
         guard var node = nodes[nodeId] else { return }
@@ -1313,9 +1329,11 @@ class CanvasViewModel: ObservableObject {
             DESCRIPTION: <description>
             """
             
-            let result = try await geminiClient.generate(
+            guard let client = AIProviderManager.shared.client else { return }
+            let result = try await client.generate(
                 prompt: prompt,
-                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions."
+                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions.",
+                context: []
             )
             
             if node.title.isEmpty {
