@@ -23,7 +23,7 @@ struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     var onCommandClose: (() -> Void)? = nil
     
-    @StateObject private var modalCoordinator = ModalCoordinator()
+    @ObservedObject private var modalCoordinator = ModalCoordinator.shared
     
     @GestureState private var canvasDragStart: CGSize? = nil
     @State private var lastZoom: CGFloat = 1.0
@@ -386,6 +386,15 @@ struct CanvasView: View {
                     Spacer()
                 }
                 Spacer()
+            }
+            
+            // Modal blocking layer - prevents scroll/interaction leakage when dialogs are open
+            // This is the equivalent of a web overlay div that blocks the background
+            if modalCoordinator.isModalPresented {
+                CanvasBlockingLayer()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .allowsHitTesting(true)
+                    .ignoresSafeArea()
             }
         }
     }

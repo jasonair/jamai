@@ -15,9 +15,29 @@ struct SettingsView: View {
     @State private var saveStatus: String?
     @State private var selectedTemplate: SystemPromptTemplate?
     @State private var customPrompt: String = ""
+    var onDismiss: (() -> Void)?
     
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // Close button bar
+            HStack {
+                Text("Settings")
+                    .font(.headline)
+                Spacer()
+                Button(action: {
+                    onDismiss?()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            
+            ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 // API Configuration Section
                 sectionHeader("API Configuration")
@@ -160,6 +180,7 @@ struct SettingsView: View {
                 .onChange(of: viewModel.project.ragMaxChars) { _, _ in viewModel.save() }
             }
             .padding(20)
+            }
         }
         .frame(width: 550, height: 700)
         .onAppear {

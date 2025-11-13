@@ -3,6 +3,7 @@
 //  JamAI
 //
 //  Coordinates modal presentation using native macOS windows
+//  Tracks ALL modal states to enable canvas blocking layer
 //
 
 import SwiftUI
@@ -10,8 +11,15 @@ import Combine
 
 @MainActor
 class ModalCoordinator: ObservableObject {
+    static let shared = ModalCoordinator()
+    
     @Published var isModalPresented = false
-    private var currentModalWindow: TeamMemberModalWindow?
+    private var currentTeamMemberWindow: TeamMemberModalWindow?
+    private var currentSettingsWindow: SettingsModalWindow?
+    private var currentUserSettingsWindow: UserSettingsModalWindow?
+    
+    // Track different modal types
+    private var activeModalCount = 0
     
     func showTeamMemberModal(
         existingMember: TeamMember?,
@@ -30,18 +38,74 @@ class ModalCoordinator: ObservableObject {
             onSave: onSave,
             onRemove: onRemove,
             onDismiss: { [weak self] in
-                self?.isModalPresented = false
+                self?.modalDidClose()
             }
         )
         
-        currentModalWindow = modalWindow
-        isModalPresented = true
+        currentTeamMemberWindow = modalWindow
+        modalDidOpen()
         modalWindow.show()
     }
     
     func dismissTeamMemberModal() {
-        currentModalWindow?.close()
-        currentModalWindow = nil
-        isModalPresented = false
+        currentTeamMemberWindow?.close()
+        currentTeamMemberWindow = nil
+    }
+    
+    func showSettingsModal(viewModel: CanvasViewModel, appState: AppState) {
+        // Close existing if any
+        dismissSettingsModal()
+        
+        let modalWindow = SettingsModalWindow(
+            viewModel: viewModel,
+            appState: appState,
+            onDismiss: { [weak self] in
+                self?.modalDidClose()
+            }
+        )
+        
+        currentSettingsWindow = modalWindow
+        modalDidOpen()
+        modalWindow.show()
+    }
+    
+    func dismissSettingsModal() {
+        currentSettingsWindow?.close()
+        currentSettingsWindow = nil
+    }
+    
+    func showUserSettingsModal() {
+        // Close existing if any
+        dismissUserSettingsModal()
+        
+        let modalWindow = UserSettingsModalWindow(
+            onDismiss: { [weak self] in
+                self?.modalDidClose()
+            }
+        )
+        
+        currentUserSettingsWindow = modalWindow
+        modalDidOpen()
+        modalWindow.show()
+    }
+    
+    func dismissUserSettingsModal() {
+        currentUserSettingsWindow?.close()
+        currentUserSettingsWindow = nil
+    }
+    
+    // Generic modal tracking for any window/sheet
+    func modalDidOpen() {
+        activeModalCount += 1
+        updateModalState()
+    }
+    
+    func modalDidClose() {
+        activeModalCount = max(0, activeModalCount - 1)
+        updateModalState()
+    }
+    
+    private func updateModalState() {
+        isModalPresented = activeModalCount > 0
     }
 }

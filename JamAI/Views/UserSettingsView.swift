@@ -24,7 +24,26 @@ struct UserSettingsView: View {
     }
     
     var body: some View {
-        ScrollView {
+        VStack(spacing: 0) {
+            // Close button bar
+            HStack {
+                Text("Account Settings")
+                    .font(.headline)
+                Spacer()
+                Button(action: {
+                    onDismiss?()
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help("Close")
+            }
+            .padding()
+            .background(Color(nsColor: .controlBackgroundColor))
+            
+            ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // User profile section
                 if let user = authService.currentUser,
@@ -439,7 +458,8 @@ struct UserSettingsView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
-            .padding(24)
+            .padding(20)
+            }
         }
         .frame(width: 600, height: 700)
         .contentShape(Rectangle())

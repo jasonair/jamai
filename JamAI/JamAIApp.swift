@@ -282,12 +282,6 @@ struct JamAIApp: App {
                 .disabled(appState.viewModel == nil)
             }
         }
-        
-        Settings {
-            if let viewModel = appState.viewModel {
-                SettingsView(viewModel: viewModel, appState: appState)
-            }
-        }
     }
     
     // MARK: - Helpers
@@ -677,51 +671,14 @@ class AppState: ObservableObject {
     }
     
     func showSettings() {
-        NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
+        // Use ModalCoordinator to show Settings modal (matching TeamMember pattern)
+        guard let viewModel = self.viewModel else { return }
+        ModalCoordinator.shared.showSettingsModal(viewModel: viewModel, appState: self)
     }
     
-    private var userSettingsWindow: NSWindow?
-    
     func showUserSettings() {
-        // Reuse existing window if already open
-        if let existingWindow = userSettingsWindow {
-            existingWindow.makeKeyAndOrderFront(nil)
-            return
-        }
-        
-        let settingsView = UserSettingsView(onDismiss: { [weak self] in
-            self?.userSettingsWindow?.close()
-        })
-        let hostingController = NSHostingController(rootView: settingsView)
-        let window = NSWindow(contentViewController: hostingController)
-        window.title = "Account Settings"
-        window.styleMask = [.titled, .closable, .resizable]
-        window.setContentSize(NSSize(width: 600, height: 700))
-        
-        // Center on main window or screen
-        if let mainWindow = NSApp.mainWindow {
-            window.center()
-            window.setFrameOrigin(NSPoint(
-                x: mainWindow.frame.midX - window.frame.width / 2,
-                y: mainWindow.frame.midY - window.frame.height / 2
-            ))
-        } else {
-            window.center()
-        }
-        
-        // Keep reference to prevent deallocation
-        self.userSettingsWindow = window
-        
-        // Clear reference when closed
-        NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification,
-            object: window,
-            queue: .main
-        ) { [weak self] _ in
-            self?.userSettingsWindow = nil
-        }
-        
-        window.makeKeyAndOrderFront(nil)
+        // Use ModalCoordinator to show User Settings modal (matching TeamMember pattern)
+        ModalCoordinator.shared.showUserSettingsModal()
     }
     
     private func showError(_ message: String) {
