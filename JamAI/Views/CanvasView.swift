@@ -137,6 +137,7 @@ struct CanvasView: View {
                 MouseTrackingView(
                     position: $mouseLocation,
                     hasSelectedNode: viewModel.selectedNodeId != nil && !modalCoordinator.isModalPresented,
+                    hasOpenModal: modalCoordinator.isModalPresented,
                     onScroll: { dx, dy in
                         // Do nothing
                     },
@@ -174,8 +175,8 @@ struct CanvasView: View {
             .simultaneousGesture(
                 DragGesture(minimumDistance: 5)
                     .updating($canvasDragStart) { value, gestureState, transaction in
-                        // Block if modal sheet is open
-                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                        // Block if modal is open
+                        if modalCoordinator.isModalPresented {
                             return
                         }
                         // Store the initial offset when drag starts (only once per gesture)
@@ -185,8 +186,8 @@ struct CanvasView: View {
                         }
                     }
                     .onChanged { value in
-                        // Block if modal sheet is open
-                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                        // Block if modal is open
+                        if modalCoordinator.isModalPresented {
                             return
                         }
                         
@@ -206,8 +207,8 @@ struct CanvasView: View {
             .simultaneousGesture(
                 MagnificationGesture()
                     .onChanged { value in
-                        // Block if modal sheet is open
-                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                        // Block if modal is open
+                        if modalCoordinator.isModalPresented {
                             return
                         }
                         guard !isResizingActive else { return }
@@ -246,8 +247,8 @@ struct CanvasView: View {
                         )
                     }
                     .onEnded { _ in
-                        // Block if modal sheet is open
-                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                        // Block if modal is open
+                        if modalCoordinator.isModalPresented {
                             return
                         }
                         // Only update viewModel once at the end
@@ -259,8 +260,8 @@ struct CanvasView: View {
                     }
             )
             .onTapGesture(count: 2) { location in
-                // Block if modal sheet is open
-                if let window = NSApp.mainWindow, !window.sheets.isEmpty {
+                // Block if modal is open
+                if modalCoordinator.isModalPresented {
                     return
                 }
                 

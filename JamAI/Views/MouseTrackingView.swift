@@ -12,6 +12,7 @@ import AppKit
 struct MouseTrackingView: NSViewRepresentable {
     @Binding var position: CGPoint
     var hasSelectedNode: Bool = false
+    var hasOpenModal: Bool = false
     var onScroll: ((CGFloat, CGFloat) -> Void)? = nil
     var onCommandClose: (() -> Void)? = nil
     
@@ -24,6 +25,7 @@ struct MouseTrackingView: NSViewRepresentable {
         v.onScroll = { dx, dy in self.onScroll?(dx, dy) }
         v.onCommandClose = self.onCommandClose
         v.hasSelectedNode = self.hasSelectedNode
+        v.hasOpenModal = self.hasOpenModal
         return v
     }
     
@@ -32,6 +34,7 @@ struct MouseTrackingView: NSViewRepresentable {
         nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) }
         nsView.onCommandClose = self.onCommandClose
         nsView.hasSelectedNode = self.hasSelectedNode
+        nsView.hasOpenModal = self.hasOpenModal
     }
     
     final class TrackingNSView: NSView {
@@ -40,6 +43,7 @@ struct MouseTrackingView: NSViewRepresentable {
         var onScroll: ((CGFloat, CGFloat) -> Void)?
         var onCommandClose: (() -> Void)?
         var hasSelectedNode: Bool = false
+        var hasOpenModal: Bool = false
         private var localMonitor: Any?
         private var keyMonitor: Any?
         
@@ -65,8 +69,8 @@ struct MouseTrackingView: NSViewRepresentable {
             localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
                 guard let self else { return event }
                 
-                // If modal sheet is open, pass all scroll events to it
-                if let mainWindow = NSApp.mainWindow, !mainWindow.sheets.isEmpty {
+                // If a modal is open, pass all scroll events to it
+                if self.hasOpenModal {
                     return event
                 }
                 
@@ -142,11 +146,11 @@ struct MouseTrackingView: NSViewRepresentable {
             
             // We're over SwiftUI content (a node or UI element)
             // Only allow node scroll if node is selected AND we found a scroll view
-            if hasSelectedNode, let scrollView = foundScrollView {
-                let documentFrame = scrollView.documentView?.frame ?? .zero
-                let contentSize = scrollView.contentSize
-                let hasVerticalScroll = documentFrame.height > contentSize.height
-                return hasVerticalScroll // Allow node scroll
+            // We're over SwiftUI content (a node or UI element)
+            // If a node is selected and we're over its scroll view, let the scroll view handle it.
+            // It will manage scrolling, bouncing, etc. This is the key to allowing node scroll.
+            if hasSelectedNode && foundScrollView != nil {
+                return true // Let the node's ScrollView handle the event
             }
             
             // Over a node but node not selected, or no scroll view - block canvas pan

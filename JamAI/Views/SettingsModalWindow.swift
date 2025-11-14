@@ -76,6 +76,7 @@ final class SettingsScrollRoutingContentView: NSView {
 @MainActor
 class SettingsModalWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
+    private var didFireDismiss = false
     private let viewModel: CanvasViewModel
     private let appState: AppState
     private let onDismissCallback: (() -> Void)?
@@ -169,6 +170,7 @@ class SettingsModalWindow: NSObject, NSWindowDelegate {
             parentWindow.makeFirstResponder(nil)
             parentWindow.beginSheet(panel) { [weak self] _ in
                 self?.window = nil
+                self?.invokeDismissOnce()
             }
             DispatchQueue.main.async {
                 panel.makeKey()
@@ -178,6 +180,7 @@ class SettingsModalWindow: NSObject, NSWindowDelegate {
             NSApp.runModal(for: panel)
             panel.orderOut(nil)
             self.window = nil
+            invokeDismissOnce()
         }
     }
     
@@ -192,7 +195,7 @@ class SettingsModalWindow: NSObject, NSWindowDelegate {
         
         window.orderOut(nil)
         self.window = nil
-        onDismissCallback?()
+        invokeDismissOnce()
     }
     
     // MARK: - NSWindowDelegate
@@ -206,6 +209,12 @@ class SettingsModalWindow: NSObject, NSWindowDelegate {
             }
         }
         self.window = nil
+        invokeDismissOnce()
+    }
+
+    private func invokeDismissOnce() {
+        guard !didFireDismiss else { return }
+        didFireDismiss = true
         onDismissCallback?()
     }
 }

@@ -312,8 +312,8 @@ struct NodeView: View {
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
             .onTapGesture {
-                // Block node selection if modal sheet is open
-                guard NSApp.mainWindow?.sheets.isEmpty ?? true else { return }
+                // Block node selection if modal is open
+                guard !modalCoordinator.isModalPresented else { return }
                 onTap()
             }
             .overlay(
@@ -565,10 +565,8 @@ struct NodeView: View {
                         .font(.system(size: 18, weight: .semibold))
                         .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                         .onTapGesture {
-                            // Block if modal sheet is open
-                            if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                                return
-                            }
+                            // Block if modal is open
+                            if modalCoordinator.isModalPresented { return }
                             editedTitle = node.title
                             isEditingTitle = true
                             isTitleFocused = true
@@ -711,12 +709,11 @@ struct NodeView: View {
                     .font(.system(size: 15))
                     .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
-                        // Block if modal sheet is open
-                        if let window = NSApp.mainWindow, !window.sheets.isEmpty {
-                            return
-                        }
+                        // Block if modal is open
+                        if modalCoordinator.isModalPresented { return }
                         editedDescription = node.description
                         isEditingDescription = true
+                        isDescFocused = true
                     }
             }
         }
