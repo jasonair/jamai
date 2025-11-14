@@ -65,7 +65,17 @@ class CanvasViewModel: ObservableObject {
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
         self.undoManager = CanvasUndoManager()
-        AIProviderManager.shared.setClient(GeminiClientAdapter(geminiClient: geminiClient))
+        if AIProviderManager.shared.activeProvider == .local {
+            let model = AIProviderManager.shared.activeModelName ?? AIProviderManager.availableLocalModels.first
+            if let name = model {
+                AIProviderManager.shared.setClient(LocalLlamaClient(modelName: name))
+            } else {
+                AIProviderManager.shared.setClient(LocalLlamaClient(modelName: "deepseek-r1:1.5b"))
+            }
+        } else {
+            AIProviderManager.shared.setClient(GeminiClientAdapter(geminiClient: geminiClient))
+        }
+        Task { await AIProviderManager.shared.refreshHealth() }
         
         // Forward undo manager state changes with logging
         undoManager.$canUndo

@@ -8,6 +8,7 @@ final class AIProviderManager: ObservableObject {
     @Published private(set) var activeProvider: AIProvider
     @Published private(set) var healthStatus: AIHealthStatus = .unknown
     @Published private(set) var activeModelName: String?
+    @Published private(set) var licenseAccepted: Bool = false
     
     private(set) var client: AIClient?
     
@@ -15,6 +16,7 @@ final class AIProviderManager: ObservableObject {
     
     private let providerDefaultsKey = "ai.activeProvider"
     private let localModelNameKey = "ai.localModelName"
+    private let licenseAcceptedKey = "ai.localLicenseAccepted"
     
     private init() {
         if let saved = UserDefaults.standard.string(forKey: providerDefaultsKey),
@@ -24,6 +26,10 @@ final class AIProviderManager: ObservableObject {
             self.activeProvider = .gemini
         }
         self.activeModelName = UserDefaults.standard.string(forKey: localModelNameKey)
+        self.licenseAccepted = UserDefaults.standard.bool(forKey: licenseAcceptedKey)
+        if activeProvider == .local && activeModelName == nil {
+            self.activeModelName = Self.availableLocalModels.first
+        }
     }
     
     func setProvider(_ provider: AIProvider) {
@@ -39,6 +45,11 @@ final class AIProviderManager: ObservableObject {
         } else {
             UserDefaults.standard.removeObject(forKey: localModelNameKey)
         }
+    }
+    
+    func setLicenseAccepted(_ accepted: Bool) {
+        licenseAccepted = accepted
+        UserDefaults.standard.set(accepted, forKey: licenseAcceptedKey)
     }
     
     func capabilities() -> ProviderCapabilities {
@@ -71,4 +82,40 @@ final class AIProviderManager: ObservableObject {
             self.healthStatus = .unknown
         }
     }
+
+    static let availableLocalModels: [String] = [
+        "deepseek-r1:1.5b",
+        "deepseek-r1:8b"
+    ]
+    
+    func activateLocal(modelName: String?) {
+        setProvider(.local)
+        let name = modelName ?? activeModelName ?? Self.availableLocalModels.first
+        setLocalModelName(name)
+        if let finalName = activeModelName {
+            self.client = LocalLlamaClient(modelName: finalName)
+        }
+        Task { await refreshHealth() }
+    }
+    
+    func startLocalModelInstall(onProgress: ((Double) -> Void)? = nil) async {
+        guard activeProvider == .local, let c = client as? LocalLlamaClient else { return }
+        guard licenseAccepted else {
+            self.healthStatus = .error("License not accepted")
+            return
+        }
+        self.healthStatus = .installing
+        do {
+            try await c.pullModel { p in
+                Task { @MainActor in
+                    self.healthStatus = .downloading(progress: p)
+                    onProgress?(p)
+                }
+            }
+            self.healthStatus = .ready
+        } catch {
+            self.healthStatus = .error("Download failed")
+        }
+    }
 }
+
