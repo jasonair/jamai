@@ -6,15 +6,20 @@
 //
 
 import SwiftUI
+import AppKit
 
 struct SettingsView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @ObservedObject var appState: AppState
+    @ObservedObject private var aiProviderManager = AIProviderManager.shared
     @State private var apiKey: String = ""
     @State private var showAPIKey = false
     @State private var saveStatus: String?
     @State private var selectedTemplate: SystemPromptTemplate?
     @State private var customPrompt: String = ""
+    @State private var localDownloadProgress: Double?
+    @State private var isInstallingLocalModel = false
+    @State private var localErrorMessage: String?
     var onDismiss: (() -> Void)?
     
     var body: some View {
@@ -39,6 +44,115 @@ struct SettingsView: View {
             
             ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                sectionHeader("AI Provider")
+                VStack(alignment: .leading, spacing: 12) {
+                    Picker("", selection: Binding(
+                        get: { aiProviderManager.activeProvider },
+                        set: { provider in
+                            switch provider {
+                            case .local:
+                                aiProviderManager.activateLocal(modelName: aiProviderManager.activeModelName)
+                            case .gemini:
+                                aiProviderManager.setProvider(.gemini)
+                                aiProviderManager.setClient(GeminiClientAdapter(geminiClient: viewModel.geminiClient))
+                                Task {
+                                    await aiProviderManager.refreshHealth()
+                                }
+                            }
+                        }
+                    )) {
+                        Text("Local (Free)").tag(AIProvider.local)
+                        Text("Gemini (Cloud)").tag(AIProvider.gemini)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    if aiProviderManager.activeProvider == .local {
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack(spacing: 8) {
+                                Button("Install Ollama") {
+                                    if let url = URL(string: "https://ollama.com/download") {
+                                        NSWorkspace.shared.open(url)
+                                    }
+                                }
+                                .buttonStyle(.bordered)
+                                
+                                Button("Check Status") {
+                                    Task {
+                                        await aiProviderManager.refreshHealth()
+                                    }
+                                }
+                            }
+                            
+                            Toggle("I accept the DeepSeek license", isOn: Binding(
+                                get: { aiProviderManager.licenseAccepted },
+                                set: { value in
+                                    aiProviderManager.setLicenseAccepted(value)
+                                }
+                            ))
+                            
+                            Picker("Local model", selection: Binding(
+                                get: { aiProviderManager.activeModelName ?? AIProviderManager.availableLocalModels.first ?? "deepseek-r1:1.5b" },
+                                set: { name in
+                                    aiProviderManager.setLocalModelName(name)
+                                    aiProviderManager.activateLocal(modelName: name)
+                                }
+                            )) {
+                                ForEach(AIProviderManager.availableLocalModels, id: \.self) { model in
+                                    Text(model).tag(model)
+                                }
+                            }
+                            
+                            HStack(spacing: 8) {
+                                Button {
+                                    guard aiProviderManager.licenseAccepted else { return }
+                                    isInstallingLocalModel = true
+                                    localErrorMessage = nil
+                                    localDownloadProgress = 0
+                                    Task {
+                                        await aiProviderManager.startLocalModelInstall { progress in
+                                            localDownloadProgress = progress
+                                        }
+                                        isInstallingLocalModel = false
+                                        switch aiProviderManager.healthStatus {
+                                        case .error(let message):
+                                            localErrorMessage = message
+                                        default:
+                                            break
+                                        }
+                                    }
+                                } label: {
+                                    if isInstallingLocalModel {
+                                        ProgressView()
+                                            .controlSize(.small)
+                                    } else {
+                                        Text("Download Local Model")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                
+                                if let progress = localDownloadProgress {
+                                    Text("\(Int(progress * 100))%")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            
+                            Text(localStatusText())
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            if let error = localErrorMessage {
+                                Text(error)
+                                    .font(.caption)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                }
+                .padding(16)
+                .background(Color(nsColor: .controlBackgroundColor))
+                .cornerRadius(12)
+            
                 // API Configuration Section
                 sectionHeader("API Configuration")
                 VStack(alignment: .leading, spacing: 12) {
@@ -188,6 +302,26 @@ struct SettingsView: View {
             customPrompt = viewModel.project.systemPrompt
             // Check if current prompt matches a template
             selectedTemplate = SystemPromptTemplate.allCases.first { $0.prompt == viewModel.project.systemPrompt }
+        }
+    }
+    
+    private func localStatusText() -> String {
+        switch aiProviderManager.healthStatus {
+        case .unknown:
+            return "Status: Unknown"
+        case .ready:
+            return "Status: Ready"
+        case .installing:
+            return "Status: Installing"
+        case .downloading(let progress):
+            let percent = Int(progress * 100)
+            return "Status: Downloading \(percent)%"
+        case .missingDependency:
+            return "Status: Missing dependency"
+        case .serverDown:
+            return "Status: Ollama server not running"
+        case .error(let message):
+            return "Status: \(message)"
         }
     }
     

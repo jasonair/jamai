@@ -114,44 +114,13 @@ final class LocalLlamaClient: NSObject, AIClient, URLSessionDataDelegate {
     ) {
         let t = Task {
             do {
-                let url = baseURL.appendingPathComponent("api/chat")
-                var request = URLRequest(url: url)
-                request.httpMethod = "POST"
-                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                let body: [String: Any] = [
-                    "model": modelName,
-                    "messages": mapContext(prompt: prompt, systemPrompt: systemPrompt, context: context),
-                    "stream": true
-                ]
-                request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                let (bytes, response) = try await session.bytes(for: request)
-                guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-                    throw NSError(domain: "LocalLlamaClient", code: 1)
-                }
-                var acc = ""
-                for try await line in bytes.lines {
-                    if Task.isCancelled { break }
-                    if line.isEmpty { continue }
-                    if let data = line.data(using: .utf8),
-                       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-                        if let message = json["message"] as? [String: Any],
-                           let content = message["content"] as? String {
-                            let delta: String
-                            if content.hasPrefix(acc) {
-                                delta = String(content.dropFirst(acc.count))
-                            } else {
-                                delta = content
-                            }
-                            acc = content
-                            if !delta.isEmpty { onChunk(delta) }
-                        }
-                        if let done = json["done"] as? Bool, done == true {
-                            onComplete(.success(acc))
-                            return
-                        }
-                    }
-                }
-                onComplete(.success(acc))
+                let text = try await self.generate(
+                    prompt: prompt,
+                    systemPrompt: systemPrompt,
+                    context: context
+                )
+                onChunk(text)
+                onComplete(.success(text))
             } catch {
                 if !Task.isCancelled {
                     onComplete(.failure(error))
