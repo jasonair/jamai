@@ -114,19 +114,46 @@ struct SettingsView: View {
                                     }
                                 } label: {
                                     if isInstallingLocalModel {
-                                        ProgressView()
-                                            .controlSize(.small)
+                                        Text("Downloading...")
                                     } else {
                                         Text("Download Local Model")
                                     }
                                 }
                                 .buttonStyle(.borderedProminent)
+                                .disabled(isInstallingLocalModel)
                                 
-                                if let progress = localDownloadProgress {
+                                if let progress = localDownloadProgress, isInstallingLocalModel {
+                                    ProgressView(value: progress)
+                                        .frame(width: 160)
                                     Text("\(Int(progress * 100))%")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
+                                } else if isCurrentLocalModelInstalled() {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundColor(.green)
+                                    Text("Model downloaded")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
                                 }
+                            }
+                            
+                            if isCurrentLocalModelInstalled() {
+                                Button(role: .destructive) {
+                                    do {
+                                        if let descriptor = currentLocalDescriptor() {
+                                            try LocalModelManager.shared.deleteModel(descriptor: descriptor)
+                                        }
+                                        localDownloadProgress = nil
+                                        Task {
+                                            await aiProviderManager.refreshHealth()
+                                        }
+                                    } catch {
+                                        localErrorMessage = error.localizedDescription
+                                    }
+                                } label: {
+                                    Text("Delete Downloaded Model")
+                                }
+                                .buttonStyle(.bordered)
                             }
                             
                             Text(localStatusText())
@@ -315,6 +342,16 @@ struct SettingsView: View {
         case .error(let message):
             return "Status: \(message)"
         }
+    }
+
+    private func currentLocalDescriptor() -> LocalModelDescriptor? {
+        let modelId = aiProviderManager.activeModelName ?? AIProviderManager.availableLocalModels.first
+        return LocalModelManager.shared.descriptor(for: modelId)
+    }
+    
+    private func isCurrentLocalModelInstalled() -> Bool {
+        guard let descriptor = currentLocalDescriptor() else { return false }
+        return LocalModelManager.shared.isModelInstalled(descriptor)
     }
     
     private func loadAPIKey() {

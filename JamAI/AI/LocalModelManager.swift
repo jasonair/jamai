@@ -7,11 +7,26 @@ struct LocalModelDescriptor {
     let downloadURL: URL
 }
 
-final class LocalModelManager {
+final class LocalModelManager: NSObject, URLSessionDownloadDelegate {
     static let shared = LocalModelManager()
     let models: [LocalModelDescriptor]
     
-    private init() {
+    private lazy var downloadSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = 300
+        config.timeoutIntervalForResource = 3600
+        let queue = OperationQueue()
+        queue.maxConcurrentOperationCount = 1
+        queue.qualityOfService = .userInitiated
+        return URLSession(configuration: config, delegate: self, delegateQueue: queue)
+    }()
+    
+    private var activeDownloadTask: URLSessionDownloadTask?
+    private var activeDownloadContinuation: CheckedContinuation<Void, Error>?
+    private var activeDownloadDescriptor: LocalModelDescriptor?
+    private var activeProgressHandler: ((Double) -> Void)?
+    
+    private override init() {
         models = [
             LocalModelDescriptor(
                 id: "deepseek-r1:1.5b",
@@ -26,6 +41,7 @@ final class LocalModelManager {
                 downloadURL: URL(string: "https://huggingface.co/bartowski/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf")!
             )
         ]
+        super.init()
     }
     
     func descriptor(for id: String?) -> LocalModelDescriptor? {
@@ -55,22 +71,93 @@ final class LocalModelManager {
     }
     
     func downloadModel(descriptor: LocalModelDescriptor, onProgress: ((Double) -> Void)? = nil) async throws {
-        onProgress?(0.0)
-        let (tempURL, response) = try await URLSession.shared.download(from: descriptor.downloadURL)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw NSError(domain: "LocalModelManager", code: 1, userInfo: [NSLocalizedDescriptionKey: "Download failed"])
+        activeDownloadDescriptor = descriptor
+        activeProgressHandler = onProgress
+        activeProgressHandler?(0.0)
+        
+        defer {
+            activeDownloadTask = nil
+            activeDownloadContinuation = nil
+            activeDownloadDescriptor = nil
+            activeProgressHandler = nil
         }
+        
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            activeDownloadContinuation = continuation
+            let task = downloadSession.downloadTask(with: descriptor.downloadURL)
+            activeDownloadTask = task
+            task.resume()
+        }
+    }
+    
+    func deleteModel(descriptor: LocalModelDescriptor) throws {
+        let url = try localFileURL(for: descriptor)
         let fm = FileManager.default
-        let dest = try localFileURL(for: descriptor)
-        if fm.fileExists(atPath: dest.path) {
-            try fm.removeItem(at: dest)
+        if fm.fileExists(atPath: url.path) {
+            try fm.removeItem(at: url)
         }
-        let parent = dest.deletingLastPathComponent()
-        if !fm.fileExists(atPath: parent.path) {
-            try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+    }
+    
+    // MARK: - URLSessionDownloadDelegate
+    
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didWriteData bytesWritten: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        guard downloadTask == activeDownloadTask else { return }
+        guard totalBytesExpectedToWrite > 0 else { return }
+        let progress = Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
+        activeProgressHandler?(progress)
+    }
+    
+    func urlSession(
+        _ session: URLSession,
+        downloadTask: URLSessionDownloadTask,
+        didFinishDownloadingTo location: URL
+    ) {
+        guard downloadTask == activeDownloadTask else { return }
+        guard let descriptor = activeDownloadDescriptor else { return }
+        
+        guard let http = downloadTask.response as? HTTPURLResponse, http.statusCode == 200 else {
+            let error = NSError(
+                domain: "LocalModelManager",
+                code: 1,
+                userInfo: [NSLocalizedDescriptionKey: "Download failed"]
+            )
+            activeDownloadContinuation?.resume(throwing: error)
+            activeDownloadContinuation = nil
+            return
         }
-        try fm.moveItem(at: tempURL, to: dest)
-        print("[LocalModelManager] download complete path=\(dest.path)")
-        onProgress?(1.0)
+        
+        do {
+            let fm = FileManager.default
+            let dest = try localFileURL(for: descriptor)
+            if fm.fileExists(atPath: dest.path) {
+                try fm.removeItem(at: dest)
+            }
+            let parent = dest.deletingLastPathComponent()
+            if !fm.fileExists(atPath: parent.path) {
+                try fm.createDirectory(at: parent, withIntermediateDirectories: true)
+            }
+            try fm.moveItem(at: location, to: dest)
+            print("[LocalModelManager] download complete path=\(dest.path)")
+            activeProgressHandler?(1.0)
+            activeDownloadContinuation?.resume(returning: ())
+            activeDownloadContinuation = nil
+        } catch {
+            activeDownloadContinuation?.resume(throwing: error)
+            activeDownloadContinuation = nil
+        }
+    }
+    
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard task == activeDownloadTask else { return }
+        if let error = error {
+            activeDownloadContinuation?.resume(throwing: error)
+            activeDownloadContinuation = nil
+        }
     }
 }
