@@ -278,23 +278,33 @@ private struct FormattedTextView: View {
                 if trimmed.range(of: pattern, options: .regularExpression) != nil {
                     let ps = NSMutableParagraphStyle()
                     ps.firstLineHeadIndent = 0
-                    
-                    // Count leading spaces to determine nesting level
-                    let leadingSpaces = line.prefix(while: { $0 == " " }).count
-                    if leadingSpaces >= 6 {
-                        // Third-level nested numbered list
-                        ps.headIndent = 64
-                    } else if leadingSpaces >= 4 {
-                        // Second-level nested
-                        ps.headIndent = 48
-                    } else if leadingSpaces >= 2 {
-                        // First-level nested
-                        ps.headIndent = 32
-                    } else {
-                        // Top-level numbered list
-                        ps.headIndent = 24
-                    }
-                    nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
+
+                    // Build the exact numeric prefix (including leading spaces) so that
+                    // wrapped lines align precisely with the first word after "N. ".
+                    let leadingSpacesCount = line.prefix(while: { $0 == " " }).count
+                    let leadingSpacesString = String(repeating: " ", count: leadingSpacesCount)
+
+                    // Find the numeric prefix in the trimmed text (e.g. "1. ", "10. ")
+                    let regex = try? NSRegularExpression(pattern: pattern)
+                    let nsTrimmed = trimmed as NSString
+                    let matchRange = regex?
+                        .firstMatch(in: trimmed, range: NSRange(location: 0, length: nsTrimmed.length))?
+                        .range ?? NSRange(location: 0, length: 0)
+                    let numberPrefix = nsTrimmed.substring(with: matchRange)
+
+                    let prefixString = leadingSpacesString + numberPrefix
+                    let prefixWidth = (prefixString as NSString)
+                        .size(withAttributes: [.font: baseFont]).width
+
+                    // Use measured prefix width for hanging indent so continuation
+                    // lines align with the content after the numeric prefix.
+                    ps.headIndent = prefixWidth
+
+                    nsAttrString.addAttribute(
+                        .paragraphStyle,
+                        value: ps,
+                        range: NSRange(location: location, length: length)
+                    )
                 }
             }
             
