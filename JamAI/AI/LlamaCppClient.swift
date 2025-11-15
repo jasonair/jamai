@@ -130,7 +130,7 @@ final class LlamaCppClient: AIClient {
     ) async throws -> String {
         let combinedPrompt = buildPrompt(prompt: prompt, systemPrompt: systemPrompt, context: context)
         return try await withCheckedThrowingContinuation { continuation in
-            Task.detached { [weak self] in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
                 guard let self = self else {
                     continuation.resume(throwing: CancellationError())
                     return
