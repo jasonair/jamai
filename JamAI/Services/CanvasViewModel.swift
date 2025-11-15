@@ -656,10 +656,16 @@ class CanvasViewModel: ObservableObject {
                 
                 // Assemble system prompt - use team member's prompt if available
                 let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+                let effectiveBaseSystemPrompt: String
+                if AIProviderManager.shared.activeProvider == .local {
+                    effectiveBaseSystemPrompt = baseSystemPrompt + "\n\nWhen answering, be concise and concrete. Focus on specific numbers, tradeoffs, and examples. Base your answer primarily on the most recent user message, and treat earlier messages only as background context. Avoid repeating the same high-level outline in every reply."
+                } else {
+                    effectiveBaseSystemPrompt = baseSystemPrompt
+                }
                 let finalSystemPrompt: String
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
                     
                     // Track team member usage in generation
                     self.trackTeamMemberUsage(
@@ -671,7 +677,7 @@ class CanvasViewModel: ObservableObject {
                         actionType: .used
                     )
                 } else {
-                    finalSystemPrompt = baseSystemPrompt
+                    finalSystemPrompt = effectiveBaseSystemPrompt
                 }
                 
                 AIProviderManager.shared.client?.generateStreaming(
@@ -1087,10 +1093,16 @@ class CanvasViewModel: ObservableObject {
                 
                 // Assemble system prompt
                 let baseSystemPrompt = node.systemPromptSnapshot ?? self.project.systemPrompt
+                let effectiveBaseSystemPrompt: String
+                if AIProviderManager.shared.activeProvider == .local {
+                    effectiveBaseSystemPrompt = baseSystemPrompt + "\n\nWhen answering, be concise and concrete. Focus on specific numbers, tradeoffs, and examples, and avoid repeating the same high-level outline in every reply."
+                } else {
+                    effectiveBaseSystemPrompt = baseSystemPrompt
+                }
                 let finalSystemPrompt: String
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
                     
                     // Track team member usage
                     self.trackTeamMemberUsage(
@@ -1202,10 +1214,16 @@ class CanvasViewModel: ObservableObject {
             
             // Assemble system prompt
             let baseSystemPrompt = node.systemPromptSnapshot ?? project.systemPrompt
+            let effectiveBaseSystemPrompt: String
+            if AIProviderManager.shared.activeProvider == .local {
+                effectiveBaseSystemPrompt = baseSystemPrompt + "\n\nWhen answering, be concise and concrete. Focus on specific numbers, tradeoffs, and examples, and avoid repeating the same high-level outline in every reply."
+            } else {
+                effectiveBaseSystemPrompt = baseSystemPrompt
+            }
             let finalSystemPrompt: String
             if let teamMember = node.teamMember,
                let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: baseSystemPrompt)
+                finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
                 
                 // Track team member usage
                 trackTeamMemberUsage(
@@ -1217,7 +1235,7 @@ class CanvasViewModel: ObservableObject {
                     actionType: .used
                 )
             } else {
-                finalSystemPrompt = baseSystemPrompt
+                finalSystemPrompt = effectiveBaseSystemPrompt
             }
             
             AIProviderManager.shared.client?.generateStreaming(
@@ -1312,9 +1330,14 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
     }
     if !node.conversation.isEmpty {
         let recentMessages = Array(node.conversation.suffix(project.kTurns * 2))
+        let isLocal = AIProviderManager.shared.activeProvider == .local
         for msg in recentMessages {
+            if isLocal && msg.role != .user {
+                continue
+            }
+            let mappedRole: AIChatMessage.Role = msg.role == .user ? .user : .assistant
             messages.append(AIChatMessage(
-                role: msg.role == .user ? .user : .assistant,
+                role: mappedRole,
                 content: msg.content,
                 imageData: msg.imageData,
                 imageMimeType: msg.imageMimeType

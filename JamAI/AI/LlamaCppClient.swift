@@ -78,8 +78,9 @@ final class LlamaCppClient: AIClient {
         process.arguments = [
             "--model", modelURL.path,
             "-t", String(threads),
-            "--temp", "0.7",
-            "--top-p", "0.9",
+            "--temp", "0.75",
+            "--top-p", "0.95",
+            "--repeat-penalty", "1.1",
             "-n", "2048",
             "-no-cnv",
             "-p", prompt
