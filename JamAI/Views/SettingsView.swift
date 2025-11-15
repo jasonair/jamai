@@ -68,20 +68,12 @@ struct SettingsView: View {
                     
                     if aiProviderManager.activeProvider == .local {
                         VStack(alignment: .leading, spacing: 8) {
-                            HStack(spacing: 8) {
-                                Button("Install Ollama") {
-                                    if let url = URL(string: "https://ollama.com/download") {
-                                        NSWorkspace.shared.open(url)
-                                    }
-                                }
-                                .buttonStyle(.bordered)
-                                
-                                Button("Check Status") {
-                                    Task {
-                                        await aiProviderManager.refreshHealth()
-                                    }
+                            Button("Check Status") {
+                                Task {
+                                    await aiProviderManager.refreshHealth()
                                 }
                             }
+                            .buttonStyle(.bordered)
                             
                             Toggle("I accept the DeepSeek license", isOn: Binding(
                                 get: { aiProviderManager.licenseAccepted },
@@ -317,9 +309,9 @@ struct SettingsView: View {
             let percent = Int(progress * 100)
             return "Status: Downloading \(percent)%"
         case .missingDependency:
-            return "Status: Missing dependency"
+            return "Status: Local engine not available"
         case .serverDown:
-            return "Status: Ollama server not running"
+            return "Status: Local engine error"
         case .error(let message):
             return "Status: \(message)"
         }

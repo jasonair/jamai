@@ -93,24 +93,32 @@ final class AIProviderManager: ObservableObject {
         let name = modelName ?? activeModelName ?? Self.availableLocalModels.first
         setLocalModelName(name)
         if let finalName = activeModelName {
-            self.client = LocalLlamaClient(modelName: finalName)
+            self.client = LlamaCppClient(modelId: finalName)
         }
         Task { await refreshHealth() }
     }
     
     func startLocalModelInstall(onProgress: ((Double) -> Void)? = nil) async {
-        guard activeProvider == .local, let c = client as? LocalLlamaClient else { return }
+        guard activeProvider == .local else { return }
         guard licenseAccepted else {
             self.healthStatus = .error("License not accepted")
             return
         }
         self.healthStatus = .installing
         do {
-            try await c.pullModel { p in
+            let modelId = activeModelName ?? Self.availableLocalModels.first
+            guard let descriptor = LocalModelManager.shared.descriptor(for: modelId) else {
+                self.healthStatus = .error("Unknown model")
+                return
+            }
+            try await LocalModelManager.shared.downloadModel(descriptor: descriptor) { p in
                 Task { @MainActor in
                     self.healthStatus = .downloading(progress: p)
                     onProgress?(p)
                 }
+            }
+            if let finalName = activeModelName {
+                self.client = LlamaCppClient(modelId: finalName)
             }
             self.healthStatus = .ready
         } catch {

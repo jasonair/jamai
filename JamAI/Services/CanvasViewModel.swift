@@ -68,9 +68,9 @@ class CanvasViewModel: ObservableObject {
         if AIProviderManager.shared.activeProvider == .local {
             let model = AIProviderManager.shared.activeModelName ?? AIProviderManager.availableLocalModels.first
             if let name = model {
-                AIProviderManager.shared.setClient(LocalLlamaClient(modelName: name))
+                AIProviderManager.shared.setClient(LlamaCppClient(modelId: name))
             } else {
-                AIProviderManager.shared.setClient(LocalLlamaClient(modelName: "deepseek-r1:1.5b"))
+                AIProviderManager.shared.setClient(LlamaCppClient(modelId: "deepseek-r1:1.5b"))
             }
         } else {
             AIProviderManager.shared.setClient(GeminiClientAdapter(geminiClient: geminiClient))
