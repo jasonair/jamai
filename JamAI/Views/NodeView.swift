@@ -775,6 +775,11 @@ struct NodeView: View {
                 }
             } else {
                 // Show conversation thread
+                // Fallback: if there are only assistant messages (older data), still show the last prompt above them
+                if !node.conversation.contains(where: { $0.role == .user }) && !node.prompt.isEmpty {
+                    messageView(role: .user, content: node.prompt)
+                        .id("legacy-user-fallback")
+                }
                 ForEach(node.conversation) { message in
                     messageView(role: message.role, content: message.content)
                         .id(message.id)

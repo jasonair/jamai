@@ -1075,6 +1075,9 @@ class CanvasViewModel: ObservableObject {
         // Add user message to conversation without search
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
         // Also update legacy prompt field for backwards compatibility
+        node.prompt = prompt
+        nodes[nodeId] = node
+        
         Task { [weak self] in
             guard let self = self else { return }
             
