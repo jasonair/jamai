@@ -249,22 +249,25 @@ private struct FormattedTextView: View {
             let length = (line as NSString).length
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             
-            // Detect bullet points with different indentation levels
-            if trimmed.hasPrefix("•") && length > 0 {
+            // Detect bullet points ("•" or "- ") with different indentation levels
+            if (trimmed.hasPrefix("•") || trimmed.hasPrefix("- ")) && length > 0 {
                 let ps = NSMutableParagraphStyle()
                 ps.firstLineHeadIndent = 0
                 
                 // Count leading spaces to determine nesting level
                 let leadingSpaces = line.prefix(while: { $0 == " " }).count
-                if leadingSpaces >= 4 {
-                    // Second-level bullet (4+ spaces): more indent
-                    ps.headIndent = 38
+                if leadingSpaces >= 6 {
+                    // Third-level bullet (6+ spaces): deepest indent
+                    ps.headIndent = 60
+                } else if leadingSpaces >= 4 {
+                    // Second-level bullet (4-5 spaces)
+                    ps.headIndent = 44
                 } else if leadingSpaces >= 2 {
-                    // First-level nested bullet (2-3 spaces): medium indent
-                    ps.headIndent = 38
+                    // First-level nested bullet (2-3 spaces)
+                    ps.headIndent = 32
                 } else {
-                    // Top-level bullet: base indent (increased from 17 to 19)
-                    ps.headIndent = 19
+                    // Top-level bullet
+                    ps.headIndent = 20
                 }
                 nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
             }
@@ -278,14 +281,17 @@ private struct FormattedTextView: View {
                     
                     // Count leading spaces to determine nesting level
                     let leadingSpaces = line.prefix(while: { $0 == " " }).count
-                    if leadingSpaces >= 4 {
-                        // Nested numbered list: more indent
-                        ps.headIndent = 42
+                    if leadingSpaces >= 6 {
+                        // Third-level nested numbered list
+                        ps.headIndent = 64
+                    } else if leadingSpaces >= 4 {
+                        // Second-level nested
+                        ps.headIndent = 48
                     } else if leadingSpaces >= 2 {
-                        // First-level nested: medium indent
-                        ps.headIndent = 42
+                        // First-level nested
+                        ps.headIndent = 32
                     } else {
-                        // Top-level numbered list: base indent
+                        // Top-level numbered list
                         ps.headIndent = 24
                     }
                     nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
@@ -304,11 +310,36 @@ private struct FormattedTextView: View {
         var processedText = text.replacingOccurrences(of: "\n* ", with: "\n• ")
         processedText = processedText.replacingOccurrences(of: "\n  * ", with: "\n  • ")
         processedText = processedText.replacingOccurrences(of: "\n    * ", with: "\n    • ")
-        
-        // If starts with asterisk, replace it too
+
+        // If starts with an asterisk bullet, normalize it too
         if processedText.hasPrefix("* ") {
             processedText = "• " + processedText.dropFirst(2)
         }
+
+        // Convert markdown # headings into bold lines so they render as headers without hashes
+        let rawLines = processedText.components(separatedBy: .newlines)
+        var headingLines: [String] = []
+        headingLines.reserveCapacity(rawLines.count)
+        for line in rawLines {
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            if trimmed.hasPrefix("#") {
+                // Count leading # characters
+                var hashCount = 0
+                for ch in trimmed {
+                    if ch == "#" { hashCount += 1 } else { break }
+                }
+                if hashCount > 0, trimmed.dropFirst(hashCount).first == " " {
+                    let leadingSpacesCount = line.prefix(while: { $0 == " " }).count
+                    let leadingSpaces = String(repeating: " ", count: leadingSpacesCount)
+                    let headingText = trimmed.dropFirst(hashCount + 1)
+                    let boldHeading = "**" + headingText + "**"
+                    headingLines.append(leadingSpaces + boldHeading)
+                    continue
+                }
+            }
+            headingLines.append(line)
+        }
+        processedText = headingLines.joined(separator: "\n")
         
         // Parse as markdown with proper options
         var options = AttributedString.MarkdownParsingOptions()
