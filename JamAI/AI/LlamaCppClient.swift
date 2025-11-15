@@ -104,7 +104,6 @@ final class LlamaCppClient: AIClient {
             throw NSError(domain: "LlamaCppClient", code: Int(process.terminationStatus), userInfo: [NSLocalizedDescriptionKey: msg])
         }
         let text = String(data: outData, encoding: .utf8) ?? ""
-        print("[LlamaCppClient] raw output (\(text.count) chars):\n\(text)")
         var output = text
         if output.hasPrefix(prompt) {
             output = String(output.dropFirst(prompt.count))

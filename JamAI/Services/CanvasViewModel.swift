@@ -1154,8 +1154,9 @@ class CanvasViewModel: ObservableObject {
                                     )
                                 }
                                 
-                                // Auto-generate title and description if empty
-                                await self?.autoGenerateTitleAndDescription(for: nodeId)
+                                if AIProviderManager.shared.activeProvider != .local {
+                                    await self?.autoGenerateTitleAndDescription(for: nodeId)
+                                }
                                 
                             case .failure(let error):
                                 self?.errorMessage = error.localizedDescription
@@ -1267,8 +1268,9 @@ class CanvasViewModel: ObservableObject {
                                 )
                             }
                             
-                            // Auto-generate title and description
-                            await self?.autoGenerateTitleAndDescription(for: nodeId)
+                            if AIProviderManager.shared.activeProvider != .local {
+                                await self?.autoGenerateTitleAndDescription(for: nodeId)
+                            }
                             
                         case .failure(let error):
                             self?.errorMessage = error.localizedDescription
