@@ -74,19 +74,10 @@ struct MouseTrackingView: NSViewRepresentable {
                     return event
                 }
                 
-                // SIMPLE: Evaluate each scroll event independently
-                // No mode locking, no state - just check the current situation
-                if self.shouldLetSystemHandleScroll(for: event) {
-                    // Mouse is over a node's scroll view AND node is selected
-                    return event // Let the scroll view handle it
-                } else {
-                    // Otherwise, pan the canvas
-                    let dxBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaX : CGFloat(event.deltaX)
-                    let dyBase = event.hasPreciseScrollingDeltas ? event.scrollingDeltaY : CGFloat(event.deltaY)
-                    let invertMult: CGFloat = event.isDirectionInvertedFromDevice ? 1.0 : -1.0
-                    self.onScroll?(dxBase * invertMult, dyBase * invertMult)
-                    return nil // Consume event
-                }
+                // Let the normal NSResponder chain handle scrolling.
+                // Node ScrollViews will scroll when enabled/selected, and
+                // the canvas will not intercept two-finger scroll globally.
+                return event
             }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
