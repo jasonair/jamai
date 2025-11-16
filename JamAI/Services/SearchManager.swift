@@ -28,6 +28,17 @@ class SearchManager {
         ProcessInfo.processInfo.environment["PERPLEXITY_API_KEY"]
     }
     
+    // Feature flag: Set to true to enable subscription-based provider selection (Perplexity for Pro+)
+    // Set to false to always use Serper regardless of user plan
+    private var enableSubscriptionBasedProviderSelection: Bool {
+        // Check environment variable first, default to false (Serper-only)
+        if let envValue = ProcessInfo.processInfo.environment["ENABLE_SUBSCRIPTION_BASED_SEARCH"], 
+           envValue.lowercased() == "true" {
+            return true
+        }
+        return false
+    }
+    
     private init() {}
     
     // MARK: - Public API
@@ -118,6 +129,11 @@ class SearchManager {
     // MARK: - Provider Selection
     
     private func selectProvider(userPlan: UserPlan, enhancedSearch: Bool) -> SearchProvider {
+        // If subscription-based selection is disabled, always use Serper
+        if !enableSubscriptionBasedProviderSelection {
+            return .serper
+        }
+        
         // Pro+ with enhanced search enabled → Perplexity
         if (userPlan == .pro || userPlan == .teams || userPlan == .enterprise) && enhancedSearch {
             return .perplexity

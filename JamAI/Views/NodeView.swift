@@ -1068,9 +1068,7 @@ struct NodeView: View {
                             .help("Upload image")
                         }
                         
-                        // Web search toggle button - PRO SEARCH for premium users
-                        let userPlan = dataService.userAccount?.plan ?? .free
-                        let isPremiumUser = userPlan == .pro || userPlan == .teams || userPlan == .enterprise
+                        // Web search toggle button
                         let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
                         
                         Button(action: {
@@ -1078,27 +1076,23 @@ struct NodeView: View {
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "globe")
-                                    .font(.system(size: isPremiumUser ? 11 : 19))
+                                    .font(.system(size: 11))
                                 
-                                if isPremiumUser {
-                                    Text("PRO SEARCH")
-                                        .font(.system(size: 10, weight: .semibold))
-                                }
+                                Text("Web Search")
+                                    .font(.system(size: 10, weight: .semibold))
                             }
                             .foregroundColor(isSearchActive ? .accentColor : .secondary)
-                            .padding(.horizontal, isPremiumUser ? 8 : 0)
-                            .padding(.vertical, isPremiumUser ? 4 : 0)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
                             .background(Color.clear)
                             .cornerRadius(12)
                             .overlay(
-                                isPremiumUser ? AnyView(
-                                    RoundedRectangle(cornerRadius: 12)
-                                        .stroke(isSearchActive ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
-                                ) : AnyView(EmptyView())
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(isSearchActive ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
-                        .help(isPremiumUser ? (isSearchActive ? "PRO search enabled" : "Enable PRO search") : (isSearchActive ? "Web search enabled" : "Enable web search"))
+                        .help(isSearchActive ? "Web search enabled" : "Enable web search")
                         .disabled(isGenerating)
                     }
                     .padding(.horizontal, 6)
