@@ -8,6 +8,7 @@
 
 import SwiftUI
 import Combine
+import AppKit
 
 @MainActor
 class ModalCoordinator: ObservableObject {
@@ -107,5 +108,13 @@ class ModalCoordinator: ObservableObject {
     
     private func updateModalState() {
         isModalPresented = activeModalCount > 0
+        
+        // When any modal is presented, completely disable mouse interaction
+        // with all non-modal windows (the canvas) at the NSWindow level.
+        // This ensures no clicks or scrolls can reach nodes while a dialog is open.
+        for window in NSApp.windows where !(window is NSPanel) {
+            window.ignoresMouseEvents = isModalPresented
+        }
     }
 }
+

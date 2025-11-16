@@ -54,6 +54,12 @@ final class TapThroughView: NSView {
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self else { return event }
             
+            // If a native modal is open, never activate or change focus state.
+            // Let the modal window own all interactions.
+            if ModalCoordinator.shared.isModalPresented {
+                return event
+            }
+            
             // Check if event is within our bounds
             let locationInWindow = event.locationInWindow
             let locationInSelf = self.convert(locationInWindow, from: nil)
@@ -85,6 +91,12 @@ final class TapThroughView: NSView {
         // Monitor for scroll wheel events and forward them when active
         scrollMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
             guard let self = self else { return event }
+            
+            // If a native modal is open, never capture or forward scroll events.
+            // This prevents node scroll from hijacking scroll intended for dialogs.
+            if ModalCoordinator.shared.isModalPresented {
+                return event
+            }
             
             // Early exit if not active to reduce processing overhead
             guard self.isActive else { return event }

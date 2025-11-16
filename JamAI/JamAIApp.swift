@@ -42,6 +42,7 @@ struct UndoStateObserver: View {
 
 @main
 struct JamAIApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var appState = AppState()
     @StateObject private var authService = FirebaseAuthService.shared
     @StateObject private var dataService = FirebaseDataService.shared
