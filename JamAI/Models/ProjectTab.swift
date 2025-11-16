@@ -9,15 +9,24 @@ import Foundation
 
 struct ProjectTab: Identifiable, Hashable {
     let id: UUID
-    let projectURL: URL
-    let projectName: String
+    var projectURL: URL
+    var projectName: String
+    var isTemporary: Bool
     var viewModel: CanvasViewModel?
     var database: Database?
     
-    init(id: UUID = UUID(), projectURL: URL, projectName: String, viewModel: CanvasViewModel? = nil, database: Database? = nil) {
+    init(
+        id: UUID = UUID(),
+        projectURL: URL,
+        projectName: String,
+        isTemporary: Bool = false,
+        viewModel: CanvasViewModel? = nil,
+        database: Database? = nil
+    ) {
         self.id = id
         self.projectURL = projectURL
         self.projectName = projectName
+        self.isTemporary = isTemporary
         self.viewModel = viewModel
         self.database = database
     }

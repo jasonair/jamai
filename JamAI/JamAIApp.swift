@@ -383,6 +383,12 @@ class AppState: ObservableObject {
         guard let tabIndex = tabs.firstIndex(where: { $0.id == id }) else { return }
         let tab = tabs[tabIndex]
         
+        // If this is a temporary/untitled project, prompt the user to choose a final save location.
+        if tab.isTemporary {
+            promptSaveAndCloseTemporaryTab(tab: tab, tabIndex: tabIndex)
+            return
+        }
+        
         // Save project before closing - MUST complete before tab removal
         if let viewModel = tab.viewModel, let database = tab.database {
             // Capture references to prevent deallocation during save
@@ -427,6 +433,87 @@ class AppState: ObservableObject {
         }
     }
     
+    private func promptSaveAndCloseTemporaryTab(tab: ProjectTab, tabIndex: Int) {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.item]
+        panel.allowsOtherFileTypes = true
+        panel.nameFieldStringValue = "\(tab.projectName).\(Config.jamFileExtension)"
+        panel.message = "Save this Jam"
+        
+        let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self = self else { return }
+            guard response == .OK, let url = panel.url else { return }
+            
+            let saveURL: URL
+            if url.pathExtension == Config.jamFileExtension {
+                saveURL = url
+            } else {
+                saveURL = url.appendingPathExtension(Config.jamFileExtension)
+            }
+            
+            let originalURL = tab.projectURL
+            
+            guard let viewModel = tab.viewModel, let database = tab.database else {
+                // No backing project; just close
+                self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+                return
+            }
+            
+            let capturedViewModel = viewModel
+            let capturedDatabase = database
+            
+            Task { @MainActor in
+                do {
+                    // Update project name to match chosen file name
+                    var updatedProject = capturedViewModel.project
+                    updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
+                    capturedViewModel.project = updatedProject
+                    
+                    // Save project metadata to the current location
+                    try? DocumentManager.shared.saveProject(
+                        capturedViewModel.project,
+                        to: originalURL.deletingPathExtension(),
+                        database: capturedDatabase
+                    )
+                    
+                    // Ensure all pending writes are flushed
+                    await capturedViewModel.saveAndWait()
+                    
+                    // Move bundle if user chose a different location/name
+                    if saveURL != originalURL {
+                        do {
+                            try FileManager.default.moveItem(at: originalURL, to: saveURL)
+                            
+                            // Update recent projects to point to the new location
+                            self.recentProjectsManager.removeRecent(url: originalURL)
+                            self.recordRecent(url: saveURL)
+                        } catch {
+                            self.showError("Failed to save project: \(error.localizedDescription)")
+                            return
+                        }
+                    }
+                    
+                    if Config.enableVerboseLogging {
+                        print("✅ Temporary tab saved successfully before close: \(saveURL.lastPathComponent)")
+                    }
+                    
+                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+                } catch {
+                    if Config.enableVerboseLogging {
+                        print("⚠️ Error saving temporary tab before close: \(error.localizedDescription)")
+                    }
+                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+                }
+            }
+        }
+        
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            panel.beginSheetModal(for: window, completionHandler: handler)
+        } else {
+            handler(panel.runModal())
+        }
+    }
+    
     private func performTabCleanup(id: UUID, tabIndex: Int, tab: ProjectTab) {
         // Stop security-scoped access
         if accessingResources.contains(tab.projectURL) {
@@ -455,7 +542,7 @@ class AppState: ObservableObject {
         }
     }
     
-    func openProjectInNewTab(url: URL) {
+    func openProjectInNewTab(url: URL, isTemporary: Bool = false) {
         // Normalize to the .jam directory URL we will operate on
         let normalizedURL = (url.pathExtension == Config.jamFileExtension) ? url : url.appendingPathExtension(Config.jamFileExtension)
         
@@ -477,6 +564,7 @@ class AppState: ObservableObject {
             let newTab = ProjectTab(
                 projectURL: normalizedURL,
                 projectName: normalizedURL.deletingPathExtension().lastPathComponent,
+                isTemporary: isTemporary,
                 viewModel: viewModel,
                 database: database
             )
@@ -527,54 +615,42 @@ class AppState: ObservableObject {
                 }
             }
             
-            let panel = NSSavePanel()
-            // Allow any name; we'll ensure .jam is appended and create the package ourselves
-            panel.allowedContentTypes = [.item]
-            panel.allowsOtherFileTypes = true
-            panel.nameFieldStringValue = "Untitled Project.\(Config.jamFileExtension)"
-            panel.message = "Create a new Jam AI project"
-            
-            let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-                guard let self = self else { return }
-                guard response == .OK, let url = panel.url else { return }
-                DispatchQueue.main.async {
-                    do {
-                        let project = Project(name: url.deletingPathExtension().lastPathComponent)
-                        try DocumentManager.shared.saveProject(project, to: url.deletingPathExtension())
-                        
-                        // Open in new tab
-                        let finalURL = (url.pathExtension == Config.jamFileExtension)
-                            ? url
-                            : url.appendingPathExtension(Config.jamFileExtension)
-
-                        // Track project created analytics
-                        if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                            Task {
-                                // Get the project from the URL after opening
-                                if let tab = self.tabs.first(where: { $0.projectURL == finalURL }),
-                                   let project = tab.viewModel?.project {
-                                    await AnalyticsService.shared.trackProjectActivity(
-                                        userId: userId,
-                                        projectId: project.id,
-                                        projectName: project.name,
-                                        activityType: .created
-                                    )
-                                }
-                            }
-                        }
-                        
-                        self.openProjectInNewTab(url: finalURL)
-                    } catch {
-                        self.showError("Failed to create project: \(error.localizedDescription)")
+            // Create a new project immediately with an auto-generated name,
+            // without prompting the user for a save location.
+            do {
+                let projectName = self.generateUntitledProjectName()
+                let (project, fileURL) = try DocumentManager.shared.createNewProject(name: projectName)
+                
+                // Open in new tab
+                self.openProjectInNewTab(url: fileURL, isTemporary: true)
+                
+                // Track project created analytics
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    Task {
+                        await AnalyticsService.shared.trackProjectActivity(
+                            userId: userId,
+                            projectId: project.id,
+                            projectName: project.name,
+                            activityType: .created
+                        )
                     }
                 }
-            }
-            if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-                panel.beginSheetModal(for: window, completionHandler: handler)
-            } else {
-                handler(panel.runModal())
+            } catch {
+                self.showError("Failed to create project: \(error.localizedDescription)")
             }
         }
+    }
+    
+    private func generateUntitledProjectName() -> String {
+        var projectName = "Untitled Jam"
+        var counter = 1
+        
+        while recentProjects.contains(where: { $0.lastPathComponent == "\(projectName)\(Config.jamFileExtension)" }) {
+            projectName = "Untitled Jam \(counter)"
+            counter += 1
+        }
+        
+        return projectName
     }
     
     func openProjectDialog() {
