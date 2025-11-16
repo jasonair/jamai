@@ -434,86 +434,124 @@ class AppState: ObservableObject {
     }
     
     private func promptSaveAndCloseTemporaryTab(tab: ProjectTab, tabIndex: Int) {
-        let panel = NSSavePanel()
-        panel.allowedContentTypes = [.item]
-        panel.allowsOtherFileTypes = true
-        panel.nameFieldStringValue = "\(tab.projectName).\(Config.jamFileExtension)"
-        panel.message = "Save this Jam"
-        
-        let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
-            guard let self = self else { return }
-            guard response == .OK, let url = panel.url else { return }
-            
-            let saveURL: URL
-            if url.pathExtension == Config.jamFileExtension {
-                saveURL = url
-            } else {
-                saveURL = url.appendingPathExtension(Config.jamFileExtension)
-            }
-            
-            let originalURL = tab.projectURL
-            
-            guard let viewModel = tab.viewModel, let database = tab.database else {
-                // No backing project; just close
-                self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
-                return
-            }
-            
-            let capturedViewModel = viewModel
-            let capturedDatabase = database
-            
-            Task { @MainActor in
-                do {
-                    // Update project name to match chosen file name
-                    var updatedProject = capturedViewModel.project
-                    updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
-                    capturedViewModel.project = updatedProject
-                    
-                    // Save project metadata to the current location
-                    try? DocumentManager.shared.saveProject(
-                        capturedViewModel.project,
-                        to: originalURL.deletingPathExtension(),
-                        database: capturedDatabase
-                    )
-                    
-                    // Ensure all pending writes are flushed
-                    await capturedViewModel.saveAndWait()
-                    
-                    // Move bundle if user chose a different location/name
-                    if saveURL != originalURL {
-                        do {
-                            try FileManager.default.moveItem(at: originalURL, to: saveURL)
-                            
-                            // Update recent projects to point to the new location
-                            self.recentProjectsManager.removeRecent(url: originalURL)
-                            self.recordRecent(url: saveURL)
-                        } catch {
-                            self.showError("Failed to save project: \(error.localizedDescription)")
-                            return
+        // First show a standard Save / Don't Save / Cancel alert
+        let alert = NSAlert()
+        alert.messageText = "Do you want to save this Jam before closing?"
+        alert.informativeText = "Your changes will be lost if you don't save."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Save")        // .alertFirstButtonReturn
+        alert.addButton(withTitle: "Don't Save") // .alertSecondButtonReturn
+        alert.addButton(withTitle: "Cancel")     // .alertThirdButtonReturn
+
+        let response = alert.runModal()
+
+        switch response {
+        case .alertFirstButtonReturn:
+            // Save - show NSSavePanel to choose final location/name
+            let panel = NSSavePanel()
+            panel.allowedContentTypes = [.item]
+            panel.allowsOtherFileTypes = true
+            panel.nameFieldStringValue = "\(tab.projectName).\(Config.jamFileExtension)"
+            panel.message = "Save this Jam"
+
+            let handler: (NSApplication.ModalResponse) -> Void = { [weak self] panelResponse in
+                guard let self = self else { return }
+                guard panelResponse == .OK, let url = panel.url else { return }
+
+                let saveURL: URL
+                if url.pathExtension == Config.jamFileExtension {
+                    saveURL = url
+                } else {
+                    saveURL = url.appendingPathExtension(Config.jamFileExtension)
+                }
+
+                let originalURL = tab.projectURL
+
+                guard let viewModel = tab.viewModel, let database = tab.database else {
+                    // No backing project; just close
+                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+                    return
+                }
+
+                let capturedViewModel = viewModel
+                let capturedDatabase = database
+
+                Task { @MainActor in
+                    do {
+                        // Update project name to match chosen file name
+                        var updatedProject = capturedViewModel.project
+                        updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
+                        capturedViewModel.project = updatedProject
+
+                        // Save project metadata to the current location
+                        try? DocumentManager.shared.saveProject(
+                            capturedViewModel.project,
+                            to: originalURL.deletingPathExtension(),
+                            database: capturedDatabase
+                        )
+
+                        // Ensure all pending writes are flushed
+                        await capturedViewModel.saveAndWait()
+
+                        // Move bundle if user chose a different location/name
+                        if saveURL != originalURL {
+                            do {
+                                try FileManager.default.moveItem(at: originalURL, to: saveURL)
+
+                                // Update recent projects to point to the new location
+                                self.recentProjectsManager.removeRecent(url: originalURL)
+                                self.recordRecent(url: saveURL)
+                            } catch {
+                                self.showError("Failed to save project: \(error.localizedDescription)")
+                                return
+                            }
                         }
+
+                        if Config.enableVerboseLogging {
+                            print("✅ Temporary tab saved successfully before close: \(saveURL.lastPathComponent)")
+                        }
+
+                        self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+                    } catch {
+                        if Config.enableVerboseLogging {
+                            print("⚠️ Error saving temporary tab before close: \(error.localizedDescription)")
+                        }
+                        self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
                     }
-                    
-                    if Config.enableVerboseLogging {
-                        print("✅ Temporary tab saved successfully before close: \(saveURL.lastPathComponent)")
-                    }
-                    
-                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
-                } catch {
-                    if Config.enableVerboseLogging {
-                        print("⚠️ Error saving temporary tab before close: \(error.localizedDescription)")
-                    }
-                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
                 }
             }
-        }
-        
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
-            panel.beginSheetModal(for: window, completionHandler: handler)
-        } else {
-            handler(panel.runModal())
+
+            if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+                panel.beginSheetModal(for: window, completionHandler: handler)
+            } else {
+                handler(panel.runModal())
+            }
+
+        case .alertSecondButtonReturn:
+            // Don't Save - delete the temporary bundle and close the tab
+            let originalURL = tab.projectURL
+
+            // Remove from recents first
+            recentProjectsManager.removeRecent(url: originalURL)
+
+            do {
+                if FileManager.default.fileExists(atPath: originalURL.path) {
+                    try FileManager.default.removeItem(at: originalURL)
+                }
+            } catch {
+                if Config.enableVerboseLogging {
+                    print("⚠️ Failed to delete temporary Jam at close: \(error.localizedDescription)")
+                }
+            }
+
+            performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
+
+        default:
+            // Cancel - do nothing, keep tab open
+            return
         }
     }
-    
+
     private func performTabCleanup(id: UUID, tabIndex: Int, tab: ProjectTab) {
         // Stop security-scoped access
         if accessingResources.contains(tab.projectURL) {
