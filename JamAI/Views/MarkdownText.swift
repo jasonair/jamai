@@ -44,7 +44,7 @@ struct MarkdownText: View {
         // PERFORMANCE OPTIMIZATION: Use LazyVStack to defer off-screen rendering
         // Only visible blocks are rendered, invisible ones wait until scrolled into view
         // User sees no difference, but zoom/scroll performance is dramatically improved
-        LazyVStack(alignment: .leading, spacing: 8, pinnedViews: []) {
+        VStack(alignment: .leading, spacing: 8) {
             ForEach(cachedBlocks, id: \.id) { block in
                 Group {
                     switch block.type {
@@ -150,12 +150,13 @@ struct MarkdownText: View {
 private struct FormattedTextView: View {
     let content: String
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.isZooming) private var isZooming
     
     var body: some View {
         if #available(macOS 12.0, *) {
             let formatted = formatText(content)
             let nsAttributed = convertToNSAttributedString(formatted, colorScheme: colorScheme)
-            NSTextViewWrapper(attributedString: nsAttributed)
+            NSTextViewWrapper(attributedString: nsAttributed, isZooming: isZooming)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
@@ -1262,58 +1263,30 @@ private struct MarkdownTableView: View {
 
 // MARK: - NSTextView Wrapper
 
-// Custom NSScrollView that prevents scroll event propagation to parent views
+// Custom NSScrollView used inside MarkdownText. The content is sized to fit
+// vertically and should not scroll independently of the surrounding SwiftUI
+// ScrollView. To keep text position stable during zoom/pan, always forward
+// scroll events to the parent instead of changing our own content offset.
 @available(macOS 12.0, *)
 private class NonPropagatingScrollView: NSScrollView {
     override func scrollWheel(with event: NSEvent) {
-        // Only propagate if we can't scroll in the event direction
-        guard let documentView = documentView else {
-            super.scrollWheel(with: event)
-            return
-        }
-        
-        let scrollDeltaY = event.scrollingDeltaY
-        let contentView = self.contentView
-        let bounds = contentView.bounds
-        let documentFrame = documentView.frame
-        
-        // Check if we can scroll
-        let canScrollUp = bounds.origin.y > 0
-        let canScrollDown = bounds.maxY < documentFrame.maxY
-        
-        let shouldPropagate: Bool
-        if scrollDeltaY < 0 {
-            // Scrolling down
-            shouldPropagate = !canScrollDown
-        } else if scrollDeltaY > 0 {
-            // Scrolling up
-            shouldPropagate = !canScrollUp
-        } else {
-            shouldPropagate = false
-        }
-        
-        if shouldPropagate {
-            // Let parent handle scroll
-            nextResponder?.scrollWheel(with: event)
-        } else {
-            // Handle scroll ourselves
-            super.scrollWheel(with: event)
-        }
+        nextResponder?.scrollWheel(with: event)
     }
 }
 
 @available(macOS 12.0, *)
 private struct NSTextViewWrapper: NSViewRepresentable {
     let attributedString: NSAttributedString
+    let isZooming: Bool
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NonPropagatingScrollView()
         
-        // PERFORMANCE FIX: Enable CALayer rasterization for GPU-accelerated rendering
-        // This prevents layout recalculation during drag/pan/zoom operations
+        // Use a layer-backed scroll view for smoother compositing, but rely on
+        // SwiftUI/Quartz for rasterization rather than forcing a cached snapshot.
+        // Forcing shouldRasterize can cause blank or stale content when the
+        // canvas is zoomed or panned.
         scrollView.wantsLayer = true
-        scrollView.layer?.shouldRasterize = true
-        scrollView.layer?.rasterizationScale = NSScreen.main?.backingScaleFactor ?? 2.0
         
         let textView = NSTextView()
         textView.isEditable = false
@@ -1357,6 +1330,14 @@ private struct NSTextViewWrapper: NSViewRepresentable {
             textView.layoutManager?.ensureLayout(for: textView.textContainer!)
         }
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
+
+        // Ensure the inner scroll view is always scrolled to the top so
+        // content cannot appear offset or partially hidden after zoom/pan.
+        let clipView = scrollView.contentView
+        if clipView.bounds.origin.y != 0 {
+            clipView.scroll(to: NSPoint(x: 0, y: 0))
+            scrollView.reflectScrolledClipView(clipView)
+        }
     }
     
     func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
