@@ -39,7 +39,7 @@ struct TeamMember: Codable, Equatable, Sendable {
         guard let role = role else {
             return "Team Member"
         }
-        return "\(effectiveExperienceLevel.displayName) \(role.name)"
+        return role.name
     }
     
     /// Assemble the full system prompt for this team member

@@ -263,61 +263,7 @@ class CanvasViewModel: ObservableObject {
         // Defer state changes to avoid publishing during view updates
         // Use .userInitiated QoS to match the calling context and avoid priority inversion
         Task(priority: .userInitiated) { @MainActor in
-            var node = Node(
-                projectId: self.project.id,
-                parentId: parentId,
-                x: position.x,
-                y: position.y
-            )
-            
-            // Set up ancestry and context
-            if let parentId = parentId, let parent = self.nodes[parentId] {
-                var ancestry = parent.ancestry
-                ancestry.append(parentId)
-                node.setAncestry(ancestry)
-                node.systemPromptSnapshot = self.project.systemPrompt
-                
-                // Don't inherit conversation for branches - just use parent summary as hidden context
-                // This gives a clean slate while maintaining context through the summary
-                
-                // Create edge to parent with parent's color
-                let parentColor = parent.color != "none" ? parent.color : nil
-                let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
-                self.edges[edge.id] = edge
-                self.undoManager.record(.createEdge(edge))
-                // Use debounced write system to ensure reliable persistence
-                self.scheduleDebouncedWrite(edgeId: edge.id)
-            }
-            
-            self.nodes[node.id] = node
-            self.bringToFront([node.id])
-            
-            // Auto-select newly created node
-            self.selectedNodeId = node.id
-            self.undoManager.record(.createNode(node))
-            let dbActor = self.dbActor
-            Task { [weak self, dbActor, node] in
-                do {
-                    try await dbActor.saveNode(node)
-
-                    // Track node creation analytics
-                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                        await AnalyticsService.shared.trackNodeCreation(
-                            userId: userId,
-                            projectId: node.projectId,
-                            nodeId: node.id,
-                            nodeType: "standard",
-                            creationMethod: .manual,
-                            parentNodeId: nil,
-                            teamMemberRoleId: node.teamMember?.roleId
-                        )
-                    }
-                } catch {
-                    await MainActor.run {
-                        self?.errorMessage = "Failed to save node: \(error.localizedDescription)"
-                    }
-                }
-            }
+            _ = self.createNodeImmediate(at: position, parentId: parentId, inheritContext: inheritContext)
         }
     }
 
