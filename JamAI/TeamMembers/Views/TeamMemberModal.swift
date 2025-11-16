@@ -20,18 +20,6 @@ struct TeamMemberModal: View {
     @State private var searchQuery = ""
     @State private var selectedCategory: RoleCategory?
     @State private var selectedRole: Role?
-    @State private var selectedLevel: ExperienceLevel = .intermediate
-    @State private var customName: String = ""
-    
-    private var currentTier: PlanTier {
-        guard let account = dataService.userAccount else { return .free }
-        // Map UserPlan to PlanTier for experience level access
-        switch account.plan {
-        case .pro: return .pro
-        case .teams, .enterprise: return .enterprise
-        case .free: return .free
-        }
-    }
     
     @FocusState private var isSearchFocused: Bool
     
@@ -139,14 +127,10 @@ struct TeamMemberModal: View {
                                     nodeName: member.nodeName,
                                     teamMember: member.teamMember,
                                     role: member.role,
-                                    isSelected: selectedRole?.id == member.teamMember.roleId && 
-                                               selectedLevel == member.teamMember.experienceLevel &&
-                                               customName == (member.teamMember.name ?? ""),
+                                    isSelected: selectedRole?.id == member.teamMember.roleId,
                                     onTap: {
                                         // Quick-select this team member's configuration
                                         selectedRole = member.role
-                                        selectedLevel = member.teamMember.experienceLevel
-                                        customName = member.teamMember.name ?? ""
                                     }
                                 )
                             }
@@ -184,47 +168,6 @@ struct TeamMemberModal: View {
             
             if selectedRole != nil {
                 Divider()
-                
-                // Configuration section
-                VStack(alignment: .leading, spacing: 16) {
-                    // Custom name field
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Name")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        TextField("Enter a name (required)", text: $customName)
-                            .textFieldStyle(PlainTextFieldStyle())
-                            .padding(8)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(6)
-                    }
-                    
-                    // Experience level selector
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Experience Level")
-                            .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.secondary)
-                        
-                        HStack(spacing: 8) {
-                            ForEach(ExperienceLevel.allCases, id: \.self) { level in
-                                let isAvailable = selectedRole?.isLevelAvailable(level, for: currentTier) ?? false
-                                
-                                ExperienceLevelButton(
-                                    level: level,
-                                    isSelected: selectedLevel == level,
-                                    isAvailable: isAvailable,
-                                    action: {
-                                        if isAvailable {
-                                            selectedLevel = level
-                                        }
-                                    }
-                                )
-                            }
-                        }
-                    }
-                }
-                .padding()
             }
             
             Divider()
@@ -258,11 +201,11 @@ struct TeamMemberModal: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(selectedRole != nil && !customName.trimmingCharacters(in: .whitespaces).isEmpty ? Color.accentColor : Color.gray)
+                        .background(selectedRole != nil ? Color.accentColor : Color.gray)
                         .cornerRadius(6)
                 }
                 .buttonStyle(PlainButtonStyle())
-                .disabled(selectedRole == nil || customName.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(selectedRole == nil)
             }
             .padding()
         }
@@ -270,11 +213,7 @@ struct TeamMemberModal: View {
         .frame(maxHeight: 680)
         .allowsHitTesting(true)
         .onAppear {
-            
-            // Load existing member if editing
             if let member = existingMember {
-                customName = member.name ?? ""
-                selectedLevel = member.experienceLevel
                 selectedRole = roleManager.role(withId: member.roleId)
             }
             
@@ -287,13 +226,9 @@ struct TeamMemberModal: View {
     
     private func saveTeamMember() {
         guard let role = selectedRole else { return }
-        let trimmedName = customName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else { return }
-        
         let member = TeamMember(
             roleId: role.id,
-            name: trimmedName,
-            experienceLevel: selectedLevel,
+            name: nil,
             promptAddendum: nil,
             knowledgePackIds: nil
         )
@@ -380,35 +315,6 @@ struct RoleRow: View {
     }
 }
 
-struct ExperienceLevelButton: View {
-    let level: ExperienceLevel
-    let isSelected: Bool
-    let isAvailable: Bool
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                if !isAvailable {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
-                }
-                
-                Text(level.displayName)
-                    .font(.system(size: 12, weight: isSelected ? .semibold : .regular))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.15))
-            .foregroundColor(isSelected ? .white : (isAvailable ? .primary : .secondary))
-            .cornerRadius(6)
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(!isAvailable)
-    }
-}
-
 struct ProjectTeamMemberPill: View {
     let nodeName: String
     let teamMember: TeamMember
@@ -426,7 +332,7 @@ struct ProjectTeamMemberPill: View {
                 
                 // Team member name and node
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(teamMember.name ?? "Team Member")
+                    Text(role.map { teamMember.displayName(with: $0) } ?? "Team Member")
                         .font(.system(size: 12, weight: .medium))
                         .lineLimit(1)
                     

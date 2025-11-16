@@ -56,6 +56,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     
     // Team Member
     var teamMemberJSON: String? // JSON representation of attached TeamMember
+    var personalityRawValue: String? // Raw Personality value stored in database
     
     // UI State
     var isExpanded: Bool
@@ -95,6 +96,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         summary: String? = nil,
         systemPromptSnapshot: String? = nil,
         teamMemberJSON: String? = nil,
+        personalityRawValue: String? = nil,
         isExpanded: Bool = true,
         isFrozenContext: Bool = false,
         color: String = "none",
@@ -134,6 +136,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.summary = summary
         self.systemPromptSnapshot = systemPromptSnapshot
         self.teamMemberJSON = teamMemberJSON
+        self.personalityRawValue = personalityRawValue
         self.isExpanded = isExpanded
         self.isFrozenContext = isFrozenContext
         self.color = color
@@ -215,6 +218,19 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
             self.teamMemberJSON = json
         } else {
             self.teamMemberJSON = nil
+        }
+    }
+    
+    /// Per-node personality with a default of .generalist when unset or unknown
+    var personality: Personality {
+        get {
+            if let raw = personalityRawValue, let value = Personality(rawValue: raw) {
+                return value
+            }
+            return .generalist
+        }
+        set {
+            personalityRawValue = newValue.rawValue
         }
     }
     

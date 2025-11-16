@@ -23,18 +23,12 @@ struct TeamMemberTray: View {
                     .foregroundColor(trayTextColor)
             }
             
-            // Team member name and role
+            // Team member role (Expert-level by default)
             VStack(alignment: .leading, spacing: 2) {
-                if let name = teamMember.name, !name.isEmpty {
-                    Text(name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(trayTextColor)
-                }
-                
                 if let role = role {
-                    Text("\(teamMember.experienceLevel.displayName) \(role.name)")
-                        .font(.system(size: 12))
-                        .foregroundColor(trayTextColor.opacity(0.9))
+                    Text(teamMember.displayName(with: role))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(trayTextColor.opacity(0.95))
                 }
             }
             

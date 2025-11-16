@@ -329,6 +329,22 @@ class CanvasViewModel: ObservableObject {
             x: position.x,
             y: position.y
         )
+        
+        // Attach default Expert Research Analyst with Generalist personality if none is set
+        if node.teamMember == nil {
+            if let defaultRole = RoleManager.shared.role(withId: "research-analyst") {
+                let member = TeamMember(
+                    roleId: defaultRole.id,
+                    name: nil,
+                    experienceLevel: .expert,
+                    promptAddendum: nil,
+                    knowledgePackIds: nil
+                )
+                node.setTeamMember(member)
+            }
+        }
+        node.personality = .generalist
+        
         // Set up ancestry and context
         if let parentId = parentId, let parent = self.nodes[parentId] {
             var ancestry = parent.ancestry
@@ -665,7 +681,11 @@ class CanvasViewModel: ObservableObject {
                 let finalSystemPrompt: String
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(
+                        with: role,
+                        personality: node.personality,
+                        baseSystemPrompt: effectiveBaseSystemPrompt
+                    )
                     
                     // Track team member usage in generation
                     self.trackTeamMemberUsage(
@@ -1102,7 +1122,11 @@ class CanvasViewModel: ObservableObject {
                 let finalSystemPrompt: String
                 if let teamMember = node.teamMember,
                    let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                    finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
+                    finalSystemPrompt = teamMember.assembleSystemPrompt(
+                    with: role,
+                    personality: node.personality,
+                    baseSystemPrompt: effectiveBaseSystemPrompt
+                )
                     
                     // Track team member usage
                     self.trackTeamMemberUsage(
@@ -1223,7 +1247,11 @@ class CanvasViewModel: ObservableObject {
             let finalSystemPrompt: String
             if let teamMember = node.teamMember,
                let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
-                finalSystemPrompt = teamMember.assembleSystemPrompt(with: role, baseSystemPrompt: effectiveBaseSystemPrompt)
+                finalSystemPrompt = teamMember.assembleSystemPrompt(
+                    with: role,
+                    personality: node.personality,
+                    baseSystemPrompt: effectiveBaseSystemPrompt
+                )
                 
                 // Track team member usage
                 trackTeamMemberUsage(

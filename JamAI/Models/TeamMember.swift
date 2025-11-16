@@ -9,7 +9,7 @@ import Foundation
 
 struct TeamMember: Codable, Equatable, Sendable {
     let roleId: String // Reference to Role.id
-    var name: String? // Custom name (e.g., "Sarah")
+    var name: String? // Legacy custom name (no longer used in prompts/UI)
     var experienceLevel: ExperienceLevel
     var promptAddendum: String? // Optional custom instructions to append to system prompt
     var knowledgePackIds: [String]? // Future: IDs of attached knowledge packs
@@ -17,34 +17,46 @@ struct TeamMember: Codable, Equatable, Sendable {
     init(
         roleId: String,
         name: String? = nil,
-        experienceLevel: ExperienceLevel = .intermediate,
+        experienceLevel: ExperienceLevel = .expert,
         promptAddendum: String? = nil,
         knowledgePackIds: [String]? = nil
     ) {
         self.roleId = roleId
         self.name = name
-        self.experienceLevel = experienceLevel
+        // Normalize to expert for all new team members
+        self.experienceLevel = .expert
         self.promptAddendum = promptAddendum
         self.knowledgePackIds = knowledgePackIds
     }
     
-    /// Display name combining custom name and role
+    /// Effective experience level used for prompts and display (currently always Expert)
+    private var effectiveExperienceLevel: ExperienceLevel {
+        .expert
+    }
+    
+    /// Display name combining experience level and role (legacy helper)
     func displayName(with role: Role?) -> String {
         guard let role = role else {
-            return name ?? "Team Member"
+            return "Team Member"
         }
-        
-        if let customName = name, !customName.isEmpty {
-            return "\(customName) (\(experienceLevel.displayName) \(role.name))"
-        } else {
-            return "\(experienceLevel.displayName) \(role.name)"
-        }
+        return "\(effectiveExperienceLevel.displayName) \(role.name)"
     }
     
     /// Assemble the full system prompt for this team member
-    func assembleSystemPrompt(with role: Role?, baseSystemPrompt: String) -> String {
-        guard let role = role,
-              let rolePrompt = role.systemPrompt(for: experienceLevel) else {
+    /// Personality is applied at the node level and appended separately.
+    func assembleSystemPrompt(with role: Role?, personality: Personality?, baseSystemPrompt: String) -> String {
+        guard let role = role else {
+            return baseSystemPrompt
+        }
+        
+        // Prefer Expert prompt; gracefully fall back if missing
+        let level = effectiveExperienceLevel
+        let rolePrompt = role.systemPrompt(for: level)
+            ?? role.systemPrompt(for: .senior)
+            ?? role.systemPrompt(for: .intermediate)
+            ?? role.systemPrompt(for: .junior)
+        
+        guard let rolePrompt else {
             return baseSystemPrompt
         }
         
@@ -53,14 +65,14 @@ struct TeamMember: Codable, Equatable, Sendable {
         // Add role-specific prompt
         assembled += "\n\n# Team Member Role\n"
         
-        let roleDescription = "\(experienceLevel.displayName) \(role.name)"
-        
-        if let customName = name, !customName.isEmpty {
-            assembled += "You are \(customName), a \(roleDescription).\n"
-        } else {
-            assembled += "You are acting as a \(roleDescription).\n"
-        }
+        let roleDescription = "\(level.displayName) \(role.name)"
+        assembled += "You are acting as a \(roleDescription).\n"
         assembled += "\n\(rolePrompt)"
+        
+        // Add personality instructions if present
+        if let personality {
+            assembled += "\n\n# Personality\n\(personality.promptSnippet)"
+        }
         
         // Add custom instructions if present
         if let addendum = promptAddendum, !addendum.isEmpty {
