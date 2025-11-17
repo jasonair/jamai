@@ -9,17 +9,17 @@ import Foundation
 import Combine
 
 class GeminiClient: ObservableObject {
-    private var apiKey: String?
     private let session: URLSession
+    
+    private var apiKey: String? {
+        ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"]
+    }
     
     init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 60
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
-        
-        // Load API key from keychain
-        self.apiKey = try? KeychainHelper.retrieve(forKey: Config.geminiAPIKeyIdentifier)
     }
     
     deinit {
@@ -34,13 +34,9 @@ class GeminiClient: ObservableObject {
     
     // MARK: - API Key Management
     
-    func setAPIKey(_ key: String) throws {
-        try KeychainHelper.save(key, forKey: Config.geminiAPIKeyIdentifier)
-        self.apiKey = key
-    }
-    
     func hasAPIKey() -> Bool {
-        return apiKey != nil && !apiKey!.isEmpty
+        guard let key = apiKey else { return false }
+        return !key.isEmpty
     }
     
     // MARK: - Streaming Generation
@@ -297,7 +293,7 @@ enum GeminiError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noAPIKey:
-            return "No API key configured. Please add your Gemini API key in settings."
+            return "No API key configured. Please set GOOGLE_GEMINI_API_KEY in your environment (for example in a .env file)."
         case .invalidURL:
             return "Invalid API URL"
         case .invalidResponse:

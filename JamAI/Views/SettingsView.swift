@@ -12,8 +12,6 @@ struct SettingsView: View {
     @ObservedObject var viewModel: CanvasViewModel
     @ObservedObject var appState: AppState
     @ObservedObject private var aiProviderManager = AIProviderManager.shared
-    @State private var apiKey: String = ""
-    @State private var showAPIKey = false
     @State private var saveStatus: String?
     @State private var selectedTemplate: SystemPromptTemplate?
     @State private var customPrompt: String = ""
@@ -172,46 +170,9 @@ struct SettingsView: View {
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
             
-                // API Configuration Section
-                sectionHeader("API Configuration")
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        if showAPIKey {
-                            TextField("Gemini API Key", text: $apiKey)
-                                .textFieldStyle(.roundedBorder)
-                        } else {
-                            SecureField("Gemini API Key", text: $apiKey)
-                                .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        Button(action: { showAPIKey.toggle() }) {
-                            Image(systemName: showAPIKey ? "eye.slash" : "eye")
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    
-                    HStack(spacing: 12) {
-                        Button("Save API Key") {
-                            saveAPIKey()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        
-                        Link("Get API Key", destination: URL(string: "https://aistudio.google.com/app/apikey")!)
-                            .font(.caption)
-                    }
-                    
-                    if let status = saveStatus {
-                        Text(status)
-                            .font(.caption)
-                            .foregroundColor(status.contains("Success") ? .green : .red)
-                    }
-                }
-                .padding(16)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(12)
+            // API Configuration Section
             
-                // Appearance Section
+            // Appearance Section
                 sectionHeader("Appearance")
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Theme (applies to entire app)")
@@ -317,7 +278,6 @@ struct SettingsView: View {
         }
         .frame(width: 550, height: 700)
         .onAppear {
-            loadAPIKey()
             customPrompt = viewModel.project.systemPrompt
             // Check if current prompt matches a template
             selectedTemplate = SystemPromptTemplate.allCases.first { $0.prompt == viewModel.project.systemPrompt }
@@ -353,22 +313,7 @@ struct SettingsView: View {
         guard let descriptor = currentLocalDescriptor() else { return false }
         return LocalModelManager.shared.isModelInstalled(descriptor)
     }
-    
-    private func loadAPIKey() {
-        if let key = try? KeychainHelper.retrieve(forKey: Config.geminiAPIKeyIdentifier) {
-            apiKey = key
-        }
-    }
-    
-    private func saveAPIKey() {
-        do {
-            try viewModel.geminiClient.setAPIKey(apiKey)
-            saveStatus = "Success! API key saved securely."
-        } catch {
-            saveStatus = "Error: \(error.localizedDescription)"
-        }
-    }
-    
+
     private func sectionHeader(_ title: String) -> some View {
         Text(title)
             .font(.headline)

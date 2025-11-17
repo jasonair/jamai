@@ -8,13 +8,7 @@
 import Foundation
 
 class VoiceTranscriptionService {
-    private var apiKey: String?
     private let geminiClient = GeminiClient()
-    
-    init() {
-        // Load API key from keychain
-        self.apiKey = try? KeychainHelper.retrieve(forKey: Config.geminiAPIKeyIdentifier)
-    }
     
     // MARK: - Cleanup helpers
     
@@ -77,7 +71,8 @@ class VoiceTranscriptionService {
     ///   - audioURL: local audio file URL
     ///   - clean: when true, post-processes transcript to remove disfluencies and fix grammar
     func transcribe(audioURL: URL, clean: Bool = true) async throws -> String {
-        guard let apiKey = apiKey else {
+        guard let apiKey = ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"],
+              !apiKey.isEmpty else {
             throw TranscriptionError.noAPIKey
         }
         
@@ -193,7 +188,7 @@ enum TranscriptionError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noAPIKey:
-            return "No API key configured. Please add your Gemini API key in settings."
+            return "No API key configured. Please set GOOGLE_GEMINI_API_KEY in your environment (for example in a .env file)."
         case .invalidURL:
             return "Invalid API URL"
         case .invalidResponse:

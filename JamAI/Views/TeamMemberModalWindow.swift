@@ -133,8 +133,10 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
                 .allowsHitTesting(true)
                 .contentShape(Rectangle())
             
+            // Make the SwiftUI modal fill the full panel height so the
+            // role list and action buttons use all available vertical space.
             contentView
-                .frame(width: panelWidth, alignment: .leading)
+                .frame(width: panelWidth, height: panelHeight, alignment: .top)
         }
         .frame(width: panelWidth, height: panelHeight)
         .contentShape(Rectangle())

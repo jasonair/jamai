@@ -152,8 +152,8 @@ struct TeamMemberModal: View {
                         RoleRow(
                             role: role,
                             isSelected: selectedRole?.id == role.id,
-                            action: { 
-                                selectedRole = role 
+                            action: {
+                                selectedRole = role
                             }
                         )
                     }
@@ -162,13 +162,9 @@ struct TeamMemberModal: View {
                 .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity)
-            .frame(height: selectedRole == nil ? 350 : 200)
+            .frame(maxHeight: .infinity)
             .contentShape(Rectangle())
             .clipped()
-            
-            if selectedRole != nil {
-                Divider()
-            }
             
             Divider()
             
@@ -182,7 +178,7 @@ struct TeamMemberModal: View {
                         Text("Remove")
                             .foregroundColor(.red)
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 8)
+                            .padding(.vertical, 6)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
@@ -192,7 +188,7 @@ struct TeamMemberModal: View {
                 Button(action: { onDismiss() }) {
                     Text("Cancel")
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                 }
                 .buttonStyle(PlainButtonStyle())
                 
@@ -200,7 +196,7 @@ struct TeamMemberModal: View {
                     Text("Save")
                         .foregroundColor(.white)
                         .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.vertical, 6)
                         .background(selectedRole != nil ? Color.accentColor : Color.gray)
                         .cornerRadius(6)
                 }
@@ -209,8 +205,7 @@ struct TeamMemberModal: View {
             }
             .padding()
         }
-        .frame(width: 600, alignment: .leading)
-        .frame(maxHeight: 680)
+        .frame(width: 600)
         .allowsHitTesting(true)
         .onAppear {
             if let member = existingMember {
