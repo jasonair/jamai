@@ -18,6 +18,7 @@ enum AuthError: LocalizedError {
     case networkError
     case weakPassword
     case emailAlreadyInUse
+    case deviceLimitReached
     case unknown(String)
     
     var errorDescription: String? {
@@ -32,6 +33,8 @@ enum AuthError: LocalizedError {
             return "Password must be at least 6 characters"
         case .emailAlreadyInUse:
             return "An account with this email already exists"
+        case .deviceLimitReached:
+            return "Your JamAI account is already in use on two devices. Please sign out on another computer or contact support."
         case .unknown(let message):
             return message
         }
@@ -113,6 +116,13 @@ class FirebaseAuthService: ObservableObject {
                 displayName: displayName
             )
             
+            // Register this device for the user and enforce device limit
+            let allowed = await DeviceManager.shared.registerCurrentDeviceForUser(userId: result.user.uid)
+            if !allowed {
+                try? auth.signOut()
+                throw AuthError.deviceLimitReached
+            }
+            
             return AuthResult(user: result.user, isNewUser: true)
         } catch let error as NSError {
             throw mapAuthError(error)
@@ -126,6 +136,14 @@ class FirebaseAuthService: ObservableObject {
         
         do {
             let result = try await auth.signIn(withEmail: email, password: password)
+            
+            // Register this device for the user and enforce device limit
+            let allowed = await DeviceManager.shared.registerCurrentDeviceForUser(userId: result.user.uid)
+            if !allowed {
+                try? auth.signOut()
+                throw AuthError.deviceLimitReached
+            }
+            
             return AuthResult(user: result.user, isNewUser: false)
         } catch let error as NSError {
             throw mapAuthError(error)
@@ -240,6 +258,12 @@ class FirebaseAuthService: ObservableObject {
     
     /// Sign out current user
     func signOut() throws {
+        let userId = auth.currentUser?.uid
+        if let userId {
+            Task {
+                await DeviceManager.shared.unregisterCurrentDeviceForUser(userId: userId)
+            }
+        }
         try auth.signOut()
         // GIDSignIn.sharedInstance.signOut()  // Temporarily disabled
     }

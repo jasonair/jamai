@@ -28,6 +28,11 @@ service cloud.firestore {
         allow read, create: if request.auth != null && request.auth.uid == userId;
         allow update, delete: if false;
       }
+      
+      // Internal per-user docs (e.g. devices). Each user can manage only their own.
+      match /_internal/{documentId} {
+        allow read, write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
+      }
     }
     
     // Credit transactions

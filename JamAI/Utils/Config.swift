@@ -19,6 +19,7 @@ enum Config {
     // Keychain
     static let keychainService = "com.jamai.api-keys"
     static let geminiAPIKeyIdentifier = "gemini-api-key"
+    static let deviceIdKey = "device-id"
     
     // Performance
     static let targetFPS = 60
