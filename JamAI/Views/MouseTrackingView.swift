@@ -58,7 +58,8 @@ struct MouseTrackingView: NSViewRepresentable {
         
         override func mouseMoved(with event: NSEvent) {
             let p = convert(event.locationInWindow, from: nil)
-            onMove?(p)
+            let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+            onMove?(flipped)
         }
         
         override func viewDidMoveToWindow() {

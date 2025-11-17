@@ -166,10 +166,10 @@ struct CanvasView: View {
                 }
             }
             .contextMenu {
+                let clickLocation = mouseLocation
                 Button("New Node Here") {
-                    let centerX = (geometry.size.width / 2 - viewModel.offset.width) / viewModel.zoom
-                    let centerY = (geometry.size.height / 2 - viewModel.offset.height) / viewModel.zoom
-                    viewModel.createNode(at: CGPoint(x: centerX, y: centerY))
+                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
+                    viewModel.createNode(at: canvasPos)
                 }
             }
             .simultaneousGesture(
