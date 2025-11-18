@@ -64,12 +64,8 @@ class FirebaseAuthService: ObservableObject {
         setupAuthStateListener()
     }
     
-    deinit {
-        cleanup()
-    }
-    
     /// Cleanup auth listener
-    nonisolated func cleanup() {
+    func cleanup() {
         if let listener = authStateListener {
             auth.removeStateDidChangeListener(listener)
             authStateListener = nil

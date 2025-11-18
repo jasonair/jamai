@@ -102,7 +102,6 @@ class CanvasViewModel: ObservableObject {
     
     deinit {
         // Cleanup GeminiClient to prevent hanging on app quit
-        geminiClient.cleanup()
         autosaveTimer?.invalidate()
     }
 
@@ -613,7 +612,8 @@ class CanvasViewModel: ObservableObject {
         
         Task {
             do {
-                let aiContext = buildAIContext(for: node)
+                let aiContext = self.buildAIContext(for: node)
+                let contextTextsForBilling = aiContext.map { $0.content }
                 var streamedResponse = ""
                 
                 // Assemble system prompt - use team member's prompt if available
@@ -679,8 +679,16 @@ class CanvasViewModel: ObservableObject {
                                 
                                 if AIProviderManager.shared.activeProvider != .local {
                                     if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                        _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Expand Action")
+                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(
+                                            promptText: prompt,
+                                            responseText: fullResponse,
+                                            contextTexts: contextTextsForBilling
+                                        )
+                                        _ = await FirebaseDataService.shared.deductCredits(
+                                            userId: userId,
+                                            amount: creditsToDeduct,
+                                            description: "AI Expand Action"
+                                        )
                                     }
                                 }
 
@@ -689,6 +697,7 @@ class CanvasViewModel: ObservableObject {
                                     await CreditTracker.shared.trackGeneration(
                                         promptText: prompt,
                                         responseText: fullResponse,
+                                        contextTexts: contextTextsForBilling,
                                         nodeId: nodeId,
                                         projectId: self?.project.id ?? UUID(),
                                         teamMemberRoleId: finalNode.teamMember?.roleId,
@@ -1055,6 +1064,7 @@ class CanvasViewModel: ObservableObject {
             
             do {
                 let aiContext = self.buildAIContext(for: node)
+                let contextTextsForBilling = aiContext.map { $0.content }
                 var streamedResponse = ""
                 
                 // Assemble system prompt
@@ -1121,8 +1131,16 @@ class CanvasViewModel: ObservableObject {
                                 
                                 if AIProviderManager.shared.activeProvider != .local {
                                     if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                        _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message")
+                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(
+                                            promptText: prompt,
+                                            responseText: fullResponse,
+                                            contextTexts: contextTextsForBilling
+                                        )
+                                        _ = await FirebaseDataService.shared.deductCredits(
+                                            userId: userId,
+                                            amount: creditsToDeduct,
+                                            description: "AI Chat Message"
+                                        )
                                     }
                                 }
 
@@ -1131,6 +1149,7 @@ class CanvasViewModel: ObservableObject {
                                     await CreditTracker.shared.trackGeneration(
                                         promptText: prompt,
                                         responseText: fullResponse,
+                                        contextTexts: contextTextsForBilling,
                                         nodeId: nodeId,
                                         projectId: self?.project.id ?? UUID(),
                                         teamMemberRoleId: finalNode.teamMember?.roleId,
@@ -1158,7 +1177,7 @@ class CanvasViewModel: ObservableObject {
         imageMimeType: String?,
         searchResults: [SearchResult]?
     ) async {
-        guard var node = nodes[nodeId] else { return }
+        guard let node = nodes[nodeId] else { return }
         
         // Build enhanced prompt with search context
         var enhancedPrompt = prompt
@@ -1180,6 +1199,11 @@ class CanvasViewModel: ObservableObject {
         
         do {
             let aiContext = buildAIContext(for: node)
+            var contextTextsForBilling = aiContext.map { $0.content }
+            // Also include the search context in billing if present
+            if enhancedPrompt != prompt {
+                contextTextsForBilling.append(enhancedPrompt)
+            }
             var streamedResponse = ""
             
             // Assemble system prompt
@@ -1244,8 +1268,16 @@ class CanvasViewModel: ObservableObject {
                             
                             if AIProviderManager.shared.activeProvider != .local {
                                 if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(promptText: prompt, responseText: fullResponse)
-                                    _ = await FirebaseDataService.shared.deductCredits(userId: userId, amount: creditsToDeduct, description: "AI Chat Message (Web Search)")
+                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(
+                                        promptText: prompt,
+                                        responseText: fullResponse,
+                                        contextTexts: contextTextsForBilling
+                                    )
+                                    _ = await FirebaseDataService.shared.deductCredits(
+                                        userId: userId,
+                                        amount: creditsToDeduct,
+                                        description: "AI Chat Message (Web Search)"
+                                    )
                                 }
                             }
                             
@@ -1253,6 +1285,7 @@ class CanvasViewModel: ObservableObject {
                                 await CreditTracker.shared.trackGeneration(
                                     promptText: prompt,
                                     responseText: fullResponse,
+                                    contextTexts: contextTextsForBilling,
                                     nodeId: nodeId,
                                     projectId: self?.project.id ?? UUID(),
                                     teamMemberRoleId: finalNode.teamMember?.roleId,
@@ -1924,7 +1957,7 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
         actionType: TeamMemberUsageEvent.ActionType
     ) {
         guard let userId = FirebaseAuthService.shared.currentUser?.uid else { return }
-        guard let node = nodes[nodeId] else { return }
+        guard nodes[nodeId] != nil else { return }
         
         Task {
             await AnalyticsService.shared.trackTeamMemberUsage(

@@ -28,6 +28,7 @@ struct TokenUsageEvent: Codable, Identifiable {
         case expand = "expand"
         case autoTitle = "auto_title"
         case autoDescription = "auto_description"
+        case voiceInput = "voice_input"
     }
     
     init(

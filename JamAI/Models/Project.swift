@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import SwiftUI
 
 struct Project: Identifiable, Codable, Sendable {
     let id: UUID
@@ -35,9 +34,9 @@ struct Project: Identifiable, Codable, Sendable {
         id: UUID = UUID(),
         name: String,
         systemPrompt: String = "You are a helpful AI assistant.",
-        kTurns: Int = 10,
+        kTurns: Int = 8,
         includeSummaries: Bool = true,
-        includeRAG: Bool = true,
+        includeRAG: Bool = false,
         ragK: Int = 5,
         ragMaxChars: Int = 2000,
         appearanceMode: AppearanceMode = .system,
@@ -68,14 +67,6 @@ enum AppearanceMode: String, Codable, CaseIterable, Sendable {
     case system = "System Auto"
     case light = "Light"
     case dark = "Dark"
-    
-    var colorScheme: ColorScheme? {
-        switch self {
-        case .system: return nil
-        case .light: return .light
-        case .dark: return .dark
-        }
-    }
 }
 
 // MARK: - RAG Document

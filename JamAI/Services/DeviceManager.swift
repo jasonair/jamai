@@ -46,7 +46,7 @@ final class DeviceManager {
         let now = Timestamp(date: Date())
         
         do {
-            try await db.runTransaction { transaction, errorPointer in
+            let _ = try await db.runTransaction { transaction, errorPointer in
                 do {
                     let snapshot = try transaction.getDocument(docRef)
                     var data = snapshot.data() ?? [:]
@@ -115,7 +115,7 @@ final class DeviceManager {
         let docRef = db.collection("users").document(userId).collection("_internal").document("devices")
         
         do {
-            try await db.runTransaction { transaction, errorPointer in
+            let _ = try await db.runTransaction { transaction, errorPointer in
                 do {
                     let snapshot = try transaction.getDocument(docRef)
                     guard var data = snapshot.data() else {

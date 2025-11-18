@@ -189,37 +189,14 @@ struct SettingsView: View {
                 .padding(16)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
-            
-                // Customise Team Section
-                sectionHeader("Customise Team")
+
+                // Project Prompt Section (with character limit)
+                sectionHeader("Project Prompt")
                 VStack(alignment: .leading, spacing: 12) {
-                    Text("Define how AI team members interact across this project")
+                    Text("Base system instructions applied to all nodes in this project.")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    Text("Select Template")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                    
-                    Picker("", selection: $selectedTemplate) {
-                        Text("Custom").tag(nil as SystemPromptTemplate?)
-                        ForEach(SystemPromptTemplate.allCases) { template in
-                            Text(template.rawValue).tag(template as SystemPromptTemplate?)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .onChange(of: selectedTemplate) { _, newTemplate in
-                        if let template = newTemplate {
-                            customPrompt = template.prompt
-                            viewModel.project.systemPrompt = template.prompt
-                        }
-                    }
-                    
-                    Text("Project Prompt")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 4)
-                    
+
                     TextEditor(text: $customPrompt)
                         .frame(height: 120)
                         .font(.body)
@@ -231,11 +208,21 @@ struct SettingsView: View {
                                 .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
                         )
                         .onChange(of: customPrompt) { _, newValue in
-                            viewModel.project.systemPrompt = newValue
-                            // Check if it matches a template
-                            selectedTemplate = SystemPromptTemplate.allCases.first { $0.prompt == newValue }
+                            // Enforce 2000-character limit to keep token usage reasonable
+                            let limited = String(newValue.prefix(2000))
+                            if limited != customPrompt {
+                                customPrompt = limited
+                            }
+                            viewModel.project.systemPrompt = limited
                         }
-                    
+
+                    HStack {
+                        Text("\(customPrompt.count)/2000 characters")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+
                     Button("Save Changes") {
                         viewModel.save()
                         saveStatus = "Project prompt saved"
@@ -245,33 +232,6 @@ struct SettingsView: View {
                 .padding(16)
                 .background(Color(nsColor: .controlBackgroundColor))
                 .cornerRadius(12)
-            
-                // Context Settings Section
-                sectionHeader("Context Settings")
-                VStack(alignment: .leading, spacing: 12) {
-                    Stepper("K-Turns: \(viewModel.project.kTurns)", value: $viewModel.project.kTurns, in: 1...50)
-                    
-                    Toggle("Include Summaries", isOn: $viewModel.project.includeSummaries)
-                    
-                    Toggle("Include RAG", isOn: $viewModel.project.includeRAG)
-                    
-                    if viewModel.project.includeRAG {
-                        Stepper("RAG K: \(viewModel.project.ragK)", value: $viewModel.project.ragK, in: 1...20)
-                        
-                        Stepper("RAG Max Chars: \(viewModel.project.ragMaxChars)", 
-                               value: $viewModel.project.ragMaxChars, 
-                               in: 500...5000, 
-                               step: 500)
-                    }
-                }
-                .padding(16)
-                .background(Color(nsColor: .controlBackgroundColor))
-                .cornerRadius(12)
-                .onChange(of: viewModel.project.kTurns) { _, _ in viewModel.save() }
-                .onChange(of: viewModel.project.includeSummaries) { _, _ in viewModel.save() }
-                .onChange(of: viewModel.project.includeRAG) { _, _ in viewModel.save() }
-                .onChange(of: viewModel.project.ragK) { _, _ in viewModel.save() }
-                .onChange(of: viewModel.project.ragMaxChars) { _, _ in viewModel.save() }
             }
             .padding(20)
             }

@@ -869,8 +869,6 @@ private class TableLayerView: NSView {
         
         // CRITICAL: The rendered image is now in standard coordinates (not flipped)
         // We need to flip it vertically so it displays correctly in our flipped view
-        let flippedSize = CGSize(width: pixelWidth, height: pixelHeight)
-        
         guard let flippedContext = CGContext(
             data: nil,
             width: pixelWidth,

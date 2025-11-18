@@ -397,34 +397,24 @@ class AppState: ObservableObject {
             let capturedURL = tab.projectURL
             
             Task { @MainActor in
-                do {
-                    // Save project metadata
-                    try? DocumentManager.shared.saveProject(
-                        capturedViewModel.project,
-                        to: capturedURL.deletingPathExtension(),
-                        database: capturedDatabase
-                    )
-                    
-                    // CRITICAL: Wait for all pending writes to complete
-                    // This ensures edges in the debounce queue are flushed to disk
-                    await capturedViewModel.saveAndWait()
-                    
-                    if Config.enableVerboseLogging {
-                        print("✅ Tab saved successfully before close: \(capturedURL.lastPathComponent)")
-                    }
-                    
-                    // Now safe to cleanup resources
-                    await MainActor.run {
-                        self.performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
-                    }
-                } catch {
-                    if Config.enableVerboseLogging {
-                        print("⚠️ Error saving tab before close: \(error.localizedDescription)")
-                    }
-                    // Still cleanup even on error
-                    await MainActor.run {
-                        self.performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
-                    }
+                // Save project metadata
+                try? DocumentManager.shared.saveProject(
+                    capturedViewModel.project,
+                    to: capturedURL.deletingPathExtension(),
+                    database: capturedDatabase
+                )
+                
+                // CRITICAL: Wait for all pending writes to complete
+                // This ensures edges in the debounce queue are flushed to disk
+                await capturedViewModel.saveAndWait()
+                
+                if Config.enableVerboseLogging {
+                    print("✅ Tab saved successfully before close: \(capturedURL.lastPathComponent)")
+                }
+                
+                // Now safe to cleanup resources
+                await MainActor.run {
+                    self.performTabCleanup(id: id, tabIndex: tabIndex, tab: tab)
                 }
             }
         } else {
@@ -477,47 +467,40 @@ class AppState: ObservableObject {
                 let capturedDatabase = database
 
                 Task { @MainActor in
-                    do {
-                        // Update project name to match chosen file name
-                        var updatedProject = capturedViewModel.project
-                        updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
-                        capturedViewModel.project = updatedProject
+                    // Update project name to match chosen file name
+                    var updatedProject = capturedViewModel.project
+                    updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
+                    capturedViewModel.project = updatedProject
 
-                        // Save project metadata to the current location
-                        try? DocumentManager.shared.saveProject(
-                            capturedViewModel.project,
-                            to: originalURL.deletingPathExtension(),
-                            database: capturedDatabase
-                        )
+                    // Save project metadata to the current location
+                    try? DocumentManager.shared.saveProject(
+                        capturedViewModel.project,
+                        to: originalURL.deletingPathExtension(),
+                        database: capturedDatabase
+                    )
 
-                        // Ensure all pending writes are flushed
-                        await capturedViewModel.saveAndWait()
+                    // Ensure all pending writes are flushed
+                    await capturedViewModel.saveAndWait()
 
-                        // Move bundle if user chose a different location/name
-                        if saveURL != originalURL {
-                            do {
-                                try FileManager.default.moveItem(at: originalURL, to: saveURL)
+                    // Move bundle if user chose a different location/name
+                    if saveURL != originalURL {
+                        do {
+                            try FileManager.default.moveItem(at: originalURL, to: saveURL)
 
-                                // Update recent projects to point to the new location
-                                self.recentProjectsManager.removeRecent(url: originalURL)
-                                self.recordRecent(url: saveURL)
-                            } catch {
-                                self.showError("Failed to save project: \(error.localizedDescription)")
-                                return
-                            }
+                            // Update recent projects to point to the new location
+                            self.recentProjectsManager.removeRecent(url: originalURL)
+                            self.recordRecent(url: saveURL)
+                        } catch {
+                            self.showError("Failed to save project: \(error.localizedDescription)")
+                            return
                         }
-
-                        if Config.enableVerboseLogging {
-                            print("✅ Temporary tab saved successfully before close: \(saveURL.lastPathComponent)")
-                        }
-
-                        self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
-                    } catch {
-                        if Config.enableVerboseLogging {
-                            print("⚠️ Error saving temporary tab before close: \(error.localizedDescription)")
-                        }
-                        self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
                     }
+
+                    if Config.enableVerboseLogging {
+                        print("✅ Temporary tab saved successfully before close: \(saveURL.lastPathComponent)")
+                    }
+
+                    self.performTabCleanup(id: tab.id, tabIndex: tabIndex, tab: tab)
                 }
             }
 
@@ -802,5 +785,20 @@ class AppState: ObservableObject {
         alert.informativeText = message
         alert.alertStyle = .critical
         alert.runModal()
+    }
+}
+
+// MARK: - Appearance Helpers
+
+extension AppearanceMode {
+    @MainActor var colorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
     }
 }

@@ -1027,6 +1027,14 @@ struct NodeView: View {
                         promptText = transcription
                     }
                     isPromptFocused = true
+                    // Track transcription usage for analytics (no credit deduction)
+                    Task {
+                        await CreditTracker.shared.trackTranscriptionUsage(
+                            transcriptText: transcription,
+                            nodeId: node.id,
+                            projectId: node.projectId
+                        )
+                    }
                 }
             }
             
@@ -1065,26 +1073,37 @@ struct NodeView: View {
             // Input field with buttons in bottom corners
             ZStack(alignment: .bottomLeading) {
                 // Text field with full area - better bottom padding for button spacing
-                TextField("Ask a question...", text: $promptText, axis: .vertical)
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 15))
-                    .padding(.horizontal, 8)
-                    .padding(.top, 8)
-                    .padding(.bottom, 36) // More space between text and buttons
-                    .background(Color.secondary.opacity(0.1))
-                    .cornerRadius(8)
-                    .lineLimit(3...6)
-                    .focused($isPromptFocused)
-                    .onKeyPress(.return, phases: .down) { keyPress in
-                        // Shift+Return: insert newline (default behavior)
-                        // Return alone: submit prompt
-                        if keyPress.modifiers.contains(.shift) {
-                            return .ignored // Let TextField handle newline
-                        } else {
-                            submitPrompt()
-                            return .handled
-                        }
+                ZStack(alignment: .topLeading) {
+                    if promptText.isEmpty {
+                        Text("Ask a question...")
+                            .font(.system(size: 15))
+                            .foregroundColor(.secondary.opacity(0.7))
+                            .padding(.horizontal, 12)
+                            .padding(.top, 10)
+                            .allowsHitTesting(false)
                     }
+
+                    TextEditor(text: $promptText)
+                        .font(.system(size: 15))
+                        .scrollContentBackground(.hidden)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(8)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 8)
+                        .padding(.bottom, 36) // More space between text and buttons
+                        .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
+                        .focused($isPromptFocused)
+                        .onKeyPress(.return, phases: .down) { keyPress in
+                            // Shift+Return: insert newline
+                            // Return alone: submit prompt
+                            if keyPress.modifiers.contains(.shift) {
+                                return .ignored // Let TextEditor insert newline
+                            } else {
+                                submitPrompt()
+                                return .handled
+                            }
+                        }
+                }
                 
                 // Button row at bottom - aligned with text padding
                 HStack {
@@ -1163,6 +1182,7 @@ struct NodeView: View {
                 .frame(maxWidth: .infinity, alignment: .bottom)
             }
             }
+            .padding(5)
             .frame(maxWidth: 700)
             Spacer(minLength: 0)
         }

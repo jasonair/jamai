@@ -34,22 +34,28 @@ final class AIProviderManager: ObservableObject {
     
     func setProvider(_ provider: AIProvider) {
         guard provider != activeProvider else { return }
-        activeProvider = provider
-        UserDefaults.standard.set(provider.rawValue, forKey: providerDefaultsKey)
+        Task { @MainActor in
+            self.activeProvider = provider
+            UserDefaults.standard.set(provider.rawValue, forKey: self.providerDefaultsKey)
+        }
     }
     
     func setLocalModelName(_ name: String?) {
-        activeModelName = name
-        if let n = name {
-            UserDefaults.standard.set(n, forKey: localModelNameKey)
-        } else {
-            UserDefaults.standard.removeObject(forKey: localModelNameKey)
+        Task { @MainActor in
+            self.activeModelName = name
+            if let n = name {
+                UserDefaults.standard.set(n, forKey: self.localModelNameKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: self.localModelNameKey)
+            }
         }
     }
     
     func setLicenseAccepted(_ accepted: Bool) {
-        licenseAccepted = accepted
-        UserDefaults.standard.set(accepted, forKey: licenseAcceptedKey)
+        Task { @MainActor in
+            self.licenseAccepted = accepted
+            UserDefaults.standard.set(accepted, forKey: self.licenseAcceptedKey)
+        }
     }
     
     func capabilities() -> ProviderCapabilities {

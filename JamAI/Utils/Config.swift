@@ -28,7 +28,7 @@ enum Config {
     static let viewCullingMargin: CGFloat = 100
     
     // Node defaults
-    static let defaultKTurns = 10
+    static let defaultKTurns = 8
     static let defaultRAGK = 5
     static let defaultRAGMaxChars = 2000
     

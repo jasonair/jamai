@@ -45,23 +45,32 @@ class CreditTracker {
         return max(1, text.count / 4)
     }
     
-    
-    /// Calculates credits needed for a given prompt and response.
-    func calculateCredits(promptText: String, responseText: String) -> Int {
+    /// Calculates credits needed for a given prompt, response, and additional
+    /// context texts (conversation history, summaries, RAG/search context).
+    func calculateCredits(
+        promptText: String,
+        responseText: String,
+        contextTexts: [String] = []
+    ) -> Int {
         let promptTokens = estimateTokens(text: promptText)
         let responseTokens = estimateTokens(text: responseText)
-        let totalTokens = promptTokens + responseTokens
+        let contextTokens = contextTexts.reduce(0) { partial, text in
+            partial + estimateTokens(text: text)
+        }
+        let totalTokens = promptTokens + responseTokens + contextTokens
         
         // Calculate credits (1 credit per 1000 tokens, minimum 1)
         return max(1, (totalTokens + 999) / 1000 * creditsPerThousandTokens)
     }
 
-    /// Tracks the detailed token usage for an AI generation event.
+    /// Tracks the detailed token usage for an AI generation event, including
+    /// context tokens from conversation history, summaries, and RAG/search.
     /// This function is now responsible for logging analytics ONLY.
     /// Credit deduction should be handled by the caller.
     func trackGeneration(
         promptText: String,
         responseText: String,
+        contextTexts: [String] = [],
         nodeId: UUID,
         projectId: UUID,
         teamMemberRoleId: String? = nil,
@@ -73,7 +82,11 @@ class CreditTracker {
             return
         }
         
-        let inputTokens = estimateTokens(text: promptText)
+        let promptTokens = estimateTokens(text: promptText)
+        let contextTokens = contextTexts.reduce(0) { partial, text in
+            partial + estimateTokens(text: text)
+        }
+        let inputTokens = promptTokens + contextTokens
         let outputTokens = estimateTokens(text: responseText)
         
         // Determine the generation type for analytics
@@ -85,6 +98,8 @@ class CreditTracker {
             genType = .autoTitle
         case "auto_description":
             genType = .autoDescription
+        case "voice_input":
+            genType = .voiceInput
         default:
             genType = .chat
         }
@@ -101,6 +116,32 @@ class CreditTracker {
             outputTokens: outputTokens,
             modelUsed: Config.geminiModel,
             generationType: genType
+        )
+    }
+    
+    /// Track token usage for voice transcription only (no credit deduction).
+    /// Treats the transcribed text as model output tokens so we can estimate
+    /// audio transcription cost separately from chat.
+    func trackTranscriptionUsage(
+        transcriptText: String,
+        nodeId: UUID,
+        projectId: UUID
+    ) async {
+        guard let userId = FirebaseAuthService.shared.currentUser?.uid else {
+            print("⚠️ CreditTracker: No authenticated user, skipping transcription tracking")
+            return
+        }
+        let outputTokens = estimateTokens(text: transcriptText)
+        await AnalyticsService.shared.trackTokenUsage(
+            userId: userId,
+            projectId: projectId,
+            nodeId: nodeId,
+            teamMemberRoleId: nil,
+            teamMemberExperienceLevel: nil,
+            inputTokens: 0,
+            outputTokens: outputTokens,
+            modelUsed: "gemini-2.0-flash-audio",
+            generationType: .voiceInput
         )
     }
     

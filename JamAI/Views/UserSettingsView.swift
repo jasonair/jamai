@@ -46,7 +46,7 @@ struct UserSettingsView: View {
             ScrollView {
             VStack(alignment: .leading, spacing: 24) {
                 // User profile section
-                if let user = authService.currentUser,
+                if let _ = authService.currentUser,
                    let account = dataService.userAccount {
                     // Content (existing code below)
                     
@@ -581,18 +581,10 @@ struct UserSettingsView: View {
         isLoadingHistory = true
         
         Task {
-            do {
-                let history = await dataService.getCreditHistory(userId: userId)
-                await MainActor.run {
-                    creditHistory = history
-                    isLoadingHistory = false
-                }
-            } catch {
-                print("Error loading credit history: \(error)")
-                await MainActor.run {
-                    creditHistory = []
-                    isLoadingHistory = false
-                }
+            let history = await dataService.getCreditHistory(userId: userId)
+            await MainActor.run {
+                creditHistory = history
+                isLoadingHistory = false
             }
         }
     }

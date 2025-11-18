@@ -125,25 +125,37 @@ class AudioRecordingService: ObservableObject {
     
     private func startTimers() {
         // Duration timer (updates every 0.1 seconds)
-        recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                guard let self = self, let startTime = self.recordingStartTime else { return }
-                
-                self.recordingDuration = Date().timeIntervalSince(startTime)
-                
-                // Auto-stop at max duration
-                if self.recordingDuration >= self.maxDuration {
-                    let _ = self.stopRecording()
-                }
-            }
-        }
+        recordingTimer = Timer.scheduledTimer(
+            timeInterval: 0.1,
+            target: self,
+            selector: #selector(handleRecordingTimer(_:)),
+            userInfo: nil,
+            repeats: true
+        )
         
         // Audio level timer (updates frequently for smooth waveform)
-        levelTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                self?.updateAudioLevel()
-            }
+        levelTimer = Timer.scheduledTimer(
+            timeInterval: 0.05,
+            target: self,
+            selector: #selector(handleLevelTimer(_:)),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+    
+    @objc private func handleRecordingTimer(_ timer: Timer) {
+        guard let startTime = recordingStartTime else { return }
+        
+        recordingDuration = Date().timeIntervalSince(startTime)
+        
+        // Auto-stop at max duration
+        if recordingDuration >= maxDuration {
+            _ = stopRecording()
         }
+    }
+    
+    @objc private func handleLevelTimer(_ timer: Timer) {
+        updateAudioLevel()
     }
     
     private func stopTimers() {
