@@ -56,6 +56,8 @@ struct NodeView: View {
     @State private var processingMessageIndex = 0
     @State private var processingOpacity: Double = 1.0
     @State private var processingTimer: Timer?
+    @State private var visibleMessageLimit: Int = 8
+    @State private var expandedUserMessageIds: Set<UUID> = []
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -795,26 +797,55 @@ struct NodeView: View {
     }
     
     private var conversationView: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if node.conversation.isEmpty {
+        let conversation = node.conversation
+        let totalCount = conversation.count
+        let limit = max(0, min(visibleMessageLimit, totalCount))
+        let visibleMessages: [ConversationMessage] = totalCount > 0 ? Array(conversation.suffix(limit)) : []
+        let hiddenCount = max(0, totalCount - visibleMessages.count)
+        
+        return VStack(alignment: .leading, spacing: 8) {
+            if conversation.isEmpty {
                 // Show legacy prompt/response for backwards compatibility
                 if !node.prompt.isEmpty {
-                    messageView(role: .user, content: node.prompt)
+                    messageView(message: nil, role: .user, content: node.prompt)
                         .id("legacy-user")
                 }
                 if !node.response.isEmpty {
-                    messageView(role: .assistant, content: node.response)
+                    messageView(message: nil, role: .assistant, content: node.response)
                         .id("legacy-assistant")
                 }
             } else {
+                if hiddenCount > 0 {
+                    Button(action: {
+                        let newLimit = min(visibleMessageLimit + 8, totalCount)
+                        visibleMessageLimit = newLimit
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "arrow.up.circle")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                            Text("Show earlier messages")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(6)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .frame(maxWidth: 700)
+                }
+                
                 // Show conversation thread
                 // Fallback: if there are only assistant messages (older data), still show the last prompt above them
-                if !node.conversation.contains(where: { $0.role == .user }) && !node.prompt.isEmpty {
-                    messageView(role: .user, content: node.prompt)
+                if !conversation.contains(where: { $0.role == .user }) && !node.prompt.isEmpty {
+                    messageView(message: nil, role: .user, content: node.prompt)
                         .id("legacy-user-fallback")
                 }
-                ForEach(node.conversation) { message in
-                    messageView(role: message.role, content: message.content)
+                ForEach(visibleMessages) { message in
+                    messageView(message: message, role: message.role, content: message.content)
                         .id(message.id)
                 }
             }
@@ -826,13 +857,26 @@ struct NodeView: View {
         }
     }
     
-    private func messageView(role: MessageRole, content: String) -> some View {
+    private func messageView(message: ConversationMessage?, role: MessageRole, content: String) -> some View {
         // Find the corresponding conversation message to check for images
-        let conversationMsg = node.conversation.first(where: { msg in
+        let conversationMsg = message ?? node.conversation.first(where: { msg in
             msg.role == role && msg.content == content
         })
         
         if role == .user {
+            let truncationThreshold = 1500
+            let isLongMessage = content.count > truncationThreshold
+            let messageId = message?.id
+            let isExpanded = messageId.map { expandedUserMessageIds.contains($0) } ?? true
+            let shouldTruncate = isLongMessage && !isExpanded
+            let displayText: String
+            if shouldTruncate {
+                let preview = content.prefix(truncationThreshold)
+                displayText = String(preview) + "\u{2026}"
+            } else {
+                displayText = content
+            }
+            
             // User messages: center everything at text content width
             return AnyView(
                 HStack {
@@ -860,10 +904,26 @@ struct NodeView: View {
                             }
                             
                             // Show text content
-                            if !content.isEmpty {
-                                Text(content)
+                            if !displayText.isEmpty {
+                                Text(displayText)
                                     .font(.system(size: 15))
                                     .textSelection(.enabled)
+                            }
+                            
+                            if isLongMessage, let messageId = messageId {
+                                Button(action: {
+                                    if expandedUserMessageIds.contains(messageId) {
+                                        expandedUserMessageIds.remove(messageId)
+                                    } else {
+                                        expandedUserMessageIds.insert(messageId)
+                                    }
+                                }) {
+                                    Text(isExpanded ? "Show less" : "See more")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(.top, 2)
                             }
                         }
                         .padding(8)
