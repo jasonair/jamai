@@ -99,8 +99,8 @@ class SettingsModalWindow: NSObject, NSWindowDelegate {
         })
         
         // Panel size
-        let panelWidth: CGFloat = 550
-        let panelHeight: CGFloat = 700
+        let panelWidth: CGFloat = 600
+        let panelHeight: CGFloat = 720
         
         // Wrap in event-capturing container with explicit sizing (match TeamMemberModalWindow)
         let wrappedContent = ZStack(alignment: .topLeading) {
