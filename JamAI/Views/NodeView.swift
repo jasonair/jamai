@@ -159,7 +159,7 @@ struct NodeView: View {
                                             HStack {
                                                 Spacer(minLength: 0)
                                                 Text(node.description)
-                                                    .font(.system(size: 15))
+                                                    .font(.system(size: 15, weight: .light))
                                                     .frame(maxWidth: 700)
                                                 Spacer(minLength: 0)
                                             }
@@ -558,13 +558,13 @@ struct NodeView: View {
                     isEditingTitle = false
                 })
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.system(size: 18, weight: .semibold))
+                .font(.system(size: 18, weight: .medium))
                 .foregroundColor(headerTextColor)
                 .focused($isTitleFocused)
             } else {
                 HStack(spacing: 8) {
                     Text(node.title.isEmpty ? "Untitled" : node.title)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 18, weight: .medium))
                         .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                         .onTapGesture {
                             // Block if modal is open
@@ -738,10 +738,10 @@ struct NodeView: View {
                     isEditingDescription = false
                 })
                 .textFieldStyle(PlainTextFieldStyle())
-                .font(.system(size: 15))
+                .font(.system(size: 15, weight: .light))
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
-                    .font(.system(size: 15))
+                    .font(.system(size: 15, weight: .light))
                     .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                     .onTapGesture {
                         // Block if modal is open
@@ -760,7 +760,7 @@ struct NodeView: View {
             // Placeholder when empty
             if editedDescription.isEmpty {
                 Text("Click to start typing...")
-                    .font(.system(size: 15))
+                    .font(.system(size: 15, weight: .light))
                     .foregroundColor(.secondary.opacity(0.5))
                     .padding(.top, 8)
                     .padding(.leading, 5)
@@ -770,7 +770,7 @@ struct NodeView: View {
             // TextEditor - always present, scrolls naturally
             // Uses local state to avoid update loops
             TextEditor(text: $editedDescription)
-                .font(.system(size: 15))
+                .font(.system(size: 15, weight: .light))
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
                 .focused($isDescFocused)
@@ -883,8 +883,7 @@ struct NodeView: View {
                     Spacer(minLength: 0)
                     VStack(alignment: .leading, spacing: 4) {
                         Text("You")
-                            .font(.system(size: 12, weight: .semibold))
-                            .fontWeight(.semibold)
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
                             .padding(.horizontal, 8)
                         
@@ -906,7 +905,7 @@ struct NodeView: View {
                             // Show text content
                             if !displayText.isEmpty {
                                 Text(displayText)
-                                    .font(.system(size: 15))
+                                    .font(.system(size: 15, weight: .light))
                                     .textSelection(.enabled)
                             }
                             
@@ -943,8 +942,7 @@ struct NodeView: View {
                     HStack {
                         Spacer(minLength: 0)
                         Text("Jam")
-                            .font(.system(size: 12, weight: .semibold))
-                            .fontWeight(.semibold)
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.accentColor)
                             .frame(maxWidth: 700, alignment: .leading)
                             .padding(.horizontal, 8)
@@ -1013,7 +1011,7 @@ struct NodeView: View {
             HStack {
                 Spacer()
                 Text("Sources")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 8)
                 Spacer()
@@ -1031,7 +1029,7 @@ struct NodeView: View {
                         HStack(alignment: .top, spacing: 10) {
                             // Number badge
                             Text("\(index + 1)")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: 11, weight: .medium))
                                 .foregroundColor(.accentColor)
                                 .frame(width: 20, height: 20)
                                 .background(Color.accentColor.opacity(0.1))
@@ -1136,21 +1134,20 @@ struct NodeView: View {
                 ZStack(alignment: .topLeading) {
                     if promptText.isEmpty {
                         Text("Ask a question...")
-                            .font(.system(size: 15))
+                            .font(.system(size: 15, weight: .light))
                             .foregroundColor(.secondary.opacity(0.7))
-                            .padding(.horizontal, 12)
-                            .padding(.top, 10)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 14)
                             .allowsHitTesting(false)
                     }
 
                     TextEditor(text: $promptText)
-                        .font(.system(size: 15))
+                        .font(.system(size: 15, weight: .light))
                         .scrollContentBackground(.hidden)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(8)
-                        .padding(.horizontal, 8)
-                        .padding(.top, 8)
-                        .padding(.bottom, 36) // More space between text and buttons
+                        // Inner padding so text is not flush with the box edges
+                        .padding(.horizontal, 4)
+                        .padding(.vertical, 4)
+                        .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .focused($isPromptFocused)
                         .onKeyPress(.return, phases: .down) { keyPress in
@@ -1164,6 +1161,11 @@ struct NodeView: View {
                             }
                         }
                 }
+                .background(Color.secondary.opacity(0.1))
+                .cornerRadius(8)
+                .padding(.horizontal, 8)
+                .padding(.top, 8)
+                .padding(.bottom, 36) // More space between text and buttons
                 
                 // Button row at bottom - aligned with text padding
                 HStack {
@@ -1182,16 +1184,16 @@ struct NodeView: View {
                         
                         // Web search toggle button
                         let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
-                        
+
                         Button(action: {
                             webSearchEnabled.toggle()
                         }) {
                             HStack(spacing: 4) {
                                 Image(systemName: "globe")
                                     .font(.system(size: 11))
-                                
+
                                 Text("Web Search")
-                                    .font(.system(size: 10, weight: .semibold))
+                                    .font(.system(size: 10, weight: .medium))
                             }
                             .foregroundColor(isSearchActive ? .accentColor : .secondary)
                             .padding(.horizontal, 8)
@@ -1446,8 +1448,7 @@ struct NodeView: View {
             Spacer(minLength: 0)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Jam")
-                    .font(.system(size: 12, weight: .semibold))
-                    .fontWeight(.semibold)
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundColor(.accentColor)
                     .frame(maxWidth: 700, alignment: .leading)
                     .padding(.horizontal, 8)
@@ -1455,7 +1456,7 @@ struct NodeView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(processingMessages[processingMessageIndex])
-                            .font(.system(size: 15))
+                            .font(.system(size: 15, weight: .light))
                             .foregroundColor(.secondary)
                             .opacity(processingOpacity)
                             .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)

@@ -172,13 +172,22 @@ private struct FormattedTextView: View {
         let nsAttrString = NSMutableAttributedString()
         
         // Build NSAttributedString from scratch with proper NSFont attributes
-        let baseFont = NSFont.systemFont(ofSize: 15)
+        // Use a lighter weight for base body text to keep responses feeling airy
+        let baseFont = NSFont.systemFont(ofSize: 15, weight: .light)
         let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
         let codeFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let headerFont = NSFont.systemFont(ofSize: 20, weight: .semibold)
         
         // Set text color based on color scheme
-        let textColor: NSColor = colorScheme == .dark ? .white : .black
+        // Use softer off-white / off-black inspired by VS Code, not pure white/black
+        let textColor: NSColor
+        if colorScheme == .dark {
+            // Soft light grey (~#D4D4D4)
+            textColor = NSColor(calibratedRed: 0.83, green: 0.83, blue: 0.83, alpha: 1.0)
+        } else {
+            // Dark grey (~#252526) instead of pure black
+            textColor = NSColor(calibratedRed: 0.15, green: 0.15, blue: 0.16, alpha: 1.0)
+        }
         
         // Process runs from the original AttributedString
         for run in attributedString.runs {
@@ -254,6 +263,8 @@ private struct FormattedTextView: View {
             if (trimmed.hasPrefix("•") || trimmed.hasPrefix("- ")) && length > 0 {
                 let ps = NSMutableParagraphStyle()
                 ps.firstLineHeadIndent = 0
+                // Slightly increase spacing between bullet items for better readability
+                ps.paragraphSpacing = 5
                 
                 // Count leading spaces to determine nesting level
                 let leadingSpaces = line.prefix(while: { $0 == " " }).count
@@ -279,6 +290,8 @@ private struct FormattedTextView: View {
                 if trimmed.range(of: pattern, options: .regularExpression) != nil {
                     let ps = NSMutableParagraphStyle()
                     ps.firstLineHeadIndent = 0
+                    // Match bullet list spacing for numbered lists as well
+                    ps.paragraphSpacing = 5
 
                     // Build the exact numeric prefix (including leading spaces) so that
                     // wrapped lines align precisely with the first word after "N. ".
@@ -914,7 +927,10 @@ private class TableLayerView: NSView {
             : NSFont.systemFont(ofSize: fontSize)
         let boldFont = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         
-        let textColor: NSColor = isDarkMode ? .white : .black
+        // Match main markdown body colors: soft off-white / off-black
+        let textColor: NSColor = isDarkMode
+            ? NSColor(calibratedRed: 0.83, green: 0.83, blue: 0.83, alpha: 1.0)
+            : NSColor(calibratedRed: 0.15, green: 0.15, blue: 0.16, alpha: 1.0)
         
         let attributedString = NSMutableAttributedString()
         

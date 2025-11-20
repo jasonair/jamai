@@ -741,40 +741,35 @@ class CanvasViewModel: ObservableObject {
     }
     
     private func autoGenerateTitleForExpansion(for nodeId: UUID, selectedText: String) async {
+        // Backwards-compatible helper that now only auto-generates a title for expansion nodes.
         guard var node = nodes[nodeId] else { return }
+        guard node.title.isEmpty else { return }
         
         do {
             let prompt = """
             Based on this expansion request about "\(selectedText)", and the response:
             \(node.response)
             
-            Generate a concise title (max 50 chars) and description (max 150 chars).
-            Format: TITLE: <title>
-            DESCRIPTION: <description>
+            Generate a concise title (max 50 chars).
+            Return only the title text.
             """
             
             guard let client = AIProviderManager.shared.client else { return }
             let result = try await client.generate(
                 prompt: prompt,
-                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions.",
+                systemPrompt: "You are a helpful assistant that creates concise titles.",
                 context: []
             )
             
-            if let titleMatch = result.range(of: "TITLE: (.+)", options: .regularExpression),
-               let title = result[titleMatch].components(separatedBy: "TITLE: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                node.title = String(title.prefix(50))
+            let trimmedTitle = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedTitle.isEmpty {
+                node.title = String(trimmedTitle.prefix(50))
                 node.titleSource = .ai
-            }
-            
-            if let descMatch = result.range(of: "DESCRIPTION: (.+)", options: .regularExpression),
-               let desc = result[descMatch].components(separatedBy: "DESCRIPTION: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                node.description = String(desc.prefix(150))
-                node.descriptionSource = .ai
             }
             
             updateNode(node, immediate: true)
         } catch {
-            if Config.enableVerboseLogging { print("Failed to auto-generate title/description: \(error)") }
+            if Config.enableVerboseLogging { print("Failed to auto-generate title: \(error)") }
         }
     }
     
@@ -1356,8 +1351,10 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
 
     
     private func autoGenerateTitleAndDescription(for nodeId: UUID) async {
+        // Backwards-compatible helper that now only auto-generates a title.
+        // Descriptions are no longer auto-generated; they remain user-authored.
         guard var node = nodes[nodeId] else { return }
-        guard node.title.isEmpty || node.description.isEmpty else { return }
+        guard node.title.isEmpty else { return }
         
         do {
             let prompt = """
@@ -1365,32 +1362,21 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
             User: \(node.prompt)
             Jam: \(node.response)
             
-            Generate a concise title (max 50 chars) and description (max 150 chars).
-            Format: TITLE: <title>
-            DESCRIPTION: <description>
+            Generate a concise title (max 50 chars).
+            Return only the title text.
             """
             
             guard let client = AIProviderManager.shared.client else { return }
             let result = try await client.generate(
                 prompt: prompt,
-                systemPrompt: "You are a helpful assistant that creates concise titles and descriptions.",
+                systemPrompt: "You are a helpful assistant that creates concise titles.",
                 context: []
             )
             
-            if node.title.isEmpty {
-                if let titleMatch = result.range(of: "TITLE: (.+)", options: .regularExpression),
-                   let title = result[titleMatch].components(separatedBy: "TITLE: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    node.title = String(title.prefix(50))
-                    node.titleSource = .ai
-                }
-            }
-            
-            if node.description.isEmpty {
-                if let descMatch = result.range(of: "DESCRIPTION: (.+)", options: .regularExpression),
-                   let desc = result[descMatch].components(separatedBy: "DESCRIPTION: ").last?.trimmingCharacters(in: .whitespacesAndNewlines) {
-                    node.description = String(desc.prefix(150))
-                    node.descriptionSource = .ai
-                }
+            let trimmedTitle = result.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedTitle.isEmpty {
+                node.title = String(trimmedTitle.prefix(50))
+                node.titleSource = .ai
             }
             
             nodes[nodeId] = node
@@ -1405,7 +1391,7 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
                 }
             }
         } catch {
-            print("Failed to auto-generate title/description: \(error)")
+            if Config.enableVerboseLogging { print("Failed to auto-generate title: \(error)") }
         }
     }
     
