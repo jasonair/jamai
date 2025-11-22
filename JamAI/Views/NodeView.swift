@@ -1137,16 +1137,17 @@ struct NodeView: View {
                             .font(.system(size: 15, weight: .light))
                             .foregroundColor(.secondary.opacity(0.7))
                             .padding(.horizontal, 16)
-                            .padding(.top, 14)
+                            .padding(.vertical, 14)
                             .allowsHitTesting(false)
                     }
 
                     TextEditor(text: $promptText)
                         .font(.system(size: 15, weight: .light))
                         .scrollContentBackground(.hidden)
-                        // Inner padding so text is not flush with the box edges
-                        .padding(.horizontal, 4)
-                        .padding(.vertical, 4)
+                        // Slightly smaller external horizontal padding to offset TextEditor internal inset
+                        // so the caret visually aligns with the placeholder text
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 14)
                         .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .focused($isPromptFocused)
