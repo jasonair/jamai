@@ -783,7 +783,7 @@ struct NodeView: View {
             } else {
                 Text(node.description.isEmpty ? "No description" : node.description)
                     .font(.system(size: 15, weight: .light))
-                    .foregroundColor(node.description.isEmpty ? .secondary : .primary)
+                    .foregroundColor(node.description.isEmpty ? contentSecondaryTextColor : contentPrimaryTextColor)
                     .onTapGesture {
                         // Block if modal is open
                         if modalCoordinator.isModalPresented { return }
@@ -802,7 +802,7 @@ struct NodeView: View {
             if editedDescription.isEmpty {
                 Text("Click to start typing...")
                     .font(.system(size: 15, weight: .light))
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(contentSecondaryTextColor.opacity(0.5))
                     .padding(.top, 8)
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
@@ -864,15 +864,15 @@ struct NodeView: View {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.up.circle")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(contentSecondaryTextColor)
                             Text("Show earlier messages")
                                 .font(.system(size: 11))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(contentSecondaryTextColor)
                             Spacer()
                         }
                         .padding(.vertical, 4)
                         .padding(.horizontal, 8)
-                        .background(Color.secondary.opacity(0.05))
+                        .background(contentSecondaryTextColor.opacity(0.12))
                         .cornerRadius(6)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -925,7 +925,7 @@ struct NodeView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("You")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(contentSecondaryTextColor)
                             .padding(.horizontal, 8)
                         
                         VStack(alignment: .leading, spacing: 8) {
@@ -947,6 +947,7 @@ struct NodeView: View {
                             if !displayText.isEmpty {
                                 Text(displayText)
                                     .font(.system(size: 15, weight: .light))
+                                    .foregroundColor(contentPrimaryTextColor)
                                     .textSelection(.enabled)
                             }
                             
@@ -984,7 +985,7 @@ struct NodeView: View {
                         Spacer(minLength: 0)
                         Text("Jam")
                             .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(contentSecondaryTextColor)
                             .frame(maxWidth: 700, alignment: .leading)
                             .padding(.horizontal, 8)
                         Spacer(minLength: 0)
@@ -1014,11 +1015,15 @@ struct NodeView: View {
                         
                         // Show text content - MarkdownText handles centering text and full-width tables
                         if !content.isEmpty {
-                            MarkdownText(text: content, onCopy: { text in
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(text, forType: .string)
-                            })
-                                .font(.system(size: 15))
+                            MarkdownText(
+                                text: content,
+                                onCopy: { text in
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(text, forType: .string)
+                                },
+                                textColorOverride: contentPrimaryTextColor
+                            )
+                            .font(.system(size: 15))
                         }
                         
                         // Show search results if available
@@ -1033,7 +1038,7 @@ struct NodeView: View {
                                 Spacer()
                                 Text("Generated using web search")
                                     .font(.system(size: 11))
-                                    .foregroundColor(.secondary.opacity(0.7))
+                                    .foregroundColor(contentSecondaryTextColor.opacity(0.7))
                                     .padding(.top, 8)
                                 Spacer()
                             }
@@ -1053,7 +1058,7 @@ struct NodeView: View {
                 Spacer()
                 Text("Sources")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(contentSecondaryTextColor)
                     .padding(.horizontal, 8)
                 Spacer()
             }
@@ -1071,28 +1076,28 @@ struct NodeView: View {
                             // Number badge
                             Text("\(index + 1)")
                                 .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(.accentColor)
+                                .foregroundColor(contentSecondaryTextColor)
                                 .frame(width: 20, height: 20)
-                                .background(Color.accentColor.opacity(0.1))
+                                .background(contentSecondaryTextColor.opacity(0.1))
                                 .clipShape(Circle())
                             
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(result.title)
                                     .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(contentPrimaryTextColor)
                                     .lineLimit(2)
                                     .multilineTextAlignment(.leading)
                                 
                                 Text(result.source)
                                     .font(.system(size: 10))
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(contentSecondaryTextColor)
                                     .lineLimit(1)
                             }
                             .frame(maxWidth: .infinity, alignment: .leading)
                             
                             Image(systemName: "arrow.up.right")
                                 .font(.system(size: 10))
-                                .foregroundColor(.secondary)
+                                .foregroundColor(contentSecondaryTextColor)
                         }
                         .padding(10)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1116,29 +1121,29 @@ struct NodeView: View {
         HStack {
             Spacer(minLength: 0)
             VStack(spacing: 8) {
-            // Voice recording view
-            if recordingService.isRecording {
-                VoiceInputView(recordingService: recordingService) { transcription in
-                    // Append transcription to existing text
-                    if !promptText.isEmpty {
-                        promptText += " " + transcription
-                    } else {
-                        promptText = transcription
-                    }
-                    isPromptFocused = true
-                    // Track transcription usage for analytics (no credit deduction)
-                    Task {
-                        await CreditTracker.shared.trackTranscriptionUsage(
-                            transcriptText: transcription,
-                            nodeId: node.id,
-                            projectId: node.projectId
-                        )
+                // Voice recording view
+                if recordingService.isRecording {
+                    VoiceInputView(recordingService: recordingService) { transcription in
+                        // Append transcription to existing text
+                        if !promptText.isEmpty {
+                            promptText += " " + transcription
+                        } else {
+                            promptText = transcription
+                        }
+                        isPromptFocused = true
+                        // Track transcription usage for analytics (no credit deduction)
+                        Task {
+                            await CreditTracker.shared.trackTranscriptionUsage(
+                                transcriptText: transcription,
+                                nodeId: node.id,
+                                projectId: node.projectId
+                            )
+                        }
                     }
                 }
-            }
-            
-            // Image preview if selected (smaller thumbnail)
-            if let image = selectedImage {
+                
+                // Image preview if selected (smaller thumbnail)
+                if let image = selectedImage {
                 HStack {
                     Image(nsImage: image)
                         .resizable()
@@ -1159,7 +1164,7 @@ struct NodeView: View {
                     }) {
                         Image(systemName: "xmark.circle.fill")
                             .font(.system(size: 15))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(contentSecondaryTextColor)
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help("Remove image")
@@ -1176,7 +1181,7 @@ struct NodeView: View {
                     if promptText.isEmpty {
                         Text("Ask a question...")
                             .font(.system(size: 15, weight: .light))
-                            .foregroundColor(.secondary.opacity(0.7))
+                            .foregroundColor(contentSecondaryTextColor.opacity(0.7))
                             .padding(.horizontal, 16)
                             .padding(.vertical, 14)
                             .allowsHitTesting(false)
@@ -1184,6 +1189,7 @@ struct NodeView: View {
 
                     TextEditor(text: $promptText)
                         .font(.system(size: 15, weight: .light))
+                        .foregroundColor(contentPrimaryTextColor)
                         .scrollContentBackground(.hidden)
                         // Slightly smaller external horizontal padding to offset TextEditor internal inset
                         // so the caret visually aligns with the placeholder text
@@ -1232,7 +1238,7 @@ struct NodeView: View {
                             Button(action: selectImage) {
                                 Image(systemName: selectedImage == nil ? "photo" : "photo.fill")
                                     .font(.system(size: 19))
-                                    .foregroundColor(selectedImage == nil ? .secondary : .accentColor)
+                                    .foregroundColor(selectedImage == nil ? contentSecondaryTextColor : headerTextColor)
                             }
                             .buttonStyle(PlainButtonStyle())
                             .help("Upload image")
@@ -1251,7 +1257,7 @@ struct NodeView: View {
                                 Text("Web Search")
                                     .font(.system(size: 10, weight: .medium))
                             }
-                            .foregroundColor(isSearchActive ? .accentColor : .secondary)
+                            .foregroundColor(isSearchActive ? headerTextColor : contentSecondaryTextColor)
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color.clear)
@@ -1276,7 +1282,7 @@ struct NodeView: View {
                         Button(action: toggleVoiceRecording) {
                             Image(systemName: recordingService.isRecording ? "mic.fill" : "mic")
                                 .font(.system(size: 19))
-                                .foregroundColor(recordingService.isRecording ? .red : .secondary)
+                                .foregroundColor(recordingService.isRecording ? .red : contentSecondaryTextColor)
                         }
                         .buttonStyle(PlainButtonStyle())
                         .help(recordingService.isRecording ? "Recording..." : "Voice input")
@@ -1288,7 +1294,7 @@ struct NodeView: View {
                         }) {
                             Image(systemName: "arrow.up.circle.fill")
                                 .font(.system(size: 22))
-                                .foregroundColor((promptText.isEmpty && selectedImage == nil) ? .secondary : .accentColor)
+                                .foregroundColor((promptText.isEmpty && selectedImage == nil) ? contentSecondaryTextColor : headerTextColor)
                         }
                         .buttonStyle(PlainButtonStyle())
                         .disabled(promptText.isEmpty && selectedImage == nil)
@@ -1325,6 +1331,22 @@ struct NodeView: View {
             return nodeColor.textColor(for: nodeColor.color)
         } else {
             return .primary
+        }
+    }
+    
+    private var contentPrimaryTextColor: Color {
+        if let _ = NodeColor.color(for: node.color), node.color != "none" {
+            return headerTextColor
+        } else {
+            return .primary
+        }
+    }
+    
+    private var contentSecondaryTextColor: Color {
+        if let _ = NodeColor.color(for: node.color), node.color != "none" {
+            return headerTextColor.opacity(0.8)
+        } else {
+            return .secondary
         }
     }
     
@@ -1499,7 +1521,7 @@ struct NodeView: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Jam")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.accentColor)
+                    .foregroundColor(contentSecondaryTextColor)
                     .frame(maxWidth: 700, alignment: .leading)
                     .padding(.horizontal, 8)
                 
@@ -1507,7 +1529,7 @@ struct NodeView: View {
                     HStack {
                         Text(processingMessages[processingMessageIndex])
                             .font(.system(size: 15, weight: .light))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(contentSecondaryTextColor)
                             .opacity(processingOpacity)
                             .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)
                     }

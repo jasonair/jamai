@@ -34,6 +34,7 @@ extension EnvironmentValues {
 struct MarkdownText: View {
     let text: String
     var onCopy: ((String) -> Void)?
+    var textColorOverride: Color? = nil
     
     @State private var showCopiedToast = false
     @State private var cachedBlocks: [MarkdownBlock] = []
@@ -66,7 +67,7 @@ struct MarkdownText: View {
                         // Text is centered with max reading width and padding
                         HStack {
                             Spacer(minLength: 0)
-                            FormattedTextView(content: content)
+                            FormattedTextView(content: content, textColorOverride: textColorOverride)
                                 .frame(maxWidth: 700)
                             Spacer(minLength: 0)
                         }
@@ -149,13 +150,14 @@ struct MarkdownText: View {
 
 private struct FormattedTextView: View {
     let content: String
+    let textColorOverride: Color?
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.isZooming) private var isZooming
     
     var body: some View {
         if #available(macOS 12.0, *) {
             let formatted = formatText(content)
-            let nsAttributed = convertToNSAttributedString(formatted, colorScheme: colorScheme)
+            let nsAttributed = convertToNSAttributedString(formatted, colorScheme: colorScheme, textColorOverride: textColorOverride)
             NSTextViewWrapper(attributedString: nsAttributed, isZooming: isZooming)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
@@ -168,7 +170,7 @@ private struct FormattedTextView: View {
     }
     
     @available(macOS 12.0, *)
-    private func convertToNSAttributedString(_ attributedString: AttributedString, colorScheme: ColorScheme) -> NSAttributedString {
+    private func convertToNSAttributedString(_ attributedString: AttributedString, colorScheme: ColorScheme, textColorOverride: Color?) -> NSAttributedString {
         let nsAttrString = NSMutableAttributedString()
         
         // Build NSAttributedString from scratch with proper NSFont attributes
@@ -178,10 +180,14 @@ private struct FormattedTextView: View {
         let codeFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
         let headerFont = NSFont.systemFont(ofSize: 20, weight: .semibold)
         
-        // Set text color based on color scheme
-        // Use softer off-white / off-black inspired by VS Code, not pure white/black
+        // Set text color based on override or color scheme
+        // Use softer off-white / off-black by default, but allow callers to override for contrast
         let textColor: NSColor
-        if colorScheme == .dark {
+        if let override = textColorOverride,
+           let cgColor = override.cgColor,
+           let nsColor = NSColor(cgColor: cgColor) {
+            textColor = nsColor
+        } else if colorScheme == .dark {
             // Soft light grey (~#D4D4D4)
             textColor = NSColor(calibratedRed: 0.83, green: 0.83, blue: 0.83, alpha: 1.0)
         } else {
