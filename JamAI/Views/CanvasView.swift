@@ -88,13 +88,27 @@ struct CanvasView: View {
         }
     }
     
-    // Smart edge culling: render edge if either endpoint is visible
+    // Smart edge culling: only render edges connected to the selected node
+    // and whose endpoints are visible (except during navigation, where
+    // viewport culling is disabled to avoid pop-in).
     private var visibleEdges: [Edge] {
-        guard !viewModel.isNavigating else { return edgesArray }
+        // If nothing is selected, hide all edges for performance and clarity
+        guard let selectedId = viewModel.selectedNodeId else { return [] }
         
-        let visibleNodeIds = Set(visibleNodes.map { $0.id })
-        return edgesArray.filter { edge in
-            visibleNodeIds.contains(edge.sourceId) || visibleNodeIds.contains(edge.targetId)
+        // Base set of edges, with viewport culling when not navigating
+        let baseEdges: [Edge]
+        if viewModel.isNavigating {
+            baseEdges = edgesArray
+        } else {
+            let visibleNodeIds = Set(visibleNodes.map { $0.id })
+            baseEdges = edgesArray.filter { edge in
+                visibleNodeIds.contains(edge.sourceId) || visibleNodeIds.contains(edge.targetId)
+            }
+        }
+        
+        // Only show edges that are actually connected to the selected node
+        return baseEdges.filter { edge in
+            edge.sourceId == selectedId || edge.targetId == selectedId
         }
     }
     
