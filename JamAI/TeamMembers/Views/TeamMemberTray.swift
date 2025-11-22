@@ -10,9 +10,12 @@ import SwiftUI
 struct TeamMemberTray: View {
     let teamMember: TeamMember
     let role: Role?
+    let personality: Personality
     let onSettings: () -> Void
+    let onPersonalityChange: (Personality) -> Void
     
     @Environment(\.colorScheme) var colorScheme
+    @State private var isPersonalityPickerPresented = false
     
     var body: some View {
         HStack(spacing: 12) {
@@ -34,28 +37,89 @@ struct TeamMemberTray: View {
             
             Spacer()
             
-            // Settings button
-            Button(action: onSettings) {
-                Image(systemName: "gearshape.fill")
-                    .font(.system(size: 14))
-                    .foregroundColor(trayTextColor.opacity(0.8))
+            HStack(spacing: 8) {
+                // Personality dropdown (custom popover for full color control)
+                Button(action: {
+                    isPersonalityPickerPresented.toggle()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "sparkles")
+                        Text(personality.displayName)
+                    }
+                    .font(.system(size: 11))
+                    .foregroundColor(trayTextColor)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(trayTextColor.opacity(0.15))
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Change AI personality for this node")
+                .popover(
+                    isPresented: $isPersonalityPickerPresented,
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: .bottom
+                ) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Personality.allCases, id: \.self) { option in
+                            Button(action: {
+                                onPersonalityChange(option)
+                                isPersonalityPickerPresented = false
+                            }) {
+                                HStack {
+                                    if option == personality {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(trayTextColor)
+                                    } else {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .opacity(0)
+                                    }
+                                    Text(option.displayName)
+                                        .font(.system(size: 11))
+                                        .foregroundColor(trayTextColor)
+                                }
+                                .padding(.vertical, 4)
+                                .padding(.horizontal, 6)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                    }
+                    .padding(8)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(trayBaseColor.opacity(0.95))
+                    )
+                }
+                
+                // Settings button
+                Button(action: onSettings) {
+                    Image(systemName: "gearshape.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(trayTextColor.opacity(0.8))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Edit Team Member")
             }
-            .buttonStyle(PlainButtonStyle())
-            .help("Edit Team Member")
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
         .background(trayBackground)
     }
     
-    private var trayBackground: some View {
+    private var trayBaseColor: Color {
         if let role = role, let nodeColor = NodeColor.color(for: role.color) {
-            // Use role color for tray
-            return AnyView(nodeColor.color)
+            return nodeColor.color
         } else {
-            // Default pink/magenta color
-            return AnyView(Color.pink)
+            return Color.pink
         }
+    }
+    
+    private var trayBackground: some View {
+        AnyView(trayBaseColor)
     }
     
     private var trayTextColor: Color {

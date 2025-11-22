@@ -88,6 +88,7 @@ struct NodeView: View {
                         TeamMemberTray(
                             teamMember: teamMember,
                             role: roleManager.role(withId: teamMember.roleId),
+                            personality: node.personality,
                             onSettings: { 
                                 // Clear SwiftUI focus states
                                 isTitleFocused = false
@@ -138,6 +139,9 @@ struct NodeView: View {
                                     }
                                 }
                                 )
+                            },
+                            onPersonalityChange: { newPersonality in
+                                node.personality = newPersonality
                             }
                         )
                         
@@ -641,39 +645,6 @@ struct NodeView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help("Create Child Node")
-                
-                // Personality selector (only when a team member is attached)
-                if node.teamMember != nil {
-                    Menu {
-                        ForEach(Personality.allCases, id: \.self) { personality in
-                            Button(action: {
-                                node.personality = personality
-                            }) {
-                                HStack {
-                                    Text(personality.displayName)
-                                    if personality == node.personality {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "sparkles")
-                            Text(node.personality.displayName)
-                        }
-                        .font(.system(size: 11))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(Color.secondary.opacity(0.15))
-                        )
-                    }
-                    .menuStyle(BorderlessButtonMenuStyle())
-                    .fixedSize()
-                    .help("Change AI personality for this node")
-                }
                 
                 // Add Team Member button (only show if no team member exists)
                 if shouldShowTeamMemberTray && node.teamMember == nil {
