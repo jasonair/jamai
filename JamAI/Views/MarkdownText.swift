@@ -35,6 +35,7 @@ struct MarkdownText: View {
     let text: String
     var onCopy: ((String) -> Void)?
     var textColorOverride: Color? = nil
+    var accessoryTintColor: Color? = nil
     
     @State private var showCopiedToast = false
     @State private var cachedBlocks: [MarkdownBlock] = []
@@ -77,7 +78,7 @@ struct MarkdownText: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             
-            // Copy button at the end - centered within text content width
+            // Copy button at the end - centered within text content
             if let onCopy = onCopy {
                 HStack {
                     Spacer(minLength: 0)
@@ -93,7 +94,7 @@ struct MarkdownText: View {
                         }) {
                             Image(systemName: showCopiedToast ? "checkmark.circle.fill" : "doc.on.doc")
                                 .font(.system(size: 13))
-                                .foregroundColor(showCopiedToast ? .green : .secondary)
+                                .foregroundColor(showCopiedToast ? .green : (accessoryTintColor ?? .secondary))
                         }
                         .buttonStyle(.plain)
                         .padding(6)

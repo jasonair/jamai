@@ -1018,7 +1018,8 @@ struct NodeView: View {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(text, forType: .string)
                                 },
-                                textColorOverride: contentPrimaryTextColor
+                                textColorOverride: contentPrimaryTextColor,
+                                accessoryTintColor: contentSecondaryTextColor
                             )
                             .font(.system(size: 15))
                         }
