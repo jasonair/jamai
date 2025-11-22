@@ -30,6 +30,7 @@ struct NodeView: View {
     let onResizeCompensationChange: (CGSize) -> Void
     let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
+    let onCenterOnCanvas: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     
     @State private var isEditingTitle = false
@@ -322,11 +323,12 @@ struct NodeView: View {
                                     Image(systemName: role.icon)
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(width: 80, height: 80)
+                                        .frame(width: 60, height: 60)
                                         .foregroundColor(headerTextColor)
+                                        .opacity(0.8)
                                 }
                                 Text(node.title.isEmpty ? "Untitled" : node.title)
-                                    .font(.system(size: 15, weight: .semibold))
+                                    .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(headerTextColor)
                                     .multilineTextAlignment(.center)
                                     .lineLimit(3)
@@ -740,6 +742,16 @@ struct NodeView: View {
                 }
                 .buttonStyle(PlainButtonStyle())
                 .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
+            } else {
+                Spacer()
+
+                Button(action: onCenterOnCanvas) {
+                    Image(systemName: "scope")
+                        .foregroundColor(headerTextColor)
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Center on Canvas")
             }
         }
         .padding(.horizontal, Node.padding)

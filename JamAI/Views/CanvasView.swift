@@ -633,6 +633,7 @@ struct CanvasView: View {
             onResizeActiveChanged: { active in isResizingActive = active },
             onResizeLiveGeometryChange: { w, h in viewModel.updateNodeGeometryDuringDrag(node.id, width: w, height: h) },
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
+            onCenterOnCanvas: { viewModel.navigateToNode(node.id, viewportSize: viewportSize) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
         )
         .zIndex(viewModel.zIndex(for: node.id))
