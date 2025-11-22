@@ -108,8 +108,8 @@ final class TapThroughView: NSView {
             
             // Only intercept if the scroll is over our bounds
             if self.bounds.contains(locationInSelf) {
-                // Forward to scroll view - find it fresh if needed
-                if let scrollView = self.scrollView ?? self.findScrollView() {
+                // Forward to scroll view - find it based on pointer location, cache for reuse
+                if let scrollView = self.findScrollView(atWindowLocation: locationInWindow) ?? self.scrollView {
                     self.scrollView = scrollView
                     scrollView.scrollWheel(with: event)
                     return nil // Consume the event
@@ -128,6 +128,19 @@ final class TapThroughView: NSView {
             if let scrollView = view as? NSScrollView { return scrollView }
             // Also check subviews recursively
             if let scrollView = findScrollViewInSubviews(of: view) { return scrollView }
+            currentView = view.superview
+        }
+        return nil
+    }
+
+    private func findScrollView(atWindowLocation locationInWindow: NSPoint) -> NSScrollView? {
+        guard let window = self.window, let contentView = window.contentView else { return nil }
+        guard let hitView = contentView.hitTest(locationInWindow) else { return nil }
+        var currentView: NSView? = hitView
+        while let view = currentView {
+            if let scrollView = view as? NSScrollView {
+                return scrollView
+            }
             currentView = view.superview
         }
         return nil
