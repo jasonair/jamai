@@ -312,10 +312,14 @@ struct NodeView: View {
                         HStack {
                             Spacer(minLength: 0)
                             Text(node.title.isEmpty ? "Untitled" : node.title)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.secondary)
+                                .font(.system(size: 17, weight: .semibold))
+                                .foregroundColor(headerTextColor)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(3)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(headerBackground)
+                                .cornerRadius(8)
                                 .frame(maxWidth: 260)
                             Spacer(minLength: 0)
                         }
@@ -586,173 +590,175 @@ struct NodeView: View {
                 }
             }
             
-            // Title
-            if isEditingTitle {
-                TextField("Title", text: $editedTitle, onCommit: {
-                    onTitleEdit(editedTitle)
-                    isEditingTitle = false
-                })
-                .textFieldStyle(PlainTextFieldStyle())
-                .font(.system(size: 18, weight: .medium))
-                .foregroundColor(headerTextColor)
-                .focused($isTitleFocused)
-            } else {
-                HStack(spacing: 8) {
-                    Text(node.title.isEmpty ? "Untitled" : node.title)
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
-                        .onTapGesture {
-                            // Block if modal is open
-                            if modalCoordinator.isModalPresented { return }
-                            editedTitle = node.title
-                            isEditingTitle = true
-                            isTitleFocused = true
+            if isSelected {
+                // Title
+                if isEditingTitle {
+                    TextField("Title", text: $editedTitle, onCommit: {
+                        onTitleEdit(editedTitle)
+                        isEditingTitle = false
+                    })
+                    .textFieldStyle(PlainTextFieldStyle())
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundColor(headerTextColor)
+                    .focused($isTitleFocused)
+                } else {
+                    HStack(spacing: 8) {
+                        Text(node.title.isEmpty ? "Untitled" : node.title)
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
+                            .onTapGesture {
+                                // Block if modal is open
+                                if modalCoordinator.isModalPresented { return }
+                                editedTitle = node.title
+                                isEditingTitle = true
+                                isTitleFocused = true
+                            }
+                        
+                        if isGenerating {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .frame(width: 16, height: 16)
                         }
-                    
-                    if isGenerating {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .frame(width: 16, height: 16)
                     }
                 }
-            }
-            
-            Spacer()
-            
-            // Delete button
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundColor(headerTextColor)
-                    .font(.system(size: 16))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Delete Node")
-            
-            // Create child node button
-            Button(action: onCreateChild) {
-                Image(systemName: "plus.square.on.square")
-                    .foregroundColor(headerTextColor)
-                    .font(.system(size: 16))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help("Create Child Node")
-            
-            // Personality selector (only when a team member is attached)
-            if node.teamMember != nil {
-                Menu {
-                    ForEach(Personality.allCases, id: \.self) { personality in
-                        Button(action: {
-                            node.personality = personality
-                        }) {
-                            HStack {
-                                Text(personality.displayName)
-                                if personality == node.personality {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    }
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: "sparkles")
-                        Text(node.personality.displayName)
-                    }
-                    .font(.system(size: 11))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.secondary.opacity(0.15))
-                    )
-                }
-                .menuStyle(BorderlessButtonMenuStyle())
-                .fixedSize()
-                .help("Change AI personality for this node")
-            }
-            
-            // Add Team Member button (only show if no team member exists)
-            if shouldShowTeamMemberTray && node.teamMember == nil {
-                Button(action: { 
-                    // Check team member limit before allowing addition
-                    if let account = dataService.userAccount {
-                        // Skip limit check if unlimited (-1)
-                        if !account.plan.hasUnlimitedTeamMembers {
-                            let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
-                            if currentTeamMemberCount >= account.plan.maxTeamMembersPerJam {
-                                // Show alert about limit reached
-                                showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembersPerJam, currentPlan: account.plan)
-                                return
-                            }
-                        }
-                    }
-                    
-                    // Clear SwiftUI focus states
-                    isTitleFocused = false
-                    isPromptFocused = false
-                    isDescFocused = false
-                    
-                    // Show modal - sheet detection will handle scroll
-                    modalCoordinator.showTeamMemberModal(
-                        existingMember: nil,
-                        projectTeamMembers: projectTeamMembers,
-                        onSave: { newMember in
-                            onTeamMemberChange(newMember)
-                            
-                            // Track analytics for team member addition
-                            if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
-                                Task {
-                                    await AnalyticsService.shared.trackTeamMemberUsage(
-                                        userId: userId,
-                                        projectId: node.projectId,
-                                        nodeId: node.id,
-                                        roleId: role.id,
-                                        roleName: role.name,
-                                        roleCategory: role.category.rawValue,
-                                        experienceLevel: newMember.experienceLevel.rawValue,
-                                        actionType: .attached
-                                    )
-                                }
-                            }
-                        },
-                        onRemove: nil
-                    )
-                }) {
-                    Image(systemName: "person.badge.plus")
+                
+                Spacer()
+                
+                // Delete button
+                Button(action: onDelete) {
+                    Image(systemName: "trash")
                         .foregroundColor(headerTextColor)
                         .font(.system(size: 16))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help("Add Team Member")
-            }
-            
-            // JAM button (for notes only)
-            if node.type == .note {
-                Button(action: {
-                    showChatSection.toggle()
-                    if showChatSection {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            isPromptFocused = true
-                        }
-                    }
-                }) {
-                    Image(systemName: "bubble.left.fill")
+                .help("Delete Node")
+                
+                // Create child node button
+                Button(action: onCreateChild) {
+                    Image(systemName: "plus.square.on.square")
                         .foregroundColor(headerTextColor)
                         .font(.system(size: 16))
                 }
                 .buttonStyle(PlainButtonStyle())
-                .help(showChatSection ? "Hide chat" : "Jam with this note")
+                .help("Create Child Node")
+                
+                // Personality selector (only when a team member is attached)
+                if node.teamMember != nil {
+                    Menu {
+                        ForEach(Personality.allCases, id: \.self) { personality in
+                            Button(action: {
+                                node.personality = personality
+                            }) {
+                                HStack {
+                                    Text(personality.displayName)
+                                    if personality == node.personality {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkles")
+                            Text(node.personality.displayName)
+                        }
+                        .font(.system(size: 11))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.secondary.opacity(0.15))
+                        )
+                    }
+                    .menuStyle(BorderlessButtonMenuStyle())
+                    .fixedSize()
+                    .help("Change AI personality for this node")
+                }
+                
+                // Add Team Member button (only show if no team member exists)
+                if shouldShowTeamMemberTray && node.teamMember == nil {
+                    Button(action: { 
+                        // Check team member limit before allowing addition
+                        if let account = dataService.userAccount {
+                            // Skip limit check if unlimited (-1)
+                            if !account.plan.hasUnlimitedTeamMembers {
+                                let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
+                                if currentTeamMemberCount >= account.plan.maxTeamMembersPerJam {
+                                    // Show alert about limit reached
+                                    showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembersPerJam, currentPlan: account.plan)
+                                    return
+                                }
+                            }
+                        }
+                        
+                        // Clear SwiftUI focus states
+                        isTitleFocused = false
+                        isPromptFocused = false
+                        isDescFocused = false
+                        
+                        // Show modal - sheet detection will handle scroll
+                        modalCoordinator.showTeamMemberModal(
+                            existingMember: nil,
+                            projectTeamMembers: projectTeamMembers,
+                            onSave: { newMember in
+                                onTeamMemberChange(newMember)
+                                
+                                // Track analytics for team member addition
+                                if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                    Task {
+                                        await AnalyticsService.shared.trackTeamMemberUsage(
+                                            userId: userId,
+                                            projectId: node.projectId,
+                                            nodeId: node.id,
+                                            roleId: role.id,
+                                            roleName: role.name,
+                                            roleCategory: role.category.rawValue,
+                                            experienceLevel: newMember.experienceLevel.rawValue,
+                                            actionType: .attached
+                                        )
+                                    }
+                                }
+                            },
+                            onRemove: nil
+                        )
+                    }) {
+                        Image(systemName: "person.badge.plus")
+                            .foregroundColor(headerTextColor)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Add Team Member")
+                }
+                
+                // JAM button (for notes only)
+                if node.type == .note {
+                    Button(action: {
+                        showChatSection.toggle()
+                        if showChatSection {
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                isPromptFocused = true
+                            }
+                        }
+                    }) {
+                        Image(systemName: "bubble.left.fill")
+                            .foregroundColor(headerTextColor)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help(showChatSection ? "Hide chat" : "Jam with this note")
+                }
+                
+                // Toggle size button (maximize/minimize)
+                Button(action: onMaximizeAndCenter) {
+                    let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
+                    let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
+                    Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
+                        .foregroundColor(headerTextColor)
+                        .font(.system(size: 16))
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
             }
-            
-            // Toggle size button (maximize/minimize)
-            Button(action: onMaximizeAndCenter) {
-                let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
-                let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
-                Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                    .foregroundColor(headerTextColor)
-                    .font(.system(size: 16))
-            }
-            .buttonStyle(PlainButtonStyle())
-            .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
         }
         .padding(.horizontal, Node.padding)
         .padding(.top, Node.padding)
@@ -1327,13 +1333,9 @@ struct NodeView: View {
             // Apply tint to card body; stronger tint for notes to stand out
             if node.type == .note {
                 // Notes get more visible color treatment
-                let tintOpacity: Double = colorScheme == .dark ? 0.25 : 0.50
-                let tintColor = colorScheme == .dark
-                    ? nodeColor.color.opacity(tintOpacity)
-                    : nodeColor.lightVariant.opacity(tintOpacity)
-                let baseColor = colorScheme == .dark
-                    ? Color(nsColor: .controlBackgroundColor)
-                    : Color.white
+                let tintOpacity: Double = 1.0
+                let tintColor = nodeColor.color.opacity(tintOpacity)
+                let baseColor = Color.clear
                 
                 return AnyView(
                     ZStack {
@@ -1343,11 +1345,9 @@ struct NodeView: View {
                 )
             } else {
                 // Standard nodes get subtle tint
-                let tintOpacity: Double = 0.05
-                let tintColor = nodeColor.lightVariant.opacity(tintOpacity)
-                let baseColor = colorScheme == .dark
-                    ? Color(nsColor: .controlBackgroundColor)
-                    : Color.white
+                let tintOpacity: Double = 1.0
+                let tintColor = nodeColor.color.opacity(tintOpacity)
+                let baseColor = Color.clear
                 
                 return AnyView(
                     ZStack {
@@ -1360,7 +1360,7 @@ struct NodeView: View {
             return AnyView(
                 colorScheme == .dark
                     ? Color(nsColor: .controlBackgroundColor)
-                    : Color.white
+                    : Color(white: 0.95)
             )
         }
     }
