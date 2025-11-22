@@ -537,6 +537,14 @@ class CanvasViewModel: ObservableObject {
         // Create branch without inheriting conversation immediately to avoid race with async creation
         let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
+        // Inherit team member from parent if present
+        if let parentTeamMember = parent.teamMember {
+            if var child = nodes[childId] {
+                child.setTeamMember(parentTeamMember)
+                updateNode(child, immediate: true)
+            }
+        }
+        
         // Indicate generation immediately so UI shows spinner
         generatingNodeId = childId
         
@@ -576,6 +584,11 @@ class CanvasViewModel: ObservableObject {
         
         // Get the newly created child
         guard var child = self.nodes[childId] else { return }
+        
+        // Inherit team member from parent if present
+        if let parentTeamMember = parent.teamMember {
+            child.setTeamMember(parentTeamMember)
+        }
         
         // Set selected text as description; no auto response
         child.description = selectedText
