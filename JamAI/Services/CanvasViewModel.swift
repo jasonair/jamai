@@ -290,12 +290,15 @@ class CanvasViewModel: ObservableObject {
         }
         node.personality = .generalist
         
-        // Set up ancestry and context
+        // Set up ancestry, context, and inherit visual styling from parent when present
         if let parentId = parentId, let parent = self.nodes[parentId] {
             var ancestry = parent.ancestry
             ancestry.append(parentId)
             node.setAncestry(ancestry)
             node.systemPromptSnapshot = self.project.systemPrompt
+
+            // Inherit parent node color so branches stay visually grouped
+            node.color = parent.color
 
             // Create edge to parent with parent's color
             let parentColor = parent.color != "none" ? parent.color : nil
