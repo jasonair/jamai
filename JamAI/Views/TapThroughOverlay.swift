@@ -11,28 +11,33 @@ import AppKit
 struct TapThroughOverlay: NSViewRepresentable {
     let onTap: () -> Void
     let shouldFocusOnTap: Bool
+    let isNodeSelected: Bool
     
-    init(onTap: @escaping () -> Void, shouldFocusOnTap: Bool = true) {
+    init(onTap: @escaping () -> Void, shouldFocusOnTap: Bool = true, isNodeSelected: Bool = true) {
         self.onTap = onTap
         self.shouldFocusOnTap = shouldFocusOnTap
+        self.isNodeSelected = isNodeSelected
     }
     
     func makeNSView(context: Context) -> TapThroughView {
         let view = TapThroughView()
         view.onTap = onTap
         view.shouldFocusOnTap = shouldFocusOnTap
+        view.isNodeSelected = isNodeSelected
         return view
     }
     
     func updateNSView(_ nsView: TapThroughView, context: Context) {
         nsView.onTap = onTap
         nsView.shouldFocusOnTap = shouldFocusOnTap
+        nsView.isNodeSelected = isNodeSelected
     }
 }
 
 final class TapThroughView: NSView {
     var onTap: (() -> Void)?
     var shouldFocusOnTap: Bool = true
+    var isNodeSelected: Bool = true
     private var clickMonitor: Any?
     private var scrollMonitor: Any?
     private var scrollView: NSScrollView?
@@ -98,8 +103,8 @@ final class TapThroughView: NSView {
                 return event
             }
             
-            // Early exit if not active to reduce processing overhead
-            guard self.isActive else { return event }
+            // Early exit if not active or node is not selected to reduce processing overhead
+            guard self.isActive, self.isNodeSelected else { return event }
             
             // Check if scroll is happening over our bounds
             guard self.window != nil else { return event }
@@ -108,12 +113,23 @@ final class TapThroughView: NSView {
             
             // Only intercept if the scroll is over our bounds
             if self.bounds.contains(locationInSelf) {
-                // Forward to scroll view - find it based on pointer location, cache for reuse
-                if let scrollView = self.findScrollView(atWindowLocation: locationInWindow) ?? self.scrollView {
-                    self.scrollView = scrollView
-                    scrollView.scrollWheel(with: event)
-                    return nil // Consume the event
+                // Resolve an appropriate scroll view under the pointer, or fall back to cached one
+                guard let scrollView = self.findScrollView(atWindowLocation: locationInWindow) ?? self.scrollView else {
+                    return event
                 }
+
+                // If the window's first responder is no longer inside this scroll view's
+                // view hierarchy (for example, because another node is now selected),
+                // don't hijack scroll events - let the system handle them instead.
+                if let window = self.window,
+                   let responderView = window.firstResponder as? NSView,
+                   !responderView.isDescendant(of: scrollView) {
+                    return event
+                }
+
+                self.scrollView = scrollView
+                scrollView.scrollWheel(with: event)
+                return nil // Consume the event so the canvas doesn't pan
             }
             
             return event

@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
 
 struct NodeView: View {
     @Binding var node: Node
@@ -294,7 +295,7 @@ struct NodeView: View {
                 }
                 .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
                 .overlay(
-                    TapThroughOverlay(onTap: onTap)
+                    TapThroughOverlay(onTap: onTap, isNodeSelected: isSelected)
                 )
             }
             .frame(
@@ -1151,15 +1152,29 @@ struct NodeView: View {
                         .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
                         .focused($isPromptFocused)
+                        .disabled(!isSelected)
                         .onKeyPress(.return, phases: .down) { keyPress in
                             // Shift+Return: insert newline
                             // Return alone: submit prompt
                             if keyPress.modifiers.contains(.shift) {
                                 return .ignored // Let TextEditor insert newline
+                            } else if keyPress.modifiers.contains(.command) {
+                                // Command+Return should behave like normal Return inside the editor
+                                return .ignored
                             } else {
                                 submitPrompt()
                                 return .handled
                             }
+                        }
+                        .onKeyPress("a", phases: .down) { keyPress in
+                            // Enable Command+A to select all text within the prompt editor
+                            if keyPress.modifiers.contains(.command) {
+                                // Explicitly send selectAll: to the current first responder
+                                // so the underlying NSTextView selects all text.
+                                NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+                                return .handled
+                            }
+                            return .ignored
                         }
                 }
                 .background(Color.secondary.opacity(0.1))
