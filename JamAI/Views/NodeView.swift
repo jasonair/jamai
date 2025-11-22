@@ -168,6 +168,7 @@ struct NodeView: View {
                                                     Spacer(minLength: 0)
                                                     Text(node.description)
                                                         .font(.system(size: 15, weight: .light))
+                                                        .foregroundColor(contentSecondaryTextColor)
                                                         .frame(maxWidth: 700)
                                                     Spacer(minLength: 0)
                                                 }
@@ -315,16 +316,26 @@ struct NodeView: View {
                         Spacer(minLength: 0)
                         HStack {
                             Spacer(minLength: 0)
-                            Text(node.title.isEmpty ? "Untitled" : node.title)
-                                .font(.system(size: 17, weight: .semibold))
-                                .foregroundColor(headerTextColor)
-                                .multilineTextAlignment(.center)
-                                .lineLimit(3)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(headerBackground)
-                                .cornerRadius(8)
-                                .frame(maxWidth: 260)
+                            VStack(spacing: 8) {
+                                if let teamMember = node.teamMember,
+                                   let role = roleManager.role(withId: teamMember.roleId) {
+                                    Image(systemName: role.icon)
+                                        .resizable()
+                                        .scaledToFit()
+                                        .frame(width: 80, height: 80)
+                                        .foregroundColor(headerTextColor)
+                                }
+                                Text(node.title.isEmpty ? "Untitled" : node.title)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(headerTextColor)
+                                    .multilineTextAlignment(.center)
+                                    .lineLimit(3)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .background(headerBackground)
+                                    .cornerRadius(8)
+                                    .frame(maxWidth: 260)
+                            }
                             Spacer(minLength: 0)
                         }
                         Spacer(minLength: 0)
@@ -602,13 +613,13 @@ struct NodeView: View {
                         isEditingTitle = false
                     })
                     .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 18, weight: .medium))
+                    .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(headerTextColor)
                     .focused($isTitleFocused)
                 } else {
                     HStack(spacing: 8) {
                         Text(node.title.isEmpty ? "Untitled" : node.title)
-                            .font(.system(size: 18, weight: .medium))
+                            .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
                             .onTapGesture {
                                 // Block if modal is open
@@ -783,6 +794,7 @@ struct NodeView: View {
             // Uses local state to avoid update loops
             TextEditor(text: $editedDescription)
                 .font(.system(size: 15, weight: .light))
+                .foregroundColor(contentSecondaryTextColor)
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
                 .focused($isDescFocused)
