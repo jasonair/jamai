@@ -25,7 +25,7 @@ struct WelcomeView: View {
                 Text("Jam AI")
                     .font(.system(size: 40, weight: .bold))
                 
-                Text("Visual AI Thinking Canvas")
+                Text("Build your AI dream team")
                     .font(.headline)
                     .foregroundColor(.secondary)
             }
@@ -119,14 +119,10 @@ struct WelcomeView: View {
             
             // Footer
             VStack(spacing: 4) {
-                Text("v0.0.1")
+                Text("Version: \(appVersion)")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fontWeight(.medium)
-                
-                Text("Powered by Gemini 2.0 Flash")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
             }
         }
         .padding(40)
@@ -135,6 +131,10 @@ struct WelcomeView: View {
             // Refresh the recent projects list to ensure only valid projects are shown
             appState.refreshRecentProjects()
         }
+    }
+    
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
     }
     
     private func openExistingProject() {

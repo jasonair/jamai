@@ -51,6 +51,8 @@ struct JamAIApp: App {
     @State private var showingMaintenanceAlert = false
     @State private var maintenanceMessage = ""
     @State private var isLoadingUserAccount = false
+    @State private var isForceUpdateRequired = false
+    @State private var updateURLString: String?
     
     init() {
         // Configure Firebase on app launch
@@ -88,8 +90,16 @@ struct JamAIApp: App {
                     .frame(width: 400, height: 300)
                 } else if shouldBlockApp() {
                     // Show maintenance/update screen
-                    MaintenanceView(message: maintenanceMessage)
+                    if isForceUpdateRequired {
+                        UpdateRequiredView(
+                            message: maintenanceMessage,
+                            updateURLString: updateURLString
+                        )
                         .frame(width: 600, height: 400)
+                    } else {
+                        MaintenanceView(message: maintenanceMessage)
+                            .frame(width: 600, height: 400)
+                    }
                 } else if appState.tabs.isEmpty {
                     // Show welcome view for signed-in users
                     WelcomeView(appState: appState)
@@ -289,8 +299,10 @@ struct JamAIApp: App {
     
     private func shouldBlockApp() -> Bool {
         let currentVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
-        let (shouldBlock, message) = dataService.shouldBlockApp(currentVersion: currentVersion)
+        let (shouldBlock, isForceUpdate, message, updateURL) = dataService.shouldBlockApp(currentVersion: currentVersion)
         maintenanceMessage = message ?? ""
+        isForceUpdateRequired = isForceUpdate
+        updateURLString = updateURL
         return shouldBlock
     }
 }

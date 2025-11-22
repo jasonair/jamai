@@ -281,6 +281,7 @@ struct AppConfig: Codable {
     var maintenanceMessage: String?
     var minimumVersion: String
     var forceUpdate: Bool
+    var updateURL: String?
     var featuresEnabled: [String: Bool]
     var announcementMessage: String?
     var lastUpdated: Date?  // Optional to handle Firestore timestamp serialization
@@ -290,6 +291,7 @@ struct AppConfig: Codable {
         self.maintenanceMessage = nil
         self.minimumVersion = "1.0.0"
         self.forceUpdate = false
+        self.updateURL = nil
         self.featuresEnabled = [:]
         self.announcementMessage = nil
         self.lastUpdated = Date()

@@ -73,20 +73,49 @@ class FirebaseDataService: ObservableObject {
     }
     
     /// Check if app should be blocked (maintenance or force update)
-    func shouldBlockApp(currentVersion: String) -> (shouldBlock: Bool, message: String?) {
-        guard let config = appConfig else { return (false, nil) }
+    func shouldBlockApp(currentVersion: String) -> (shouldBlock: Bool, isForceUpdate: Bool, message: String?, updateURL: String?) {
+        guard let config = appConfig else { return (false, false, nil, nil) }
         
         // Check maintenance mode
         if config.isMaintenanceMode {
-            return (true, config.maintenanceMessage ?? "App is under maintenance. Please try again later.")
+            let message = config.maintenanceMessage ?? "App is under maintenance. Please try again later."
+            return (true, false, message, nil)
         }
         
         // Check force update
-        if config.forceUpdate && currentVersion < config.minimumVersion {
-            return (true, "Please update to the latest version to continue using JamAI.")
+        if config.forceUpdate && isVersion(currentVersion, lessThan: config.minimumVersion) {
+            let message = "A new version of JamAI is available. Please download the latest version to continue."
+            return (true, true, message, config.updateURL)
         }
         
-        return (false, nil)
+        return (false, false, nil, nil)
+    }
+    
+    private func isVersion(_ lhs: String, lessThan rhs: String) -> Bool {
+        func components(from version: String) -> [Int] {
+            version
+                .split(separator: ".")
+                .map { Int($0) ?? 0 }
+        }
+        
+        let left = components(from: lhs)
+        let right = components(from: rhs)
+        let count = max(left.count, right.count)
+        
+        for index in 0..<count {
+            let leftComponent = index < left.count ? left[index] : 0
+            let rightComponent = index < right.count ? right[index] : 0
+            
+            if leftComponent < rightComponent {
+                return true
+            }
+            
+            if leftComponent > rightComponent {
+                return false
+            }
+        }
+        
+        return false
     }
     
     // MARK: - User Account Management
