@@ -323,7 +323,7 @@ struct NodeView: View {
                                     Image(systemName: role.icon)
                                         .resizable()
                                         .scaledToFit()
-                                        .frame(width: 60, height: 60)
+                                        .frame(width: 40, height: 40)
                                         .foregroundColor(headerTextColor)
                                         .opacity(0.8)
                                 }
