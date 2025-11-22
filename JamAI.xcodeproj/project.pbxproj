@@ -42,6 +42,7 @@
 		F9E382F72E9967730097A9E7 /* Exceptions for "JamAI" folder in "JamAI" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Info.plist,
 				Untitled.swift,
 			);
 			target = F9E3829E2E995D660097A9E7 /* JamAI */;
