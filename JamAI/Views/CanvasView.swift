@@ -170,6 +170,12 @@ struct CanvasView: View {
                             }
                         }
 
+                        // Ignore tiny deltas from two-finger taps/rests that are not real scrolls
+                        let minPanDelta: CGFloat = 0.5
+                        if abs(dx) < minPanDelta && abs(dy) < minPanDelta {
+                            return false
+                        }
+
                         // First scroll event in a burst: capture and temporarily clear selection
                         if panDebounceTimer == nil {
                             scrollSelectedNodeId = viewModel.selectedNodeId
