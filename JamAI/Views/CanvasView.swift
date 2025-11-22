@@ -44,6 +44,7 @@ struct CanvasView: View {
     
     // Pan debounce timer for two-finger scrolling
     @State private var panDebounceTimer: Timer?
+    @State private var scrollSelectedNodeId: UUID? = nil
     
     // Cached node frames to avoid rebuilding on every render
     @State private var cachedNodeFrames: [UUID: CGRect] = [:]
@@ -153,7 +154,55 @@ struct CanvasView: View {
                     hasSelectedNode: viewModel.selectedNodeId != nil && !modalCoordinator.isModalPresented,
                     hasOpenModal: modalCoordinator.isModalPresented,
                     onScroll: { dx, dy in
-                        // Do nothing
+                        // Block if a modal is open
+                        if modalCoordinator.isModalPresented {
+                            return false
+                        }
+
+                        // If the cursor is over the selected node, never pan the canvas.
+                        if let selectedId = viewModel.selectedNodeId,
+                           let node = viewModel.nodes[selectedId] {
+                            let canvasPos = screenToCanvas(mouseLocation, in: geometry.size)
+                            let nodeRect = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+                            if nodeRect.contains(canvasPos) {
+                                // Do not handle here – let node-internal scrolling work.
+                                return false
+                            }
+                        }
+
+                        // First scroll event in a burst: capture and temporarily clear selection
+                        if panDebounceTimer == nil {
+                            scrollSelectedNodeId = viewModel.selectedNodeId
+                            if scrollSelectedNodeId != nil {
+                                viewModel.selectedNodeId = nil
+                            }
+                            viewModel.isPanning = true
+                        }
+
+                        // Apply pan in screen space. Match drag gesture semantics by
+                        // adding the deltas directly to the offset.
+                        viewModel.offset = CGSize(
+                            width: viewModel.offset.width + dx,
+                            height: viewModel.offset.height + dy
+                        )
+
+                        // Debounce end-of-scroll so we can restore selection
+                        panDebounceTimer?.invalidate()
+                        panDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
+                            panDebounceTimer = nil
+                            viewModel.isPanning = false
+
+                            if let savedId = scrollSelectedNodeId {
+                                // Only restore if nothing else has selected a node
+                                if viewModel.selectedNodeId == nil {
+                                    viewModel.selectedNodeId = savedId
+                                }
+                            }
+                            scrollSelectedNodeId = nil
+                        }
+                        
+                        // Canvas handled this scroll (panned)
+                        return true
                     },
                     onCommandClose: {
                         onCommandClose?()
@@ -177,6 +226,7 @@ struct CanvasView: View {
                     viewModel.selectedTool = .select
                 case .select:
                     viewModel.selectedNodeId = nil
+                    scrollSelectedNodeId = nil
                 }
             }
             .contextMenu {

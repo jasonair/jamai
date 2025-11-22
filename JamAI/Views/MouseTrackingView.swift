@@ -13,7 +13,9 @@ struct MouseTrackingView: NSViewRepresentable {
     @Binding var position: CGPoint
     var hasSelectedNode: Bool = false
     var hasOpenModal: Bool = false
-    var onScroll: ((CGFloat, CGFloat) -> Void)? = nil
+    // Returns true if the scroll was handled (consumed) by the canvas, false to
+    // let the normal NSResponder chain handle it (e.g. node ScrollViews).
+    var onScroll: ((CGFloat, CGFloat) -> Bool)? = nil
     var onCommandClose: (() -> Void)? = nil
     
     func makeNSView(context: Context) -> TrackingNSView {
@@ -22,7 +24,7 @@ struct MouseTrackingView: NSViewRepresentable {
             // Update binding on main thread
             DispatchQueue.main.async { self.position = p }
         }
-        v.onScroll = { dx, dy in self.onScroll?(dx, dy) }
+        v.onScroll = { dx, dy in self.onScroll?(dx, dy) ?? false }
         v.onCommandClose = self.onCommandClose
         v.hasSelectedNode = self.hasSelectedNode
         v.hasOpenModal = self.hasOpenModal
@@ -31,7 +33,7 @@ struct MouseTrackingView: NSViewRepresentable {
     
     func updateNSView(_ nsView: TrackingNSView, context: Context) {
         nsView.onMove = { p in DispatchQueue.main.async { self.position = p } }
-        nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) }
+        nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) ?? false }
         nsView.onCommandClose = self.onCommandClose
         nsView.hasSelectedNode = self.hasSelectedNode
         nsView.hasOpenModal = self.hasOpenModal
@@ -40,7 +42,8 @@ struct MouseTrackingView: NSViewRepresentable {
     final class TrackingNSView: NSView {
         var onMove: ((CGPoint) -> Void)?
         private var tracking: NSTrackingArea?
-        var onScroll: ((CGFloat, CGFloat) -> Void)?
+        // Returns true if the scroll event was handled by the canvas.
+        var onScroll: ((CGFloat, CGFloat) -> Bool)?
         var onCommandClose: (() -> Void)?
         var hasSelectedNode: Bool = false
         var hasOpenModal: Bool = false
@@ -75,9 +78,14 @@ struct MouseTrackingView: NSViewRepresentable {
                     return event
                 }
                 
-                // Let the normal NSResponder chain handle scrolling.
-                // Node ScrollViews will scroll when enabled/selected, and
-                // the canvas will not intercept two-finger scroll globally.
+                // Forward scroll deltas to SwiftUI. If the handler returns true,
+                // the canvas consumed the event (pan). Otherwise, let the normal
+                // NSResponder chain handle it so node-internal scrolling works.
+                if let handler = self.onScroll {
+                    let handled = handler(event.scrollingDeltaX, event.scrollingDeltaY)
+                    return handled ? nil : event
+                }
+                
                 return event
             }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
@@ -94,61 +102,7 @@ struct MouseTrackingView: NSViewRepresentable {
             if let monitor = localMonitor { NSEvent.removeMonitor(monitor) }
             if let k = keyMonitor { NSEvent.removeMonitor(k) }
         }
-        
-        private func shouldLetSystemHandleScroll(for event: NSEvent) -> Bool {
-            guard let window = self.window else { return false }
-            let location = event.locationInWindow
-            
-            // CANVAS BACKGROUND STRATEGY:
-            // Check if we're over SwiftUI content (nodes) or empty canvas
-            // If over nodes → only scroll node if selected, otherwise do nothing
-            // If over empty canvas → pan canvas
-            
-            guard let contentView = window.contentView,
-                  let hitView = contentView.hitTest(location) else {
-                return false // No hit, allow canvas pan
-            }
-            
-            // Check if we're over SwiftUI-rendered content (NSHostingView indicates SwiftUI nodes/UI)
-            // Walk up to find if this is inside a hosting view
-            var currentView: NSView? = hitView
-            var foundHostingView = false
-            var foundScrollView: NSScrollView? = nil
-            
-            while currentView != nil {
-                // Check for scroll view first
-                if let scrollView = currentView as? NSScrollView {
-                    foundScrollView = scrollView
-                }
-                
-                // Check if we're in SwiftUI content
-                let className = NSStringFromClass(type(of: currentView!))
-                if className.contains("NSHostingView") {
-                    foundHostingView = true
-                    break
-                }
-                
-                currentView = currentView?.superview
-            }
-            
-            // If we didn't find SwiftUI hosting view, we're over empty canvas - allow pan
-            if !foundHostingView {
-                return false // Allow canvas pan
-            }
-            
-            // We're over SwiftUI content (a node or UI element)
-            // Only allow node scroll if node is selected AND we found a scroll view
-            // We're over SwiftUI content (a node or UI element)
-            // If a node is selected and we're over its scroll view, let the scroll view handle it.
-            // It will manage scrolling, bouncing, etc. This is the key to allowing node scroll.
-            if hasSelectedNode && foundScrollView != nil {
-                return true // Let the node's ScrollView handle the event
-            }
-            
-            // Over a node but node not selected, or no scroll view - block canvas pan
-            return true
-        }
-        
+
         override var acceptsFirstResponder: Bool { true }
     }
 }
