@@ -145,25 +145,75 @@ struct NodeView: View {
                 
                 // Content with fixed input at bottom
                 VStack(spacing: 0) {
-                    // Content area - different layout for notes vs standard nodes
-                    // Use flexible frame to account for team member tray height
-                    Group {
-                    if node.type == .note {
-                        // For notes: Handle both note view and conversation view
-                        if showChatSection {
-                            // When chat is visible, use ScrollView for conversation
+                    if isSelected {
+                        // Content area - different layout for notes vs standard nodes
+                        // Use flexible frame to account for team member tray height
+                        Group {
+                        if node.type == .note {
+                            // For notes: Handle both note view and conversation view
+                            if showChatSection {
+                                // When chat is visible, use ScrollView for conversation
+                                ScrollViewReader { proxy in
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Note description (read-only when chat is visible)
+                                            if !node.description.isEmpty {
+                                                HStack {
+                                                    Spacer(minLength: 0)
+                                                    Text(node.description)
+                                                        .font(.system(size: 15, weight: .light))
+                                                        .frame(maxWidth: 700)
+                                                    Spacer(minLength: 0)
+                                                }
+                                            }
+                                            
+                                            // Conversation thread - no width constraint, let MarkdownText handle it
+                                            conversationView
+                                                .id(scrollViewID)
+                                        }
+                                        .padding(Node.padding)
+                                    }
+                                    .disabled(!isSelected)
+                                    .onAppear {
+                                        // Only auto-scroll on initial load to prevent scroll spam
+                                        if !hasInitiallyLoaded {
+                                            hasInitiallyLoaded = true
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                if let last = node.conversation.last {
+                                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .onChange(of: node.conversation.count) { oldCount, newCount in
+                                        if newCount > oldCount {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                                withAnimation {
+                                                    if let last = node.conversation.last {
+                                                        proxy.scrollTo(last.id, anchor: .bottom)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                // When chat is hidden, show note content
+                                // Single TextEditor handles both reading and editing
+                                noteDescriptionView
+                                    .padding(Node.padding)
+                            }
+                        } else {
+                            // For standard nodes: ScrollView with conversation
                             ScrollViewReader { proxy in
                                 ScrollView {
                                     VStack(alignment: .leading, spacing: 12) {
-                                        // Note description (read-only when chat is visible)
-                                        if !node.description.isEmpty {
-                                            HStack {
-                                                Spacer(minLength: 0)
-                                                Text(node.description)
-                                                    .font(.system(size: 15, weight: .light))
-                                                    .frame(maxWidth: 700)
-                                                Spacer(minLength: 0)
-                                            }
+                                        // Description - centered
+                                        HStack {
+                                            Spacer(minLength: 0)
+                                            descriptionView
+                                                .frame(maxWidth: 700)
+                                            Spacer(minLength: 0)
                                         }
                                         
                                         // Conversation thread - no width constraint, let MarkdownText handle it
@@ -178,8 +228,14 @@ struct NodeView: View {
                                     if !hasInitiallyLoaded {
                                         hasInitiallyLoaded = true
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            if let last = node.conversation.last {
-                                                proxy.scrollTo(last.id, anchor: .bottom)
+                                            if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                proxy.scrollTo(lastAssistantId, anchor: .bottom)
+                                            } else if let lastMessageId = node.conversation.last?.id {
+                                                proxy.scrollTo(lastMessageId, anchor: .bottom)
+                                            } else if !node.response.isEmpty {
+                                                proxy.scrollTo("legacy-assistant", anchor: .bottom)
+                                            } else if !node.prompt.isEmpty {
+                                                proxy.scrollTo("legacy-user", anchor: .bottom)
                                             }
                                         }
                                     }
@@ -189,108 +245,67 @@ struct NodeView: View {
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                             withAnimation {
                                                 if let last = node.conversation.last {
-                                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                                    switch last.role {
+                                                    case .user:
+                                                        if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                            proxy.scrollTo(lastUserId, anchor: .top)
+                                                        } else {
+                                                            proxy.scrollTo(scrollViewID, anchor: .top)
+                                                        }
+                                                    case .assistant:
+                                                        if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                            proxy.scrollTo(lastUserId, anchor: .top)
+                                                        } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                            proxy.scrollTo(lastAssistantId, anchor: .top)
+                                                        } else {
+                                                            proxy.scrollTo(scrollViewID, anchor: .top)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                .onChange(of: isGenerating) { oldValue, newValue in
+                                    if newValue {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                            withAnimation {
+                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                    proxy.scrollTo(lastUserId, anchor: .top)
+                                                } else if node.conversation.isEmpty && !node.response.isEmpty {
+                                                    // Expansion streaming without a user bubble
+                                                    proxy.scrollTo("legacy-assistant", anchor: .top)
                                                 }
                                             }
                                         }
                                     }
                                 }
                             }
-                        } else {
-                            // When chat is hidden, show note content
-                            // Single TextEditor handles both reading and editing
-                            noteDescriptionView
+                        }
+                        }
+                        .frame(maxHeight: .infinity) // Let content fill available space
+                        
+                        // Only show divider and input if not a note OR if chat section is visible
+                        if node.type != .note || showChatSection {
+                            Divider()
+                            
+                            // Input area - always visible at bottom
+                            inputView
                                 .padding(Node.padding)
                         }
                     } else {
-                        // For standard nodes: ScrollView with conversation
-                        ScrollViewReader { proxy in
-                            ScrollView {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    // Description - centered
-                                    HStack {
-                                        Spacer(minLength: 0)
-                                        descriptionView
-                                            .frame(maxWidth: 700)
-                                        Spacer(minLength: 0)
-                                    }
-                                    
-                                    // Conversation thread - no width constraint, let MarkdownText handle it
-                                    conversationView
-                                        .id(scrollViewID)
-                                }
-                                .padding(Node.padding)
-                            }
-                            .disabled(!isSelected)
-                            .onAppear {
-                                // Only auto-scroll on initial load to prevent scroll spam
-                                if !hasInitiallyLoaded {
-                                    hasInitiallyLoaded = true
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                            proxy.scrollTo(lastAssistantId, anchor: .bottom)
-                                        } else if let lastMessageId = node.conversation.last?.id {
-                                            proxy.scrollTo(lastMessageId, anchor: .bottom)
-                                        } else if !node.response.isEmpty {
-                                            proxy.scrollTo("legacy-assistant", anchor: .bottom)
-                                        } else if !node.prompt.isEmpty {
-                                            proxy.scrollTo("legacy-user", anchor: .bottom)
-                                        }
-                                    }
-                                }
-                            }
-                            .onChange(of: node.conversation.count) { oldCount, newCount in
-                                if newCount > oldCount {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                        withAnimation {
-                                            if let last = node.conversation.last {
-                                                switch last.role {
-                                                case .user:
-                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                        proxy.scrollTo(lastUserId, anchor: .top)
-                                                    } else {
-                                                        proxy.scrollTo(scrollViewID, anchor: .top)
-                                                    }
-                                                case .assistant:
-                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                        proxy.scrollTo(lastUserId, anchor: .top)
-                                                    } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                                        proxy.scrollTo(lastAssistantId, anchor: .top)
-                                                    } else {
-                                                        proxy.scrollTo(scrollViewID, anchor: .top)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .onChange(of: isGenerating) { oldValue, newValue in
-                                if newValue {
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                        withAnimation {
-                                            if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                proxy.scrollTo(lastUserId, anchor: .top)
-                                            } else if node.conversation.isEmpty && !node.response.isEmpty {
-                                                // Expansion streaming without a user bubble
-                                                proxy.scrollTo("legacy-assistant", anchor: .top)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                        Spacer(minLength: 0)
+                        HStack {
+                            Spacer(minLength: 0)
+                            Text(node.title.isEmpty ? "Untitled" : node.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                                .lineLimit(3)
+                                .frame(maxWidth: 260)
+                            Spacer(minLength: 0)
                         }
-                    }
-                    }
-                    .frame(maxHeight: .infinity) // Let content fill available space
-                    
-                    // Only show divider and input if not a note OR if chat section is visible
-                    if node.type != .note || showChatSection {
-                        Divider()
-                        
-                        // Input area - always visible at bottom
-                        inputView
-                            .padding(Node.padding)
+                        Spacer(minLength: 0)
                     }
                 }
                 .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
