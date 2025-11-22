@@ -799,7 +799,7 @@ struct NodeView: View {
                 Text("Click to start typing...")
                     .font(.system(size: 15, weight: .light))
                     .foregroundColor(contentSecondaryTextColor.opacity(0.5))
-                    .padding(.top, 8)
+                    .padding(.top, 0)
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
             }
@@ -817,6 +817,12 @@ struct NodeView: View {
             // Sync local state with node on appear
             if editedDescription != node.description {
                 editedDescription = node.description
+            }
+        }
+        .onChange(of: editedDescription) { _, newValue in
+            // Auto-save on type for FigJam/Miro-style notes
+            if newValue != node.description {
+                onDescriptionEdit(newValue)
             }
         }
         .onChange(of: isDescFocused) { _, isFocused in

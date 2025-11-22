@@ -382,6 +382,57 @@ class CanvasViewModel: ObservableObject {
         }
     }
 
+    func createFreeformNote(at position: CGPoint) {
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            var note = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                x: position.x,
+                y: position.y,
+                height: Node.noteWidth,
+                title: "Note",
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: true,
+                isFrozenContext: false,
+                color: "lightYellow",
+                type: .note
+            )
+            note.systemPromptSnapshot = self.project.systemPrompt
+            self.nodes[note.id] = note
+            self.bringToFront([note.id])
+            self.selectedNodeId = note.id
+            self.undoManager.record(.createNode(note))
+
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, note] in
+                do {
+                    try await dbActor.saveNode(note)
+
+                    // Track note creation analytics
+                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                        await AnalyticsService.shared.trackNodeCreation(
+                            userId: userId,
+                            projectId: note.projectId,
+                            nodeId: note.id,
+                            nodeType: "note",
+                            creationMethod: .note,
+                            parentNodeId: nil,
+                            teamMemberRoleId: note.teamMember?.roleId
+                        )
+                    }
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save note: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
     func createShape(at position: CGPoint, kind: ShapeKind) {
         // Defer state changes to avoid publishing during view updates
         // Use .userInitiated QoS to match the calling context and avoid priority inversion

@@ -239,9 +239,13 @@ struct CanvasView: View {
             }
             .contextMenu {
                 let clickLocation = mouseLocation
-                Button("New Node Here") {
+                Button("New Chat Here") {
                     let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
                     viewModel.createNode(at: canvasPos)
+                }
+                Button("New Note Here") {
+                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
+                    viewModel.createFreeformNote(at: canvasPos)
                 }
             }
             .simultaneousGesture(
