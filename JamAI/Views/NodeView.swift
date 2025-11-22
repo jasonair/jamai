@@ -338,12 +338,14 @@ struct NodeView: View {
                                     .cornerRadius(8)
                                     .frame(maxWidth: 260)
                             }
+                            .offset(y: -6)
                             Spacer(minLength: 0)
                         }
                         Spacer(minLength: 0)
                     }
                 }
                 .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
+                .background(contentBackground)
                 .overlay(
                     TapThroughOverlay(onTap: onTap, isNodeSelected: isSelected)
                 )
@@ -1309,16 +1311,28 @@ struct NodeView: View {
     
     // MARK: - Styling
     
-    private var headerBackground: some View {
+    private var headerBaseColor: Color {
         if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
-            return AnyView(nodeColor.color)
+            return nodeColor.color
         } else {
-            return AnyView(
-                colorScheme == .dark
-                    ? Color(nsColor: .controlBackgroundColor)
-                    : Color(white: 0.95)
-            )
+            return colorScheme == .dark
+                ? Color(nsColor: .controlBackgroundColor)
+                : Color(white: 0.95)
         }
+    }
+    
+    private var headerBackground: some View {
+        AnyView(headerBaseColor)
+    }
+    
+    private var contentBackground: some View {
+        let overlayOpacity = colorScheme == .dark ? 0.04 : 0.06
+        return AnyView(
+            ZStack {
+                headerBaseColor
+                Color.white.opacity(overlayOpacity)
+            }
+        )
     }
     
     private var headerTextColor: Color {
