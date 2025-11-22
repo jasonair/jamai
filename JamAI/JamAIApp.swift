@@ -208,6 +208,12 @@ struct JamAIApp: App {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(appState.viewModel == nil)
                 
+                Button("Save As...") {
+                    appState.saveAs()
+                }
+                .keyboardShortcut("s", modifiers: [.command, .shift])
+                .disabled(appState.viewModel == nil)
+                
                 Button("Export JSON...") {
                     appState.exportJSON()
                 }
@@ -716,8 +722,20 @@ class AppState: ObservableObject {
 
     
     func save() {
-        guard let tab = activeTab,
-              let viewModel = tab.viewModel else { return }
+        guard
+            let activeId = activeTabId,
+            let tabIndex = tabs.firstIndex(where: { $0.id == activeId }),
+            let viewModel = tabs[tabIndex].viewModel
+        else { return }
+        
+        let tab = tabs[tabIndex]
+        
+        // For temporary/untitled projects, treat Save as Save As to let the user
+        // pick a final name and location without requiring the tab to be closed.
+        if tab.isTemporary {
+            presentSavePanelForTab(at: tabIndex)
+            return
+        }
         
         do {
             // Security-scoped access is already active from openProjectInNewTab.
@@ -730,6 +748,107 @@ class AppState: ObservableObject {
             viewModel.save()
         } catch {
             showError("Failed to save project: \(error.localizedDescription)")
+        }
+    }
+
+    func saveAs() {
+        guard
+            let activeId = activeTabId,
+            let tabIndex = tabs.firstIndex(where: { $0.id == activeId })
+        else { return }
+        
+        presentSavePanelForTab(at: tabIndex)
+    }
+
+    private func presentSavePanelForTab(at tabIndex: Int) {
+        let tab = tabs[tabIndex]
+        
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.item]
+        panel.allowsOtherFileTypes = true
+        panel.nameFieldStringValue = "\(tab.projectName).\(Config.jamFileExtension)"
+        panel.message = "Save this Jam"
+        
+        let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
+            guard let self = self else { return }
+            guard response == .OK, let url = panel.url else { return }
+            
+            let saveURL: URL
+            if url.pathExtension == Config.jamFileExtension {
+                saveURL = url
+            } else {
+                saveURL = url.appendingPathExtension(Config.jamFileExtension)
+            }
+            
+            self.saveTab(at: tabIndex, to: saveURL)
+        }
+        
+        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+            panel.beginSheetModal(for: window, completionHandler: handler)
+        } else {
+            handler(panel.runModal())
+        }
+    }
+
+    private func saveTab(at tabIndex: Int, to saveURL: URL) {
+        let tab = tabs[tabIndex]
+        let originalURL = tab.projectURL
+        
+        guard let viewModel = tab.viewModel, let database = tab.database else {
+            return
+        }
+        
+        let capturedViewModel = viewModel
+        let capturedDatabase = database
+        
+        Task { @MainActor in
+            // Update project name to match chosen file name
+            var updatedProject = capturedViewModel.project
+            updatedProject.name = saveURL.deletingPathExtension().lastPathComponent
+            capturedViewModel.project = updatedProject
+            
+            // Save project metadata to the current location
+            try? DocumentManager.shared.saveProject(
+                capturedViewModel.project,
+                to: originalURL.deletingPathExtension(),
+                database: capturedDatabase
+            )
+            
+            // Ensure all pending writes are flushed
+            await capturedViewModel.saveAndWait()
+            
+            // Move bundle if user chose a different location/name
+            if saveURL != originalURL {
+                do {
+                    try FileManager.default.moveItem(at: originalURL, to: saveURL)
+                    
+                    // Update recent projects to point to the new location
+                    self.recentProjectsManager.removeRecent(url: originalURL)
+                    self.recordRecent(url: saveURL)
+                    
+                    // Update security-scoped resource tracking
+                    if self.accessingResources.contains(originalURL) {
+                        originalURL.stopAccessingSecurityScopedResource()
+                        self.accessingResources.remove(originalURL)
+                    }
+                    if saveURL.startAccessingSecurityScopedResource() {
+                        self.accessingResources.insert(saveURL)
+                    }
+                    
+                    // Update tab metadata for the active project
+                    self.tabs[tabIndex].projectURL = saveURL
+                    self.tabs[tabIndex].projectName = updatedProject.name
+                } catch {
+                    self.showError("Failed to save project: \(error.localizedDescription)")
+                    return
+                }
+            } else {
+                // Even if the URL didn't change, update the tab name
+                self.tabs[tabIndex].projectName = updatedProject.name
+            }
+            
+            // Once saved via an explicit Save / Save As, this is no longer temporary
+            self.tabs[tabIndex].isTemporary = false
         }
     }
     
