@@ -54,6 +54,8 @@ struct NodeView: View {
     @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
     @State private var hasInitiallyLoaded = false
+    @State private var shouldScrollToBottomOnNextAppear = false
+    @State private var isPreparingScrollToBottom = false
     @State private var processingMessageIndex = 0
     @State private var processingOpacity: Double = 1.0
     @State private var processingTimer: Timer?
@@ -174,13 +176,19 @@ struct NodeView: View {
                                         .padding(Node.padding)
                                     }
                                     .disabled(!isSelected)
+                                    .opacity(isPreparingScrollToBottom ? 0 : 1)
                                     .onAppear {
-                                        // Only auto-scroll on initial load to prevent scroll spam
-                                        if !hasInitiallyLoaded {
+                                        // Auto-scroll on initial load and when explicitly requested
+                                        if !hasInitiallyLoaded || shouldScrollToBottomOnNextAppear {
                                             hasInitiallyLoaded = true
+                                            shouldScrollToBottomOnNextAppear = false
+                                            isPreparingScrollToBottom = true
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                 if let last = node.conversation.last {
                                                     proxy.scrollTo(last.id, anchor: .bottom)
+                                                }
+                                                DispatchQueue.main.async {
+                                                    isPreparingScrollToBottom = false
                                                 }
                                             }
                                         }
@@ -223,10 +231,13 @@ struct NodeView: View {
                                     .padding(Node.padding)
                                 }
                                 .disabled(!isSelected)
+                                .opacity(isPreparingScrollToBottom ? 0 : 1)
                                 .onAppear {
-                                    // Only auto-scroll on initial load to prevent scroll spam
-                                    if !hasInitiallyLoaded {
+                                    // Auto-scroll on initial load and when explicitly requested
+                                    if !hasInitiallyLoaded || shouldScrollToBottomOnNextAppear {
                                         hasInitiallyLoaded = true
+                                        shouldScrollToBottomOnNextAppear = false
+                                        isPreparingScrollToBottom = true
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                             if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
                                                 proxy.scrollTo(lastAssistantId, anchor: .bottom)
@@ -236,6 +247,9 @@ struct NodeView: View {
                                                 proxy.scrollTo("legacy-assistant", anchor: .bottom)
                                             } else if !node.prompt.isEmpty {
                                                 proxy.scrollTo("legacy-user", anchor: .bottom)
+                                            }
+                                            DispatchQueue.main.async {
+                                                isPreparingScrollToBottom = false
                                             }
                                         }
                                     }
@@ -356,6 +370,11 @@ struct NodeView: View {
         }
         .onChange(of: isSelected) { oldValue, newValue in
             if newValue {
+                // When transitioning from unselected to selected, ensure the
+                // scroll view will scroll to the bottom the next time it appears.
+                if !oldValue {
+                    shouldScrollToBottomOnNextAppear = true
+                }
                 // Only focus prompt for non-note nodes or when chat section is visible
                 // Notes can be scrolled and clicked to focus without auto-focusing
                 if node.type != .note || showChatSection {
