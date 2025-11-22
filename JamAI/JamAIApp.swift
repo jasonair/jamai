@@ -46,6 +46,7 @@ struct JamAIApp: App {
     @StateObject private var appState = AppState()
     @StateObject private var authService = FirebaseAuthService.shared
     @StateObject private var dataService = FirebaseDataService.shared
+    @StateObject private var updateManager = SparkleUpdateManager()
     @State private var canUndo = false
     @State private var canRedo = false
     @State private var showingMaintenanceAlert = false
@@ -93,7 +94,8 @@ struct JamAIApp: App {
                     if isForceUpdateRequired {
                         UpdateRequiredView(
                             message: maintenanceMessage,
-                            updateURLString: updateURLString
+                            updateURLString: updateURLString,
+                            updateManager: updateManager
                         )
                         .frame(width: 600, height: 400)
                     } else {

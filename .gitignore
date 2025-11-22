@@ -42,6 +42,9 @@ Carthage/Build/
 *.jam
 !example.jam
 
+# Release artifacts
+releases/
+
 # macOS
 .AppleDouble
 .LSOverride

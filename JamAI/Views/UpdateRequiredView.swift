@@ -4,6 +4,7 @@ import AppKit
 struct UpdateRequiredView: View {
     let message: String
     let updateURLString: String?
+    let updateManager: SparkleUpdateManager
     
     var body: some View {
         VStack(spacing: 24) {
@@ -23,6 +24,7 @@ struct UpdateRequiredView: View {
             HStack(spacing: 16) {
                 if let url = validUpdateURL {
                     Button("Download Update") {
+                        updateManager.checkForUpdates()
                         NSWorkspace.shared.open(url)
                     }
                     .buttonStyle(.borderedProminent)
@@ -46,6 +48,7 @@ struct UpdateRequiredView: View {
 #Preview {
     UpdateRequiredView(
         message: "A new version of JamAI is available. Please download the latest version to continue.",
-        updateURLString: "https://example.com/download"
+        updateURLString: "https://example.com/download",
+        updateManager: SparkleUpdateManager()
     )
 }
