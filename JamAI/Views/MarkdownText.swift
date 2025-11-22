@@ -259,29 +259,42 @@ private struct FormattedTextView: View {
             let length = (line as NSString).length
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             
-            // Detect bullet points ("•" or "- ") with different indentation levels
+            // Detect bullet points ("•" or "- ") and apply a precise hanging indent so
+            // wrapped lines align perfectly with the text after the bullet marker.
             if (trimmed.hasPrefix("•") || trimmed.hasPrefix("- ")) && length > 0 {
                 let ps = NSMutableParagraphStyle()
                 ps.firstLineHeadIndent = 0
                 // Slightly increase spacing between bullet items for better readability
                 ps.paragraphSpacing = 5
                 
-                // Count leading spaces to determine nesting level
-                let leadingSpaces = line.prefix(while: { $0 == " " }).count
-                if leadingSpaces >= 6 {
-                    // Third-level bullet (6+ spaces): deepest indent
-                    ps.headIndent = 60
-                } else if leadingSpaces >= 4 {
-                    // Second-level bullet (4-5 spaces)
-                    ps.headIndent = 44
-                } else if leadingSpaces >= 2 {
-                    // First-level nested bullet (2-3 spaces)
-                    ps.headIndent = 32
+                // Compute the exact prefix width from the start of the line up to the first
+                // content character after the bullet marker (including indentation, bullet,
+                // and any following spaces). This ensures continuation lines line up exactly
+                // under the start of the bullet text, even when there are multiple spaces.
+                if let firstNonSpaceIndex = line.firstIndex(where: { !$0.isWhitespace }) {
+                    var contentIndex = line.index(after: firstNonSpaceIndex) // skip bullet marker
+                    
+                    // Skip all spaces after the bullet so the indent matches the first
+                    // visible text character.
+                    while contentIndex < line.endIndex && line[contentIndex] == " " {
+                        contentIndex = line.index(after: contentIndex)
+                    }
+                    
+                    let prefixString = String(line[..<contentIndex])
+                    let prefixWidth = (prefixString as NSString)
+                        .size(withAttributes: [.font: baseFont]).width
+                    
+                    ps.headIndent = prefixWidth
                 } else {
-                    // Top-level bullet
+                    // Fallback to a reasonable default if the line is empty or whitespace
                     ps.headIndent = 20
                 }
-                nsAttrString.addAttribute(.paragraphStyle, value: ps, range: NSRange(location: location, length: length))
+                
+                nsAttrString.addAttribute(
+                    .paragraphStyle,
+                    value: ps,
+                    range: NSRange(location: location, length: length)
+                )
             }
             // Detect numbered lists (e.g., "1. ", "2. ", etc.)
             else if let firstChar = trimmed.first, firstChar.isNumber {
@@ -298,15 +311,22 @@ private struct FormattedTextView: View {
                     let leadingSpacesCount = line.prefix(while: { $0 == " " }).count
                     let leadingSpacesString = String(repeating: " ", count: leadingSpacesCount)
 
-                    // Find the numeric prefix in the trimmed text (e.g. "1. ", "10. ")
-                    let regex = try? NSRegularExpression(pattern: pattern)
-                    let nsTrimmed = trimmed as NSString
-                    let matchRange = regex?
-                        .firstMatch(in: trimmed, range: NSRange(location: 0, length: nsTrimmed.length))?
-                        .range ?? NSRange(location: 0, length: 0)
-                    let numberPrefix = nsTrimmed.substring(with: matchRange)
+                    // Walk the trimmed string to include all digits, the period, and any
+                    // spaces after it so continuation lines align with the first visible
+                    // text character, even if there are multiple spaces.
+                    var index = trimmed.startIndex
+                    while index < trimmed.endIndex && trimmed[index].isNumber {
+                        index = trimmed.index(after: index)
+                    }
+                    if index < trimmed.endIndex && trimmed[index] == "." {
+                        index = trimmed.index(after: index)
+                    }
+                    while index < trimmed.endIndex && trimmed[index] == " " {
+                        index = trimmed.index(after: index)
+                    }
 
-                    let prefixString = leadingSpacesString + numberPrefix
+                    let numericPrefixWithSpaces = String(trimmed[..<index])
+                    let prefixString = leadingSpacesString + numericPrefixWithSpaces
                     let prefixWidth = (prefixString as NSString)
                         .size(withAttributes: [.font: baseFont]).width
 
@@ -330,21 +350,35 @@ private struct FormattedTextView: View {
     
     @available(macOS 12.0, *)
     private func formatText(_ text: String) -> AttributedString {
-        // Replace asterisk bullets with proper bullet points
-        var processedText = text.replacingOccurrences(of: "\n* ", with: "\n• ")
-        processedText = processedText.replacingOccurrences(of: "\n  * ", with: "\n  • ")
-        processedText = processedText.replacingOccurrences(of: "\n    * ", with: "\n    • ")
-
-        // If starts with an asterisk bullet, normalize it too
-        if processedText.hasPrefix("* ") {
-            processedText = "• " + processedText.dropFirst(2)
-        }
-
-        // Convert markdown # headings into bold lines so they render as headers without hashes
-        let rawLines = processedText.components(separatedBy: .newlines)
-        var headingLines: [String] = []
-        headingLines.reserveCapacity(rawLines.count)
+        // STEP 1: Normalize asterisk-based bullets into proper bullet characters at
+        // any indentation level so nested bullets don't render as raw "*" text.
+        let rawLines = text.components(separatedBy: .newlines)
+        var bulletNormalizedLines: [String] = []
+        bulletNormalizedLines.reserveCapacity(rawLines.count)
+        
         for line in rawLines {
+            // Preserve original indentation
+            let leadingSpacesCount = line.prefix(while: { $0 == " " }).count
+            let leadingSpaces = String(repeating: " ", count: leadingSpacesCount)
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            
+            if trimmed.hasPrefix("* ") {
+                // Replace leading "* " with "• " while keeping indentation
+                let contentStartIndex = trimmed.index(trimmed.startIndex, offsetBy: 2)
+                let content = trimmed[contentStartIndex...]
+                bulletNormalizedLines.append(leadingSpaces + "• " + content)
+            } else {
+                bulletNormalizedLines.append(line)
+            }
+        }
+        
+        var processedText = bulletNormalizedLines.joined(separator: "\n")
+
+        // STEP 2: Convert markdown # headings into bold lines so they render as headers without hashes
+        let headingSourceLines = processedText.components(separatedBy: .newlines)
+        var headingLines: [String] = []
+        headingLines.reserveCapacity(headingSourceLines.count)
+        for line in headingSourceLines {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             if trimmed.hasPrefix("#") {
                 // Count leading # characters
