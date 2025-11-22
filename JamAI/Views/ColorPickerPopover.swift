@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if os(macOS)
+import AppKit
+#endif
 
 struct ColorPickerPopover: View {
     let selectedColorId: String
@@ -21,8 +24,12 @@ struct ColorPickerPopover: View {
                             nodeColor: nodeColor,
                             isSelected: nodeColor.id == selectedColorId,
                             onSelect: {
-                                onColorSelected(nodeColor.id)
-                                dismiss()
+                                if nodeColor.id == "rainbow" {
+                                    openSystemColorPicker()
+                                } else {
+                                    onColorSelected(nodeColor.id)
+                                    dismiss()
+                                }
                             }
                         )
                     }
@@ -33,6 +40,15 @@ struct ColorPickerPopover: View {
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
         .shadow(color: Color.black.opacity(0.2), radius: 8, x: 0, y: 2)
+    }
+
+    private func openSystemColorPicker() {
+        #if os(macOS)
+        MacColorPicker.shared.present { hex in
+            onColorSelected(hex)
+        }
+        dismiss()
+        #endif
     }
 }
 
@@ -81,3 +97,83 @@ struct ColorButton: View {
     ColorPickerPopover(selectedColorId: "blue") { _ in }
         .frame(width: 400, height: 200)
 }
+
+#if os(macOS)
+final class MacColorPicker {
+    static let shared = MacColorPicker()
+
+    private var colorChangeObserver: Any?
+    private var windowCloseObserver: Any?
+    private var onColorPicked: ((String) -> Void)?
+    private var lastCommittedColor: String?
+
+    func present(onPicked: @escaping (String) -> Void) {
+        // Clean up existing observers
+        cleanup()
+        
+        onColorPicked = onPicked
+        lastCommittedColor = nil
+
+        let panel = NSColorPanel.shared
+        panel.showsAlpha = false
+
+        // Observe color changes for live updates
+        colorChangeObserver = NotificationCenter.default.addObserver(
+            forName: NSColorPanel.colorDidChangeNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            let color = panel.color
+            if let hex = color.hexString {
+                self.lastCommittedColor = hex
+                self.onColorPicked?(hex)
+            }
+        }
+        
+        // Observe window close to ensure final color is committed
+        windowCloseObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification,
+            object: panel,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self = self else { return }
+            // Commit the last color one final time when panel closes
+            if let finalColor = self.lastCommittedColor {
+                self.onColorPicked?(finalColor)
+            }
+            self.cleanup()
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        panel.makeKeyAndOrderFront(nil)
+    }
+    
+    private func cleanup() {
+        if let observer = colorChangeObserver {
+            NotificationCenter.default.removeObserver(observer)
+            colorChangeObserver = nil
+        }
+        if let observer = windowCloseObserver {
+            NotificationCenter.default.removeObserver(observer)
+            windowCloseObserver = nil
+        }
+        onColorPicked = nil
+        lastCommittedColor = nil
+    }
+    
+    deinit {
+        cleanup()
+    }
+}
+
+private extension NSColor {
+    var hexString: String? {
+        guard let rgbColor = usingColorSpace(.sRGB) else { return nil }
+        let r = Int(round(rgbColor.redComponent * 255))
+        let g = Int(round(rgbColor.greenComponent * 255))
+        let b = Int(round(rgbColor.blueComponent * 255))
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+}
+#endif

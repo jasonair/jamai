@@ -62,7 +62,13 @@ struct NodeColor: Identifiable, Equatable {
     static let allColors = palette.flatMap { $0 }
     
     static func color(for id: String) -> NodeColor? {
-        allColors.first { $0.id == id }
+        if let match = allColors.first(where: { $0.id == id }) {
+            return match
+        }
+        if id.hasPrefix("#") {
+            return NodeColor(id: id, name: "Custom", hex: id, lightHex: id)
+        }
+        return nil
     }
 }
 

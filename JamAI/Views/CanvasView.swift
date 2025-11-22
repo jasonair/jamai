@@ -195,16 +195,18 @@ struct CanvasView: View {
                         // Debounce end-of-scroll so we can restore selection
                         panDebounceTimer?.invalidate()
                         panDebounceTimer = Timer.scheduledTimer(withTimeInterval: 0.15, repeats: false) { _ in
-                            panDebounceTimer = nil
-                            viewModel.isPanning = false
+                            Task { @MainActor in
+                                panDebounceTimer = nil
+                                viewModel.isPanning = false
 
-                            if let savedId = scrollSelectedNodeId {
-                                // Only restore if nothing else has selected a node
-                                if viewModel.selectedNodeId == nil {
-                                    viewModel.selectedNodeId = savedId
+                                if let savedId = scrollSelectedNodeId {
+                                    // Only restore if nothing else has selected a node
+                                    if viewModel.selectedNodeId == nil {
+                                        viewModel.selectedNodeId = savedId
+                                    }
                                 }
+                                scrollSelectedNodeId = nil
                             }
-                            scrollSelectedNodeId = nil
                         }
                         
                         // Canvas handled this scroll (panned)
@@ -712,7 +714,7 @@ struct CanvasView: View {
             viewModel.updateEdge(edge)
         }
         
-        // Update the node last
+        // Update the node last (this will save to DB)
         viewModel.updateNode(node, immediate: true)
     }
     

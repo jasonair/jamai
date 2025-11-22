@@ -338,7 +338,7 @@ struct NodeView: View {
                                     .cornerRadius(8)
                                     .frame(maxWidth: 260)
                             }
-                            .offset(y: -6)
+                            .offset(y: -10)
                             Spacer(minLength: 0)
                         }
                         Spacer(minLength: 0)
