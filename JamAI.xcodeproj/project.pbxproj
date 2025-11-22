@@ -455,7 +455,7 @@
 				ENABLE_RESOURCE_ACCESS_USB = NO;
 				ENABLE_USER_SELECTED_FILES = readwrite;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Jam AI";
+				INFOPLIST_KEY_CFBundleDisplayName = "Jam AI (beta)";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Jam AI needs access to your microphone to transcribe voice input for AI conversations.";
@@ -465,7 +465,7 @@
 				);
 				MARKETING_VERSION = 0.1.1;
 				PRODUCT_BUNDLE_IDENTIFIER = iuxo.JamAI;
-				PRODUCT_NAME = "Jam AI";
+				PRODUCT_NAME = "Jam AI (beta)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
