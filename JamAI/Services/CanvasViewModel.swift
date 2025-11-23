@@ -180,6 +180,47 @@ class CanvasViewModel: ObservableObject {
         }
     }
 
+    func createTitleLabel(at position: CGPoint) {
+        // Defer state changes to avoid publishing during view updates
+        // Use .userInitiated QoS to match the calling context and avoid priority inversion
+        Task(priority: .userInitiated) { @MainActor in
+            let node = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                // For titles, treat x/y as the top-left of the node so the
+                // text is visually pinned to the click location.
+                x: position.x,
+                y: position.y,
+                height: 100,
+                title: "",
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: false,
+                color: "none",
+                type: .title,
+                fontSize: 80,
+                isBold: true,
+                fontFamily: nil,
+                shapeKind: nil
+            )
+            self.nodes[node.id] = node
+            self.bringToFront([node.id])
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do {
+                    try await dbActor.saveNode(node)
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save title: \(error.localizedDescription)"
+                    }
+                }
+            }
+        }
+    }
+
     func expandFromNote(noteId: UUID) {
         guard let note = nodes[noteId] else { return }
         let text = note.description.trimmingCharacters(in: .whitespacesAndNewlines)

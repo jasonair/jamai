@@ -15,7 +15,32 @@ struct TextLabelView: View {
     var body: some View {
         HStack(spacing: 8) {
             if isEditing {
-                TextField("Type here...", text: $text, axis: .vertical)
+                if node.type == .title {
+                    TextEditor(text: $text)
+                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .foregroundColor(effectiveTextColor)
+                        .scrollContentBackground(.hidden)
+                        .focused($isFocused)
+                        .frame(width: Node.titleWidth, alignment: .topLeading)
+                        .frame(minHeight: 60, alignment: .topLeading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .onChange(of: text) { _, newValue in
+                            onDescriptionEdit(newValue)
+                        }
+                        // Allow Esc to exit editing locally while still letting the
+                        // canvas-level Escape handler clear selection.
+                        .onKeyPress(.escape, phases: .down) { _ in
+                            isEditing = false
+                            isFocused = false
+                            return .ignored
+                        }
+                } else {
+                    // Regular text annotation: keep existing behavior
+                    TextField(
+                        "Type here...",
+                        text: $text,
+                        axis: .vertical
+                    )
                     .textFieldStyle(.plain)
                     .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
                     .foregroundColor(.primary)
@@ -27,19 +52,37 @@ struct TextLabelView: View {
                     .onSubmit {
                         isEditing = false
                     }
+                }
             } else {
-                Text(node.description.isEmpty ? "Double-click to edit" : node.description)
-                    .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
-                    .foregroundColor(node.description.isEmpty ? .secondary : .primary)
-                    .fixedSize(horizontal: false, vertical: false)
-                    .multilineTextAlignment(.leading)
-                    .lineLimit(nil)
-                    .frame(minWidth: 50, maxWidth: 400, alignment: .leading)
-                    .contentShape(Rectangle())
-                    .onTapGesture(count: 2) {
-                        isEditing = true
-                        isFocused = true
-                    }
+                if node.type == .title {
+                    Text(node.description.isEmpty ? "Double-click to edit" : node.description)
+                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .foregroundColor(node.description.isEmpty ? effectiveTextColor.opacity(0.6) : effectiveTextColor)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(nil)
+                        .frame(width: Node.titleWidth, alignment: .topLeading)
+                        .frame(minHeight: 60, alignment: .topLeading)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            isEditing = true
+                            isFocused = true
+                        }
+                } else {
+                    Text(node.description.isEmpty ? "Double-click to edit" : node.description)
+                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .foregroundColor(node.description.isEmpty ? .secondary : .primary)
+                        .fixedSize(horizontal: false, vertical: false)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(nil)
+                        .frame(minWidth: 50,
+                               maxWidth: 400,
+                               alignment: .leading)
+                        .contentShape(Rectangle())
+                        .onTapGesture(count: 2) {
+                            isEditing = true
+                            isFocused = true
+                        }
+                }
             }
             if isSelected && !isEditing {
                 Button(action: onDelete) {
@@ -52,9 +95,10 @@ struct TextLabelView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .frame(width: node.type == .title ? Node.titleWidth : nil, alignment: .topLeading)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
-                .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
+                .stroke(isSelected && !isEditing ? Color.accentColor : Color.clear, lineWidth: 2)
         )
         .onAppear { 
             text = node.description
@@ -72,6 +116,12 @@ struct TextLabelView: View {
         .onChange(of: isFocused) { _, focused in
             if !focused { isEditing = false }
         }
+        .onChange(of: isSelected) { _, newValue in
+            if !newValue {
+                isEditing = false
+                isFocused = false
+            }
+        }
         .onTapGesture { 
             if !isEditing {
                 onTap() 
@@ -86,6 +136,13 @@ struct TextLabelView: View {
         case "mono", "monospace", "monospaced": return .monospaced
         default: return .default
         }
+    }
+
+    private var effectiveTextColor: Color {
+        if node.type == .title, let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            return nodeColor.color
+        }
+        return .primary
     }
 }
 

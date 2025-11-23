@@ -37,7 +37,8 @@ struct NodeItemWrapper: View {
     
     var body: some View {
         Group {
-            if node.type == .text {
+            if node.type == .title {
+                // Title nodes: let width grow naturally with text
                 TextLabelView(
                     node: $node,
                     isSelected: isSelected,
@@ -45,6 +46,16 @@ struct NodeItemWrapper: View {
                     onDelete: onDelete,
                     onDescriptionEdit: onDescriptionEdit
                 )
+            } else if node.type == .text {
+                // Text annotation nodes: clamp to node.width
+                TextLabelView(
+                    node: $node,
+                    isSelected: isSelected,
+                    onTap: onTap,
+                    onDelete: onDelete,
+                    onDescriptionEdit: onDescriptionEdit
+                )
+                .frame(width: displayWidth, alignment: .topLeading)
             } else if node.type == .shape {
                 ShapeItemView(
                     node: $node,
@@ -117,7 +128,7 @@ struct NodeItemWrapper: View {
         switch node.type {
         case .shape:
             return node.height
-        case .text:
+        case .text, .title:
             return max(40, node.height)
         case .note:
             return node.height

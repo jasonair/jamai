@@ -23,6 +23,7 @@ enum NodeType: String, Codable, Sendable {
     case standard
     case note
     case text
+    case title
     case shape
     case image
 }
@@ -243,6 +244,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
 extension Node {
     nonisolated static let nodeWidth: CGFloat = 420 // Same width for both collapsed and expanded
     nonisolated static let noteWidth: CGFloat = 350 // Note default width
+    nonisolated static let titleWidth: CGFloat = 1400
     nonisolated static let textWidth: CGFloat = 200
     nonisolated static let shapeWidth: CGFloat = 160
     nonisolated static let collapsedHeight: CGFloat = 672 // Same as expanded height - nodes stay at 420x672
@@ -262,6 +264,7 @@ extension Node {
     nonisolated static func width(for type: NodeType) -> CGFloat {
         switch type {
         case .note: return noteWidth
+        case .title: return titleWidth
         case .text: return textWidth
         case .shape: return shapeWidth
         case .image: return 300 // Default image width

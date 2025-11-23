@@ -247,6 +247,10 @@ struct CanvasView: View {
                     let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
                     viewModel.createFreeformNote(at: canvasPos)
                 }
+                Button("New Title Here") {
+                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
+                    viewModel.createTitleLabel(at: canvasPos)
+                }
             }
             .simultaneousGesture(
                 DragGesture(minimumDistance: 5)
@@ -602,7 +606,7 @@ struct CanvasView: View {
 
     private var formattingBinding: Binding<Node>? {
         guard let id = viewModel.selectedNodeId, let node = viewModel.nodes[id] else { return nil }
-        guard node.type == .text else { return nil }
+        guard node.type == .text || node.type == .title else { return nil }
         return binding(for: id)
     }
 
@@ -846,8 +850,10 @@ extension View {
     func canvasKeyboardHandlers(_ viewModel: CanvasViewModel) -> some View {
         self
             .onKeyPress(.escape) {
-                viewModel.selectedTool = .select
-                viewModel.selectedNodeId = nil
+                Task { @MainActor in
+                    viewModel.selectedTool = .select
+                    viewModel.selectedNodeId = nil
+                }
                 return .handled
             }
             .onKeyPress("n") {
@@ -873,8 +879,10 @@ extension View {
                 // Adjust for node size so it appears centered
                 let nodeX = canvasCenterX - Node.nodeWidth / 2
                 let nodeY = canvasCenterY - Node.expandedHeight / 2
-                
-                viewModel.createNode(at: CGPoint(x: nodeX, y: nodeY))
+
+                Task { @MainActor in
+                    viewModel.createNode(at: CGPoint(x: nodeX, y: nodeY))
+                }
                 return .handled
             }
             // Undo/Redo through key events - alternative approach
