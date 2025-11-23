@@ -199,7 +199,7 @@ class CanvasViewModel: ObservableObject {
                 isExpanded: false,
                 color: "none",
                 type: .title,
-                fontSize: 80,
+                fontSize: 48,
                 isBold: true,
                 fontFamily: nil,
                 shapeKind: nil
@@ -404,7 +404,7 @@ class CanvasViewModel: ObservableObject {
                 isExpanded: false,
                 color: "none",
                 type: .text,
-                fontSize: 24,
+                fontSize: 18,
                 isBold: false,
                 fontFamily: nil,
                 shapeKind: nil

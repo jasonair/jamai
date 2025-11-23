@@ -244,7 +244,7 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
 extension Node {
     nonisolated static let nodeWidth: CGFloat = 420 // Same width for both collapsed and expanded
     nonisolated static let noteWidth: CGFloat = 350 // Note default width
-    nonisolated static let titleWidth: CGFloat = 1400
+    nonisolated static let titleWidth: CGFloat = 700
     nonisolated static let textWidth: CGFloat = 200
     nonisolated static let shapeWidth: CGFloat = 160
     nonisolated static let collapsedHeight: CGFloat = 672 // Same as expanded height - nodes stay at 420x672

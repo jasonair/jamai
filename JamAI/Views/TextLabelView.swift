@@ -17,7 +17,7 @@ struct TextLabelView: View {
             if isEditing {
                 if node.type == .title {
                     TextEditor(text: $text)
-                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .font(effectiveFont)
                         .foregroundColor(effectiveTextColor)
                         .scrollContentBackground(.hidden)
                         .focused($isFocused)
@@ -42,7 +42,7 @@ struct TextLabelView: View {
                         axis: .vertical
                     )
                     .textFieldStyle(.plain)
-                    .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                    .font(effectiveFont)
                     .foregroundColor(.primary)
                     .focused($isFocused)
                     .lineLimit(1...10)
@@ -56,7 +56,7 @@ struct TextLabelView: View {
             } else {
                 if node.type == .title {
                     Text(node.description.isEmpty ? "Double-click to edit" : node.description)
-                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .font(effectiveFont)
                         .foregroundColor(node.description.isEmpty ? effectiveTextColor.opacity(0.6) : effectiveTextColor)
                         .multilineTextAlignment(.leading)
                         .lineLimit(nil)
@@ -69,7 +69,7 @@ struct TextLabelView: View {
                         }
                 } else {
                     Text(node.description.isEmpty ? "Double-click to edit" : node.description)
-                        .font(.system(size: node.fontSize, weight: node.isBold ? .bold : .regular, design: fontDesign))
+                        .font(effectiveFont)
                         .foregroundColor(node.description.isEmpty ? .secondary : .primary)
                         .fixedSize(horizontal: false, vertical: false)
                         .multilineTextAlignment(.leading)
@@ -128,13 +128,24 @@ struct TextLabelView: View {
             }
         }
     }
-    
+    private var effectiveFont: Font {
+        let size = node.fontSize
+        let isBold = node.isBold
+        let family = node.fontFamily?.lowercased()
 
-    private var fontDesign: Font.Design {
-        switch node.fontFamily?.lowercased() {
-        case "serif": return .serif
-        case "mono", "monospace", "monospaced": return .monospaced
-        default: return .default
+        switch family {
+        case "serif":
+            return .system(size: size, weight: isBold ? .bold : .regular, design: .serif)
+        case "rounded":
+            return .system(size: size, weight: isBold ? .bold : .regular, design: .rounded)
+        case "mono", "monospace", "monospaced":
+            return .system(size: size, weight: isBold ? .bold : .regular, design: .monospaced)
+        case "handwriting-noteworthy":
+            return .custom("Noteworthy", size: size)
+        case "handwriting-marker":
+            return .custom("Marker Felt", size: size)
+        default:
+            return .system(size: size, weight: isBold ? .bold : .regular, design: .default)
         }
     }
 
