@@ -9,8 +9,10 @@ import SwiftUI
 
 struct BackgroundToggleView: View {
     @Binding var backgroundStyle: CanvasBackgroundStyle
+    @Binding var backgroundColorId: String?
     
     @Environment(\.colorScheme) var colorScheme
+    @State private var showColorPicker = false
     
     var body: some View {
         HStack(spacing: 8) {
@@ -58,11 +60,52 @@ struct BackgroundToggleView: View {
             }
             .buttonStyle(PlainButtonStyle())
             .help("Grid Background")
+            
+            // Color button (washed-out canvas tint)
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showColorPicker = true
+                }
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(colorPreview)
+                        .frame(width: 18, height: 18)
+                    Circle()
+                        .strokeBorder(Color.secondary.opacity(0.6), lineWidth: 1)
+                        .frame(width: 20, height: 20)
+                }
+                .frame(width: 28, height: 28)
+                .background(backgroundColorId != nil ? Color.accentColor.opacity(0.16) : Color.clear)
+                .cornerRadius(6)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Colored Background")
+            .popover(isPresented: $showColorPicker) {
+                ColorPickerPopover(selectedColorId: backgroundColorId ?? "none") { newId in
+                    if newId == "none" {
+                        backgroundColorId = nil
+                    } else {
+                        backgroundColorId = newId
+                    }
+                }
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(8)
         .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
+    }
+    
+    private var colorPreview: Color {
+        guard let id = backgroundColorId, let nodeColor = NodeColor.color(for: id) else {
+            return Color.gray.opacity(0.3)
+        }
+        if colorScheme == .dark {
+            return nodeColor.color.opacity(0.6)
+        } else {
+            return nodeColor.lightVariant
+        }
     }
 }

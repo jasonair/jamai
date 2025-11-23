@@ -96,6 +96,7 @@ final class Database: Sendable {
                 t.column("canvas_zoom", .double).notNull().defaults(to: 1.0)
                 t.column("show_dots", .boolean).notNull().defaults(to: true)
                 t.column("background_style", .text).notNull().defaults(to: "grid")
+                t.column("background_color_id", .text)
                 t.column("created_at", .datetime).notNull()
                 t.column("updated_at", .datetime).notNull()
             }
@@ -172,6 +173,13 @@ final class Database: Sendable {
             if try db.columns(in: "projects").first(where: { $0.name == "background_style" }) == nil {
                 try db.alter(table: "projects") { t in
                     t.add(column: "background_style", .text).notNull().defaults(to: "grid")
+                }
+            }
+            
+            // Add background_color_id column if it doesn't exist (migration)
+            if try db.columns(in: "projects").first(where: { $0.name == "background_color_id" }) == nil {
+                try db.alter(table: "projects") { t in
+                    t.add(column: "background_color_id", .text)
                 }
             }
             
@@ -285,8 +293,8 @@ final class Database: Sendable {
             try db.execute(
                 sql: """
                 INSERT OR REPLACE INTO projects 
-                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, canvas_offset_x, canvas_offset_y, canvas_zoom, show_dots, background_style, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, name, system_prompt, k_turns, include_summaries, include_rag, rag_k, rag_max_chars, appearance_mode, canvas_offset_x, canvas_offset_y, canvas_zoom, show_dots, background_style, background_color_id, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     project.id.uuidString,
@@ -303,6 +311,7 @@ final class Database: Sendable {
                     project.canvasZoom,
                     project.showDots,
                     project.backgroundStyle.rawValue,
+                    project.backgroundColorId,
                     project.createdAt,
                     project.updatedAt
                 ]
@@ -320,18 +329,26 @@ final class Database: Sendable {
             
             let showDots: Bool = row["show_dots"] ?? true
             let backgroundStyle: CanvasBackgroundStyle
-            if let raw: String = row["background_style"], let parsed = CanvasBackgroundStyle(rawValue: raw) {
-                // If the DB was migrated from a version that only had show_dots,
-                // the new background_style column will default to "grid". In that
-                // case, preserve the user's dots preference.
-                if raw == "grid" && showDots {
-                    backgroundStyle = .dots
+            if let raw: String = row["background_style"] {
+                if raw == "color" {
+                    // Legacy dedicated color mode now maps to blank pattern + tint
+                    backgroundStyle = .blank
+                } else if let parsed = CanvasBackgroundStyle(rawValue: raw) {
+                    // If the DB was migrated from a version that only had show_dots,
+                    // the new background_style column will default to "grid". In that
+                    // case, preserve the user's dots preference.
+                    if raw == "grid" && showDots {
+                        backgroundStyle = .dots
+                    } else {
+                        backgroundStyle = parsed
+                    }
                 } else {
-                    backgroundStyle = parsed
+                    backgroundStyle = showDots ? .dots : .grid
                 }
             } else {
                 backgroundStyle = showDots ? .dots : .grid
             }
+            let backgroundColorId: String? = row["background_color_id"]
             
             return Project(
                 id: UUID(uuidString: row["id"])!,
@@ -347,7 +364,8 @@ final class Database: Sendable {
                 canvasOffsetY: row["canvas_offset_y"] ?? 0,
                 canvasZoom: row["canvas_zoom"] ?? 1.0,
                 showDots: showDots,
-                backgroundStyle: backgroundStyle
+                backgroundStyle: backgroundStyle,
+                backgroundColorId: backgroundColorId
             )
         }
     }
@@ -362,15 +380,22 @@ final class Database: Sendable {
             
             let showDots: Bool = row["show_dots"] ?? true
             let backgroundStyle: CanvasBackgroundStyle
-            if let raw: String = row["background_style"], let parsed = CanvasBackgroundStyle(rawValue: raw) {
-                if raw == "grid" && showDots {
-                    backgroundStyle = .dots
+            if let raw: String = row["background_style"] {
+                if raw == "color" {
+                    backgroundStyle = .blank
+                } else if let parsed = CanvasBackgroundStyle(rawValue: raw) {
+                    if raw == "grid" && showDots {
+                        backgroundStyle = .dots
+                    } else {
+                        backgroundStyle = parsed
+                    }
                 } else {
-                    backgroundStyle = parsed
+                    backgroundStyle = showDots ? .dots : .grid
                 }
             } else {
                 backgroundStyle = showDots ? .dots : .grid
             }
+            let backgroundColorId: String? = row["background_color_id"]
             
             return Project(
                 id: UUID(uuidString: row["id"])!,
@@ -386,7 +411,8 @@ final class Database: Sendable {
                 canvasOffsetY: row["canvas_offset_y"] ?? 0,
                 canvasZoom: row["canvas_zoom"] ?? 1.0,
                 showDots: showDots,
-                backgroundStyle: backgroundStyle
+                backgroundStyle: backgroundStyle,
+                backgroundColorId: backgroundColorId
             )
         }
     }

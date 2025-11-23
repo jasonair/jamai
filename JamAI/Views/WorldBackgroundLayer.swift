@@ -70,7 +70,7 @@ struct WorldBackgroundLayer: View, Equatable {
                     context.stroke(path, with: .color(gridColor), lineWidth: lineWidth)
                     y += scaledSpacing
                 }
-            case .blank:
+            case .blank, .color:
                 // Intentionally draw nothing for a clean canvas background
                 break
             }

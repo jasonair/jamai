@@ -519,10 +519,16 @@ struct CanvasView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    BackgroundToggleView(backgroundStyle: Binding(
-                        get: { viewModel.backgroundStyle },
-                        set: { viewModel.backgroundStyle = $0 }
-                    ))
+                    BackgroundToggleView(
+                        backgroundStyle: Binding(
+                            get: { viewModel.backgroundStyle },
+                            set: { viewModel.backgroundStyle = $0 }
+                        ),
+                        backgroundColorId: Binding(
+                            get: { viewModel.backgroundColorId },
+                            set: { viewModel.backgroundColorId = $0 }
+                        )
+                    )
                     .padding(.trailing, 20)
                     .padding(.bottom, 20)
                 }
@@ -849,9 +855,25 @@ struct CanvasView: View {
     // MARK: - Styling
     
     private var canvasBackground: Color {
-        colorScheme == .dark
-            ? Color(nsColor: .windowBackgroundColor)
-            : Color(white: 0.95)
+        // Base neutral background
+        let baseDark = Color(nsColor: .windowBackgroundColor)
+        let baseLight = Color(white: 0.95)
+        let base = (colorScheme == .dark) ? baseDark : baseLight
+        
+        // Optional tint from the background color selector, applied on top of
+        // whichever pattern is active (blank / dots / grid).
+        if let id = viewModel.backgroundColorId,
+           let nodeColor = NodeColor.color(for: id) {
+            if colorScheme == .dark {
+                // Stronger but still subtle tint in dark mode
+                return nodeColor.color.opacity(0.45)
+            } else {
+                // Use the lightVariant directly in light mode for a clear but soft wash
+                return nodeColor.lightVariant
+            }
+        }
+        
+        return base
     }
     
     

@@ -301,6 +301,10 @@ struct JamAIApp: App {
                             vm.backgroundStyle = .grid
                         case .grid:
                             vm.backgroundStyle = .blank
+                        case .color:
+                            // When in colored mode, treat Cmd+G as returning to the
+                            // normal cycle starting point (blank).
+                            vm.backgroundStyle = .blank
                         }
                     }
                 }

@@ -31,6 +31,7 @@ class CanvasViewModel: ObservableObject {
             showDots = (backgroundStyle == .dots)
         }
     }
+    @Published var backgroundColorId: String? = nil
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
     @Published var isZooming: Bool = false // true during active zoom gesture for performance optimization
@@ -273,6 +274,7 @@ class CanvasViewModel: ObservableObject {
             offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)
             zoom = project.canvasZoom
             backgroundStyle = project.backgroundStyle
+            backgroundColorId = project.backgroundColorId
             showDots = (backgroundStyle == .dots)
             
             // Force edge refresh to ensure wires render correctly on load
@@ -1929,6 +1931,7 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
         project.backgroundStyle = backgroundStyle
+        project.backgroundColorId = backgroundColorId
         project.showDots = (backgroundStyle == .dots)
         
         let snapshotProject = project
@@ -1957,6 +1960,7 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
         project.backgroundStyle = backgroundStyle
+        project.backgroundColorId = backgroundColorId
         project.showDots = (backgroundStyle == .dots)
         let snapshotProject = project
         let snapshotNodes = Array(nodes.values)
