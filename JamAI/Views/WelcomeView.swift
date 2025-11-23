@@ -144,12 +144,21 @@ struct WelcomeView: View {
     
     private func openExistingProject() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = []
-        panel.allowsOtherFileTypes = true
+        // Allow selecting .jam project bundles (packages) as either files or directories
+        if let jamType = UTType(Config.jamUTType) {
+            panel.allowedContentTypes = [jamType]
+            panel.allowsOtherFileTypes = false
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+        } else {
+            // Fallback: allow any item, still permitting .jam bundles
+            panel.allowedContentTypes = []
+            panel.allowsOtherFileTypes = true
+            panel.canChooseFiles = true
+            panel.canChooseDirectories = true
+        }
         panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.message = "Select a Jam AI project folder (.jam)"
+        panel.message = "Select a Jam AI project (.jam)"
         
         panel.begin { [weak appState] response in
             guard let appState = appState else { return }

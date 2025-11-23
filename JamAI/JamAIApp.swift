@@ -43,7 +43,7 @@ struct UndoStateObserver: View {
 @main
 struct JamAIApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var appState = AppState()
+    @StateObject private var appState = AppState.shared
     @StateObject private var authService = FirebaseAuthService.shared
     @StateObject private var dataService = FirebaseDataService.shared
     @StateObject private var updateManager = SparkleUpdateManager()
@@ -333,6 +333,8 @@ struct JamAIApp: App {
 
 @MainActor
 class AppState: ObservableObject {
+    static let shared = AppState()
+
     // Multi-tab support
     @Published var tabs: [ProjectTab] = []
     @Published var activeTabId: UUID?
@@ -713,13 +715,20 @@ class AppState: ObservableObject {
             guard let self = self else { return }
             
             let panel = NSOpenPanel()
-            // Use the exact same configuration and presentation as WelcomeView.openExistingProject()
-            panel.allowedContentTypes = []
-            panel.allowsOtherFileTypes = true
+            // Mirror WelcomeView.openExistingProject() so .jam bundles are selectable
+            if let jamType = UTType(Config.jamUTType) {
+                panel.allowedContentTypes = [jamType]
+                panel.allowsOtherFileTypes = false
+                panel.canChooseFiles = true
+                panel.canChooseDirectories = true
+            } else {
+                panel.allowedContentTypes = []
+                panel.allowsOtherFileTypes = true
+                panel.canChooseFiles = true
+                panel.canChooseDirectories = true
+            }
             panel.allowsMultipleSelection = false
-            panel.canChooseDirectories = true
-            panel.canChooseFiles = false
-            panel.message = "Select a Jam AI project folder (.jam)"
+            panel.message = "Select a Jam AI project (.jam)"
             
             let handler: (NSApplication.ModalResponse) -> Void = { [weak self] response in
                 guard let self = self else { return }

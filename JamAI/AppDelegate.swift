@@ -15,6 +15,12 @@ import SwiftUI
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var modalMouseBlocker: Any?
     
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            AppState.shared.openProjectInNewTab(url: url)
+        }
+    }
+    
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Install a local monitor for mouse-related events. This runs
         // before normal event dispatch, so we can consume events for
