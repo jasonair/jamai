@@ -116,16 +116,30 @@ struct JamAIApp: App {
                     
                     // Tab bar overlay (top layer with high z-index)
                     VStack(spacing: 0) {
-                        TabBarView(
-                            tabs: appState.tabs,
-                            activeTabId: appState.activeTabId,
-                            onTabSelect: { tabId in
-                                appState.selectTab(tabId)
-                            },
-                            onTabClose: { tabId in
-                                appState.closeTab(tabId)
+                        HStack(spacing: 8) {
+                            TabBarView(
+                                tabs: appState.tabs,
+                                activeTabId: appState.activeTabId,
+                                onTabSelect: { tabId in
+                                    appState.selectTab(tabId)
+                                },
+                                onTabClose: { tabId in
+                                    appState.closeTab(tabId)
+                                }
+                            )
+                            
+                            Spacer()
+                            
+                            if updateManager.updateReadyToInstall {
+                                Button("Restart to update") {
+                                    // Sparkle will detect the already-downloaded update and run the installer / relaunch
+                                    updateManager.checkForUpdates()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .controlSize(.small)
+                                .padding(.trailing, 8)
                             }
-                        )
+                        }
                         
                         Divider()
                         

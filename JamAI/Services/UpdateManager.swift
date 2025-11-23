@@ -10,20 +10,25 @@ protocol UpdateManaging: AnyObject {
 
 final class SparkleUpdateManager: NSObject, ObservableObject, UpdateManaging {
     let objectWillChange = ObservableObjectPublisher()
+    @Published var updateReadyToInstall = false
+    
     #if canImport(Sparkle)
-    private let updaterController: SPUStandardUpdaterController
+    private lazy var updaterController: SPUStandardUpdaterController = {
+        let controller = SPUStandardUpdaterController(startingUpdater: true,
+                                                      updaterDelegate: self,
+                                                      userDriverDelegate: nil)
+        controller.updater.automaticallyChecksForUpdates = true
+        controller.updater.automaticallyDownloadsUpdates = true
+        controller.updater.checkForUpdatesInBackground()
+        return controller
+    }()
     #endif
 
     override init() {
-        #if canImport(Sparkle)
-        self.updaterController = SPUStandardUpdaterController(startingUpdater: true,
-                                                              updaterDelegate: nil,
-                                                              userDriverDelegate: nil)
-        // Enable automatic background checks and downloads for future versions
-        self.updaterController.updater.automaticallyChecksForUpdates = true
-        self.updaterController.updater.automaticallyDownloadsUpdates = true
-        #endif
         super.init()
+        #if canImport(Sparkle)
+        _ = updaterController
+        #endif
     }
 
     func checkForUpdates() {
@@ -32,3 +37,15 @@ final class SparkleUpdateManager: NSObject, ObservableObject, UpdateManaging {
         #endif
     }
 }
+
+#if canImport(Sparkle)
+extension SparkleUpdateManager: SPUUpdaterDelegate {
+    func updater(_ updater: SPUUpdater, didDownloadUpdate item: SUAppcastItem) {
+        // Once Sparkle finishes downloading an update, flip the flag so the UI can show
+        // a prominent "Restart to update" button in the top bar.
+        DispatchQueue.main.async {
+            self.updateReadyToInstall = true
+        }
+    }
+}
+#endif
