@@ -29,6 +29,7 @@ struct Project: Identifiable, Codable, Sendable {
     var canvasOffsetY: Double
     var canvasZoom: Double
     var showDots: Bool
+    var backgroundStyle: CanvasBackgroundStyle
     
     nonisolated init(
         id: UUID = UUID(),
@@ -43,7 +44,8 @@ struct Project: Identifiable, Codable, Sendable {
         canvasOffsetX: Double = 0,
         canvasOffsetY: Double = 0,
         canvasZoom: Double = 1.0,
-        showDots: Bool = false
+        showDots: Bool = false,
+        backgroundStyle: CanvasBackgroundStyle? = .blank
     ) {
         self.id = id
         self.name = name
@@ -58,6 +60,11 @@ struct Project: Identifiable, Codable, Sendable {
         self.canvasOffsetY = canvasOffsetY
         self.canvasZoom = canvasZoom
         self.showDots = showDots
+        if let style = backgroundStyle {
+            self.backgroundStyle = style
+        } else {
+            self.backgroundStyle = showDots ? .dots : .grid
+        }
         self.createdAt = Date()
         self.updatedAt = Date()
     }
@@ -67,6 +74,12 @@ enum AppearanceMode: String, Codable, CaseIterable, Sendable {
     case system = "System Auto"
     case light = "Light"
     case dark = "Dark"
+}
+
+enum CanvasBackgroundStyle: String, Codable, CaseIterable, Sendable {
+    case grid
+    case dots
+    case blank
 }
 
 // MARK: - RAG Document

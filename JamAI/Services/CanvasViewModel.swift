@@ -26,6 +26,11 @@ class CanvasViewModel: ObservableObject {
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
     @Published var showDots: Bool = false
+    @Published var backgroundStyle: CanvasBackgroundStyle = .blank {
+        didSet {
+            showDots = (backgroundStyle == .dots)
+        }
+    }
     @Published var positionsVersion: Int = 0 // increment to force connector refresh
     @Published var isNavigating: Bool = false // true during animated navigation
     @Published var isZooming: Bool = false // true during active zoom gesture for performance optimization
@@ -267,7 +272,8 @@ class CanvasViewModel: ObservableObject {
             // Restore canvas view state
             offset = CGSize(width: project.canvasOffsetX, height: project.canvasOffsetY)
             zoom = project.canvasZoom
-            showDots = project.showDots
+            backgroundStyle = project.backgroundStyle
+            showDots = (backgroundStyle == .dots)
             
             // Force edge refresh to ensure wires render correctly on load
             positionsVersion += 1
@@ -1922,7 +1928,8 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
         project.canvasOffsetX = offset.width
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
-        project.showDots = showDots
+        project.backgroundStyle = backgroundStyle
+        project.showDots = (backgroundStyle == .dots)
         
         let snapshotProject = project
         let snapshotNodes = Array(nodes.values)
@@ -1949,7 +1956,8 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
         project.canvasOffsetX = offset.width
         project.canvasOffsetY = offset.height
         project.canvasZoom = zoom
-        project.showDots = showDots
+        project.backgroundStyle = backgroundStyle
+        project.showDots = (backgroundStyle == .dots)
         let snapshotProject = project
         let snapshotNodes = Array(nodes.values)
         let snapshotEdges = Array(edges.values)

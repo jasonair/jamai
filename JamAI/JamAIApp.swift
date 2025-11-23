@@ -292,9 +292,16 @@ struct JamAIApp: App {
                 
                 Divider()
                 
-                Button("Toggle Grid") {
+                Button("Toggle Background Style") {
                     if let vm = appState.viewModel {
-                        vm.showDots.toggle()
+                        switch vm.backgroundStyle {
+                        case .blank:
+                            vm.backgroundStyle = .dots
+                        case .dots:
+                            vm.backgroundStyle = .grid
+                        case .grid:
+                            vm.backgroundStyle = .blank
+                        }
                     }
                 }
                 .keyboardShortcut("g", modifiers: .command)

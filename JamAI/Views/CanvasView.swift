@@ -393,9 +393,9 @@ struct CanvasView: View {
             WorldBackgroundLayer(
                 zoom: currentZoom,
                 offset: currentOffset,
-                showDots: viewModel.showDots
+                style: viewModel.backgroundStyle
             )
-            .equatable()  // Only redraws when zoom/offset/showDots change
+            .equatable()  // Only redraws when zoom/offset/style change
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Edges - transformed the same way as nodes
@@ -519,9 +519,9 @@ struct CanvasView: View {
                 Spacer()
                 HStack {
                     Spacer()
-                    BackgroundToggleView(showDots: Binding(
-                        get: { viewModel.showDots },
-                        set: { viewModel.showDots = $0 }
+                    BackgroundToggleView(backgroundStyle: Binding(
+                        get: { viewModel.backgroundStyle },
+                        set: { viewModel.backgroundStyle = $0 }
                     ))
                     .padding(.trailing, 20)
                     .padding(.bottom, 20)
