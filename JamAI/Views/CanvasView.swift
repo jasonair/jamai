@@ -30,6 +30,7 @@ struct CanvasView: View {
     @State private var draggedNodeId: UUID? = nil
     @State private var dragStartPosition: CGPoint = .zero
     @State private var mouseLocation: CGPoint = .zero
+    @State private var contextMenuLocation: CGPoint? = nil
     @State private var isResizingActive: Bool = false
     @State private var showOutline: Bool = false
     @State private var viewportSize: CGSize = .zero
@@ -214,6 +215,11 @@ struct CanvasView: View {
                     },
                     onCommandClose: {
                         onCommandClose?()
+                    },
+                    onRightClick: { point in
+                        // Ignore right-clicks when a modal is open
+                        guard !modalCoordinator.isModalPresented else { return }
+                        contextMenuLocation = point
                     }
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -226,6 +232,9 @@ struct CanvasView: View {
                 // Completely block if modal is presented
                 guard !modalCoordinator.isModalPresented else { return }
                 
+                // Dismiss custom context menu on tap
+                contextMenuLocation = nil
+
                 // Place annotation if a tool is active; otherwise deselect
                 switch viewModel.selectedTool {
                 case .text:
@@ -235,21 +244,6 @@ struct CanvasView: View {
                 case .select:
                     viewModel.selectedNodeId = nil
                     scrollSelectedNodeId = nil
-                }
-            }
-            .contextMenu {
-                let clickLocation = mouseLocation
-                Button("New Chat Here") {
-                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
-                    viewModel.createNode(at: canvasPos)
-                }
-                Button("New Note Here") {
-                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
-                    viewModel.createFreeformNote(at: canvasPos)
-                }
-                Button("New Title Here") {
-                    let canvasPos = screenToCanvas(clickLocation, in: geometry.size)
-                    viewModel.createTitleLabel(at: canvasPos)
                 }
             }
             .simultaneousGesture(
@@ -432,6 +426,30 @@ struct CanvasView: View {
             
             // Toolbar overlay
             overlayControls
+
+            // Custom right-click canvas menu
+            if let menuPoint = contextMenuLocation, !modalCoordinator.isModalPresented {
+                CanvasContextMenu(
+                    onCreateChat: {
+                        let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
+                        viewModel.createNode(at: canvasPos)
+                        contextMenuLocation = nil
+                    },
+                    onCreateNote: {
+                        let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
+                        viewModel.createFreeformNote(at: canvasPos)
+                        contextMenuLocation = nil
+                    },
+                    onCreateTitle: {
+                        let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
+                        viewModel.createTitleLabel(at: canvasPos)
+                        contextMenuLocation = nil
+                    }
+                )
+                .position(menuPoint)
+                .zIndex(50)
+                .transition(.scale.combined(with: .opacity))
+            }
             
             // Outline
             VStack(alignment: .leading) {

@@ -17,6 +17,7 @@ struct MouseTrackingView: NSViewRepresentable {
     // let the normal NSResponder chain handle it (e.g. node ScrollViews).
     var onScroll: ((CGFloat, CGFloat) -> Bool)? = nil
     var onCommandClose: (() -> Void)? = nil
+    var onRightClick: ((CGPoint) -> Void)? = nil
     
     func makeNSView(context: Context) -> TrackingNSView {
         let v = TrackingNSView()
@@ -26,6 +27,7 @@ struct MouseTrackingView: NSViewRepresentable {
         }
         v.onScroll = { dx, dy in self.onScroll?(dx, dy) ?? false }
         v.onCommandClose = self.onCommandClose
+        v.onRightClick = self.onRightClick
         v.hasSelectedNode = self.hasSelectedNode
         v.hasOpenModal = self.hasOpenModal
         return v
@@ -35,6 +37,7 @@ struct MouseTrackingView: NSViewRepresentable {
         nsView.onMove = { p in DispatchQueue.main.async { self.position = p } }
         nsView.onScroll = { dx, dy in self.onScroll?(dx, dy) ?? false }
         nsView.onCommandClose = self.onCommandClose
+        nsView.onRightClick = self.onRightClick
         nsView.hasSelectedNode = self.hasSelectedNode
         nsView.hasOpenModal = self.hasOpenModal
     }
@@ -45,6 +48,7 @@ struct MouseTrackingView: NSViewRepresentable {
         // Returns true if the scroll event was handled by the canvas.
         var onScroll: ((CGFloat, CGFloat) -> Bool)?
         var onCommandClose: (() -> Void)?
+        var onRightClick: ((CGPoint) -> Void)?
         var hasSelectedNode: Bool = false
         var hasOpenModal: Bool = false
         private var localMonitor: Any?
@@ -64,29 +68,55 @@ struct MouseTrackingView: NSViewRepresentable {
             let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
             onMove?(flipped)
         }
+
+        override func rightMouseDown(with event: NSEvent) {
+            let p = convert(event.locationInWindow, from: nil)
+            let flipped = CGPoint(x: p.x, y: bounds.height - p.y)
+            onRightClick?(flipped)
+        }
         
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
             if let monitor = localMonitor { NSEvent.removeMonitor(monitor); localMonitor = nil }
             if let k = keyMonitor { NSEvent.removeMonitor(k); keyMonitor = nil }
             guard window != nil else { return }
-            localMonitor = NSEvent.addLocalMonitorForEvents(matching: .scrollWheel) { [weak self] event in
+            localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.scrollWheel, .rightMouseDown]) { [weak self] event in
                 guard let self else { return event }
                 
-                // If a modal is open, pass all scroll events to it
-                if self.hasOpenModal {
+                switch event.type {
+                case .scrollWheel:
+                    // If a modal is open, pass all scroll events to it
+                    if self.hasOpenModal {
+                        return event
+                    }
+                    
+                    // Forward scroll deltas to SwiftUI. If the handler returns true,
+                    // the canvas consumed the event (pan). Otherwise, let the normal
+                    // NSResponder chain handle it so node-internal scrolling works.
+                    if let handler = self.onScroll {
+                        let handled = handler(event.scrollingDeltaX, event.scrollingDeltaY)
+                        return handled ? nil : event
+                    }
+                    return event
+                case .rightMouseDown:
+                    // Only trigger right-click handler when no modal is open.
+                    if self.hasOpenModal {
+                        return event
+                    }
+                    
+                    if let onRightClick = self.onRightClick {
+                        let locationInWindow = event.locationInWindow
+                        let local = self.convert(locationInWindow, from: nil)
+                        if self.bounds.contains(local) {
+                            let flipped = CGPoint(x: local.x, y: self.bounds.height - local.y)
+                            onRightClick(flipped)
+                        }
+                    }
+                    // Do not swallow; allow other views/menus to respond too.
+                    return event
+                default:
                     return event
                 }
-                
-                // Forward scroll deltas to SwiftUI. If the handler returns true,
-                // the canvas consumed the event (pan). Otherwise, let the normal
-                // NSResponder chain handle it so node-internal scrolling works.
-                if let handler = self.onScroll {
-                    let handled = handler(event.scrollingDeltaX, event.scrollingDeltaY)
-                    return handled ? nil : event
-                }
-                
-                return event
             }
             keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
                 guard let self else { return event }
