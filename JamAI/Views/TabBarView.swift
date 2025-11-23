@@ -28,7 +28,6 @@ struct TabBarView: View {
             .padding(.horizontal, 8)
         }
         .frame(height: 36)
-        .background(Color(nsColor: .windowBackgroundColor))
     }
 }
 

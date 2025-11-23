@@ -140,6 +140,8 @@ struct JamAIApp: App {
                                 .padding(.trailing, 8)
                             }
                         }
+                        .frame(height: 36)
+                        .background(Color(nsColor: .windowBackgroundColor))
                         
                         Divider()
                         
