@@ -442,7 +442,7 @@
 				CODE_SIGN_ENTITLEMENTS = JamAI/JamAI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = HAJZ43DHY8;
 				ENABLE_APP_SANDBOX = YES;
@@ -469,7 +469,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = iuxo.JamAI;
 				PRODUCT_NAME = "Jam AI (beta)";
 				REGISTER_APP_GROUPS = YES;
@@ -490,7 +490,7 @@
 				CODE_SIGN_ENTITLEMENTS = JamAI/JamAI.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 5;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = HAJZ43DHY8;
 				ENABLE_APP_SANDBOX = YES;
@@ -517,7 +517,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.1.4;
+				MARKETING_VERSION = 0.1.5;
 				PRODUCT_BUNDLE_IDENTIFIER = iuxo.JamAI;
 				PRODUCT_NAME = "Jam AI";
 				REGISTER_APP_GROUPS = YES;

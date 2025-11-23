@@ -21,7 +21,7 @@ struct TextLabelView: View {
                         .foregroundColor(effectiveTextColor)
                         .scrollContentBackground(.hidden)
                         .focused($isFocused)
-                        .frame(width: Node.titleWidth, alignment: .topLeading)
+                        .frame(width: node.width, alignment: .topLeading)
                         .frame(minHeight: 60, alignment: .topLeading)
                         .fixedSize(horizontal: false, vertical: true)
                         .onChange(of: text) { _, newValue in
@@ -60,7 +60,7 @@ struct TextLabelView: View {
                         .foregroundColor(node.description.isEmpty ? effectiveTextColor.opacity(0.6) : effectiveTextColor)
                         .multilineTextAlignment(.leading)
                         .lineLimit(nil)
-                        .frame(width: Node.titleWidth, alignment: .topLeading)
+                        .frame(width: node.width, alignment: .topLeading)
                         .frame(minHeight: 60, alignment: .topLeading)
                         .contentShape(Rectangle())
                         .onTapGesture(count: 2) {
@@ -95,7 +95,7 @@ struct TextLabelView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .frame(width: node.type == .title ? Node.titleWidth : nil, alignment: .topLeading)
+        .frame(width: node.type == .title ? node.width : nil, alignment: .topLeading)
         .overlay(
             RoundedRectangle(cornerRadius: 6)
                 .stroke(isSelected && !isEditing ? Color.accentColor : Color.clear, lineWidth: 2)

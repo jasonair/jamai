@@ -34,18 +34,31 @@ struct NodeItemWrapper: View {
     let onTeamMemberChange: (TeamMember?) -> Void
     @State private var isResizingActive: Bool = false
     @State private var resizeCompensation: CGSize = .zero
+    @State private var isTitleResizing: Bool = false
+    @State private var titleResizeStartWidth: CGFloat = 0
+    @State private var titleResizeStartHeight: CGFloat = 0
+    @State private var titleDraggedWidth: CGFloat = 0
+    @State private var titleDraggedHeight: CGFloat = 0
+    @State private var titleDragStartLocation: CGPoint = .zero
     
     var body: some View {
         Group {
             if node.type == .title {
-                // Title nodes: let width grow naturally with text
-                TextLabelView(
-                    node: $node,
-                    isSelected: isSelected,
-                    onTap: onTap,
-                    onDelete: onDelete,
-                    onDescriptionEdit: onDescriptionEdit
-                )
+                ZStack(alignment: .bottomTrailing) {
+                    // Title nodes: use TextLabelView plus a resize grip in the
+                    // bottom-right corner when selected.
+                    TextLabelView(
+                        node: $node,
+                        isSelected: isSelected,
+                        onTap: onTap,
+                        onDelete: onDelete,
+                        onDescriptionEdit: onDescriptionEdit
+                    )
+
+                    if isSelected {
+                        titleResizeGripOverlay
+                    }
+                }
             } else if node.type == .text {
                 // Text annotation nodes: clamp to node.width
                 TextLabelView(
@@ -142,5 +155,50 @@ struct NodeItemWrapper: View {
     private var displayWidth: CGFloat {
         // Use the node's custom width property
         return node.width
+    }
+
+    // Corner resize grip specifically for title nodes
+    private var titleResizeGripOverlay: some View {
+        ResizeGripView()
+            .frame(width: 16, height: 16)
+            .padding(.trailing, 8)
+            .padding(.bottom, 8)
+            .contentShape(Rectangle().size(width: 40, height: 40))
+            .highPriorityGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .global)
+                    .onChanged { value in
+                        if !isTitleResizing {
+                            isTitleResizing = true
+                            isResizingActive = true
+                            titleResizeStartWidth = node.width
+                            titleResizeStartHeight = node.height
+                            titleDraggedWidth = node.width
+                            titleDraggedHeight = node.height
+                            titleDragStartLocation = value.location
+                            onResizeActiveChanged(true)
+                        }
+
+                        let deltaX = value.location.x - titleDragStartLocation.x
+                        let deltaY = value.location.y - titleDragStartLocation.y
+
+                        let minWidth: CGFloat = 200
+                        let maxWidth: CGFloat = 2000
+                        let minHeight: CGFloat = 60
+                        let maxHeight: CGFloat = 800
+
+                        titleDraggedWidth = max(minWidth, min(maxWidth, titleResizeStartWidth + deltaX))
+                        titleDraggedHeight = max(minHeight, min(maxHeight, titleResizeStartHeight + deltaY))
+
+                        onResizeLiveGeometryChange(titleDraggedWidth, titleDraggedHeight)
+                    }
+                    .onEnded { _ in
+                        guard isTitleResizing else { return }
+                        isTitleResizing = false
+                        isResizingActive = false
+                        onHeightChange(titleDraggedHeight)
+                        onWidthChange(titleDraggedWidth)
+                        onResizeActiveChanged(false)
+                    }
+            )
     }
 }
