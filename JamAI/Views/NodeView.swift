@@ -84,7 +84,7 @@ struct NodeView: View {
                 Divider()
                 
                 // Team Member Tray (only for non-note nodes or notes with chat enabled)
-                if shouldShowTeamMemberTray {
+                if shouldShowTeamMemberTray && isSelected {
                     if let teamMember = node.teamMember {
                         TeamMemberTray(
                             teamMember: teamMember,
@@ -326,9 +326,12 @@ struct NodeView: View {
                                         .frame(width: 40, height: 40)
                                         .foregroundColor(headerTextColor)
                                         .opacity(0.8)
+                                    Text(teamMember.displayName(with: role))
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(headerTextColor.opacity(0.8))
                                 }
                                 Text(node.title.isEmpty ? "Untitled" : node.title)
-                                    .font(.system(size: 16, weight: .semibold))
+                                    .font(.system(size: 18, weight: .semibold))
                                     .foregroundColor(headerTextColor)
                                     .multilineTextAlignment(.center)
                                     .lineLimit(3)
@@ -545,8 +548,8 @@ struct NodeView: View {
     private var headerHeight: CGFloat {
         var height: CGFloat = 60 // Base header height
         
-        // Add team member tray height if present
-        if shouldShowTeamMemberTray && node.teamMember != nil {
+        // Add team member tray height if present and node is selected
+        if shouldShowTeamMemberTray && node.teamMember != nil && isSelected {
             height += 60 // Team member tray height (~50-60px)
         }
         
