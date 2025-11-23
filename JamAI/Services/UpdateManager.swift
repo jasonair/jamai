@@ -19,6 +19,9 @@ final class SparkleUpdateManager: NSObject, ObservableObject, UpdateManaging {
         self.updaterController = SPUStandardUpdaterController(startingUpdater: true,
                                                               updaterDelegate: nil,
                                                               userDriverDelegate: nil)
+        // Enable automatic background checks and downloads for future versions
+        self.updaterController.updater.automaticallyChecksForUpdates = true
+        self.updaterController.updater.automaticallyDownloadsUpdates = true
         #endif
         super.init()
     }

@@ -285,7 +285,15 @@ struct JamAIApp: App {
                 .disabled(appState.viewModel == nil)
             }
             
-            CommandGroup(after: .appInfo) {
+            CommandGroup(replacing: .appInfo) {
+                Button("About Jam AI") {
+                    showAboutPanel()
+                }
+
+                Button("Check for Updates...") {
+                    updateManager.checkForUpdates()
+                }
+                
                 Button("Account...") {
                     appState.showUserSettings()
                 }
@@ -312,6 +320,12 @@ struct JamAIApp: App {
         isForceUpdateRequired = isForceUpdate
         updateURLString = updateURL
         return shouldBlock
+    }
+
+    private func showAboutPanel() {
+        // Use the standard About panel, which already shows
+        // "Version X (Y)" based on CFBundleShortVersionString and CFBundleVersion.
+        NSApplication.shared.orderFrontStandardAboutPanel(nil)
     }
 }
 

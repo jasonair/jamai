@@ -119,7 +119,7 @@ struct WelcomeView: View {
             
             // Footer
             VStack(spacing: 4) {
-                Text("Version: \(appVersion)")
+                Text("Version: \(fullVersion)")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .fontWeight(.medium)
@@ -133,8 +133,13 @@ struct WelcomeView: View {
         }
     }
     
-    private var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+    private var fullVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "1.0.0"
+        if let build = info?["CFBundleVersion"] as? String, !build.isEmpty {
+            return "\(short) (\(build))"
+        }
+        return short
     }
     
     private func openExistingProject() {

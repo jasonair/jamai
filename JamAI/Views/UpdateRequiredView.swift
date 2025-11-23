@@ -22,12 +22,16 @@ struct UpdateRequiredView: View {
                 .frame(maxWidth: 400)
             
             HStack(spacing: 16) {
+                Button("Update with Sparkle") {
+                    updateManager.checkForUpdates()
+                }
+                .buttonStyle(.borderedProminent)
+                
                 if let url = validUpdateURL {
-                    Button("Download Update") {
-                        updateManager.checkForUpdates()
+                    Button("Download from Website") {
                         NSWorkspace.shared.open(url)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.bordered)
                 }
                 
                 Button("Quit") {
@@ -37,6 +41,10 @@ struct UpdateRequiredView: View {
             }
         }
         .padding(40)
+        .onAppear {
+            // Kick off a Sparkle check as soon as the forced update screen appears
+            updateManager.checkForUpdates()
+        }
     }
     
     private var validUpdateURL: URL? {
