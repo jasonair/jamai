@@ -131,12 +131,23 @@ struct JamAIApp: App {
                             Spacer()
                             
                             if updateManager.updateReadyToInstall {
-                                Button("Restart to update") {
+                                Button {
                                     // Sparkle will detect the already-downloaded update and run the installer / relaunch
                                     updateManager.checkForUpdates()
+                                } label: {
+                                    HStack(spacing: 8) {
+                                        Text("Restart to Update")
+                                            .font(.system(size: 13, weight: .semibold))
+                                        Text("→")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 6)
+                                    .background(Color.accentColor)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(999)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .controlSize(.small)
+                                .buttonStyle(.plain)
                                 .padding(.trailing, 8)
                             }
                         }
