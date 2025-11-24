@@ -66,7 +66,7 @@ struct JamAIApp: App {
                 if !authService.isAuthenticated {
                     // Show authentication view if not signed in
                     AuthenticationView()
-                        .frame(width: 800, height: 600)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if isLoadingUserAccount {
                     // Show loading indicator while user account is loading
                     VStack(spacing: 20) {

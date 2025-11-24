@@ -12,14 +12,20 @@ struct AuthenticationView: View {
     
     @StateObject private var authService = FirebaseAuthService.shared
     @StateObject private var dataService = FirebaseDataService.shared
+    @Environment(\.colorScheme) private var colorScheme
     
     @State private var email = ""
     @State private var password = ""
-    @State private var displayName = ""
-    @State private var isSignUpMode = false
     @State private var showingError = false
     @State private var errorMessage = ""
     @State private var showingForgotPassword = false
+
+    private enum FocusField {
+        case email
+        case password
+    }
+
+    @FocusState private var focusedField: FocusField?
     
     var body: some View {
         ZStack {
@@ -42,41 +48,55 @@ struct AuthenticationView: View {
                     Text("Welcome to Jam AI")
                         .font(.system(size: 32, weight: .bold))
                     
-                    Text(isSignUpMode ? "Create your account" : "Sign in to continue")
+                    Text("Sign in to continue")
                         .font(.system(size: 16))
                         .foregroundColor(.secondary)
                 }
                 .padding(.bottom, 40)
                 
                 // Auth form
-                VStack(spacing: 12) {
-                    if isSignUpMode {
-                        TextField("Display Name", text: $displayName)
-                            .textFieldStyle(AuthTextFieldStyle())
+                VStack(spacing: 20) {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Email")
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        TextField("you@example.com", text: $email)
+                            .textFieldStyle(
+                                AuthTextFieldStyle(
+                                    isFocused: focusedField == .email,
+                                    isDarkMode: colorScheme == .dark
+                                )
+                            )
+                            .focused($focusedField, equals: .email)
+                            .textContentType(.emailAddress)
+                            // .autocapitalization(.none)  // iOS-only, not needed on macOS
                     }
                     
-                    TextField("Email", text: $email)
-                        .textFieldStyle(AuthTextFieldStyle())
-                        .textContentType(.emailAddress)
-                        // .autocapitalization(.none)  // iOS-only, not needed on macOS
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Password")
+                            .font(.system(size: 14, weight: .medium))
+                        
+                        SecureField("••••••••", text: $password)
+                            .textFieldStyle(
+                                AuthTextFieldStyle(
+                                    isFocused: focusedField == .password,
+                                    isDarkMode: colorScheme == .dark
+                                )
+                            )
+                            .focused($focusedField, equals: .password)
+                            .textContentType(.password)
+                    }
                     
-                    SecureField("Password", text: $password)
-                        .textFieldStyle(AuthTextFieldStyle())
-                        .textContentType(isSignUpMode ? .newPassword : .password)
-                    
-                    if !isSignUpMode {
-                        HStack {
-                            Spacer()
-                            Button("Forgot Password?") {
-                                showingForgotPassword = true
-                            }
-                            .font(.system(size: 14))
-                            .foregroundColor(.accentColor)
+                    HStack {
+                        Spacer()
+                        Button("Forgot Password?") {
+                            showingForgotPassword = true
                         }
-                        .padding(.top, 4)
+                        .font(.system(size: 14))
+                        .foregroundColor(.accentColor)
                     }
                     
-                    // Email sign in/up button
+                    // Email sign in button
                     Button {
                         handleEmailAuth()
                     } label: {
@@ -86,7 +106,7 @@ struct AuthenticationView: View {
                                     .controlSize(.small)
                                     .tint(.white)
                             }
-                            Text(isSignUpMode ? "Create Account" : "Sign In")
+                            Text("Sign In")
                                 .font(.system(size: 16, weight: .semibold))
                         }
                         .frame(maxWidth: .infinity)
@@ -97,10 +117,23 @@ struct AuthenticationView: View {
                     }
                     .buttonStyle(.plain)
                     .disabled(authService.isLoading || email.isEmpty || password.isEmpty)
-                    .padding(.top, 16)
+                    .padding(.top, 8)
                 }
-                .frame(width: 460)
-                .padding(.bottom, 24)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 28)
+                .frame(width: 420)
+                .background(
+                    Group {
+                        if colorScheme == .dark {
+                            Color.white.opacity(0.04)
+                        } else {
+                            Color(nsColor: .controlBackgroundColor)
+                        }
+                    }
+                )
+                .cornerRadius(20)
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.55 : 0.08), radius: 22, y: 18)
+                .padding(.bottom, 32)
                 
                 // OAuth buttons - Temporarily disabled due to SDK issues
                 // // Divider
@@ -155,16 +188,14 @@ struct AuthenticationView: View {
                 
                 Spacer()
                 
-                // Toggle sign up/in
+                // Sign up on website
                 HStack(spacing: 4) {
-                    Text(isSignUpMode ? "Already have an account?" : "Don't have an account?")
+                    Text("Need an account?")
                         .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
-                    Button(isSignUpMode ? "Sign In" : "Sign Up") {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            isSignUpMode.toggle()
-                        }
+                    Button("Sign up on website") {
+                        openSignupPage()
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.accentColor)
@@ -193,15 +224,7 @@ struct AuthenticationView: View {
     private func handleEmailAuth() {
         Task {
             do {
-                if isSignUpMode {
-                    _ = try await authService.signUp(
-                        email: email,
-                        password: password,
-                        displayName: displayName.isEmpty ? nil : displayName
-                    )
-                } else {
-                    _ = try await authService.signIn(email: email, password: password)
-                }
+                _ = try await authService.signIn(email: email, password: password)
                 
                 // Clear any persisted tabs to show welcome screen after login
                 UserDefaults.standard.removeObject(forKey: "lastOpenedProjectURL")
@@ -210,6 +233,11 @@ struct AuthenticationView: View {
                 showingError = true
             }
         }
+    }
+
+    private func openSignupPage() {
+        guard let url = URL(string: "https://www.usejamai.com/") else { return }
+        NSWorkspace.shared.open(url)
     }
     
     // Google Sign-In handler - Temporarily disabled due to SDK issues
@@ -258,12 +286,27 @@ struct AuthenticationView: View {
 // MARK: - Custom Text Field Style
 
 struct AuthTextFieldStyle: TextFieldStyle {
+    var isFocused: Bool = false
+    var isDarkMode: Bool = false
+    
     func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
+        let background: Color = isDarkMode
+            ? Color.white.opacity(0.06)
+            : Color(nsColor: .textBackgroundColor)
+        
+        return configuration
+            .textFieldStyle(.plain)
             .font(.system(size: 15))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
-            .background(Color(nsColor: .textBackgroundColor))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(background)
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(
+                        isFocused ? Color.accentColor.opacity(0.9) : Color.secondary.opacity(0.35),
+                        lineWidth: 1
+                    )
+            )
             .cornerRadius(10)
     }
 }
