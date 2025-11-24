@@ -15,6 +15,8 @@ enum Config {
     static let geminiAPIBaseURL = "https://generativelanguage.googleapis.com/v1beta"
     static let geminiModel = "gemini-2.0-flash-exp"
     static let geminiEmbeddingModel = "models/text-embedding-004"
+    // Call Cloud Function directly for Gemini SaaS backend
+    static let geminiBackendURL = "https://europe-west1-jamai-dev.cloudfunctions.net/generateWithGemini"
     
     // Keychain
     static let keychainService = "com.jamai.api-keys"

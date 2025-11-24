@@ -37,6 +37,11 @@ const STRIPE_PRICE_TO_PLAN: {[key: string]: string} = {
   'price_1SKlghEVeQAdCfriOsC3xS1b': 'enterprise', // Enterprise Monthly - $99 (example)
 };
 
+// Gemini configuration (server-side secret)
+const geminiApiKey = process.env.GEMINI_API_KEY || '';
+const GEMINI_MODEL_ID = 'gemini-2.0-flash-exp';
+const GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta';
+
 function getPlanFromPrice(priceId?: string | null): string {
   if (!priceId) return 'free';
   if (STRIPE_PRICE_TO_PLAN[priceId]) return STRIPE_PRICE_TO_PLAN[priceId];
@@ -569,6 +574,131 @@ export const createCustomerPortalSession = onRequest({ invoker: 'public' }, asyn
     console.error('❌ createCustomerPortalSession failed', err?.message || err);
     res.status(400).json({ ok: false, error: err?.message || 'Portal creation failed' });
     return;
+  }
+});
+
+/**
+ * Gemini AI proxy
+ * Authenticates via Firebase ID token, enforces basic credit limits,
+ * calls Gemini generateContent with a server-side API key, and returns text.
+ */
+export const generateWithGemini = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  if (!geminiApiKey) {
+    console.error('❌ GEMINI_API_KEY not configured');
+    res.status(500).json({ ok: false, error: 'Gemini not configured' });
+    return;
+  }
+
+  try {
+    // Authenticate user via Firebase ID token
+    const { uid } = await verifyFirebaseAuth(req);
+
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      console.error(`❌ No user document for uid=${uid}`);
+      res.status(403).json({ ok: false, error: 'User account not found' });
+      return;
+    }
+
+    const userData = userSnap.data() as any;
+
+    // Basic account checks
+    if (userData.isActive === false) {
+      res.status(403).json({ ok: false, error: 'Account is inactive. Please contact support.' });
+      return;
+    }
+
+    // Trial expiration check for free plan
+    const plan = (userData.plan as string) || 'free';
+    if (plan === 'free' && userData.planExpiresAt) {
+      const expiresAt = userData.planExpiresAt as admin.firestore.Timestamp;
+      const now = admin.firestore.Timestamp.now();
+      if (expiresAt.seconds < now.seconds) {
+        res.status(403).json({ ok: false, error: 'Your free trial has expired. Upgrade your plan to continue.' });
+        return;
+      }
+    }
+
+    const credits = typeof userData.credits === 'number' ? userData.credits : 0;
+    const creditsUsedThisMonth = typeof userData.creditsUsedThisMonth === 'number' ? userData.creditsUsedThisMonth : 0;
+
+    if (credits <= 0) {
+      res.status(403).json({ ok: false, error: 'Out of credits. Upgrade your plan to continue.' });
+      return;
+    }
+
+    // Expect a pre-built Gemini request body from the client
+    const { body } = req.body || {};
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ ok: false, error: 'Missing or invalid Gemini request body' });
+      return;
+    }
+
+    const url = `${GEMINI_BASE_URL}/models/${GEMINI_MODEL_ID}:generateContent?key=${geminiApiKey}`;
+
+    const geminiResponse = await (globalThis as any).fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const rawText = await geminiResponse.text();
+
+    if (!geminiResponse.ok) {
+      console.error('❌ Gemini API error', geminiResponse.status, rawText);
+      res.status(geminiResponse.status).json({ ok: false, error: 'Gemini API error', details: rawText });
+      return;
+    }
+
+    let json: any;
+    try {
+      json = JSON.parse(rawText);
+    } catch (err: any) {
+      console.error('❌ Failed to parse Gemini response JSON', err?.message || err);
+      res.status(500).json({ ok: false, error: 'Invalid response from Gemini' });
+      return;
+    }
+
+    const candidates = Array.isArray(json.candidates) ? json.candidates : [];
+    const first = candidates[0];
+    const content = first && first.content;
+    const parts = content && Array.isArray(content.parts) ? content.parts : [];
+    const firstPart = parts[0];
+    const text = firstPart && typeof firstPart.text === 'string' ? firstPart.text : '';
+
+    if (!text) {
+      console.error('❌ Gemini response missing text field');
+      res.status(500).json({ ok: false, error: 'Gemini response missing text content' });
+      return;
+    }
+
+    // Deduct one credit per successful generation (simple, conservative model)
+    const newCredits = Math.max(0, credits - 1);
+    const newUsed = creditsUsedThisMonth + 1;
+
+    await userRef.update({
+      credits: newCredits,
+      creditsUsedThisMonth: newUsed,
+    });
+
+    await db.collection('credit_transactions').add({
+      userId: uid,
+      amount: -1,
+      type: 'ai_generation',
+      description: 'Gemini chat generation',
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    res.json({ ok: true, text, creditsRemaining: newCredits });
+  } catch (err: any) {
+    console.error('❌ generateWithGemini failed', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'AI generation failed' });
   }
 });
 

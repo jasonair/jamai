@@ -7,10 +7,13 @@
 
 import Foundation
 import Combine
+import FirebaseAuth
 
 class GeminiClient: ObservableObject {
     private let session: URLSession
     
+    // Local API key is still used for embeddings/RAG in development builds.
+    // Chat generation goes through the JamAI backend and does not rely on this.
     private var apiKey: String? {
         ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"]
     }
@@ -32,11 +35,12 @@ class GeminiClient: ObservableObject {
         session.invalidateAndCancel()
     }
     
-    // MARK: - API Key Management
+    // MARK: - Availability / Auth
     
+    /// In the SaaS model, cloud AI availability is tied to Firebase auth,
+    /// not a local API key. We treat "has key" as "user is signed in".
     func hasAPIKey() -> Bool {
-        guard let key = apiKey else { return false }
-        return !key.isEmpty
+        return FirebaseAuthService.shared.currentUser != nil
     }
     
     // MARK: - Streaming Generation
@@ -48,39 +52,24 @@ class GeminiClient: ObservableObject {
         onChunk: @escaping (String) -> Void,
         onComplete: @escaping (Result<String, Error>) -> Void
     ) {
-        guard let apiKey = apiKey else {
-            onComplete(.failure(GeminiError.noAPIKey))
-            return
-        }
-        
-        let urlString = "\(Config.geminiAPIBaseURL)/models/\(Config.geminiModel):streamGenerateContent?key=\(apiKey)&alt=sse"
-        guard let url = URL(string: urlString) else {
-            onComplete(.failure(GeminiError.invalidURL))
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body = buildRequestBody(prompt: prompt, systemPrompt: systemPrompt, context: context)
-        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
-        
-        let task = session.dataTask(with: request) { data, response, error in
-            if let error = error {
-                onComplete(.failure(error))
-                return
+        // For now we don't stream from the backend – just call generate()
+        // and surface a single chunk to the UI (same pattern as LocalLlamaClient).
+        Task {
+            do {
+                let text = try await self.generate(
+                    prompt: prompt,
+                    systemPrompt: systemPrompt,
+                    context: context
+                )
+                onChunk(text)
+                onComplete(.success(text))
+            } catch {
+                if !Task.isCancelled {
+                    onComplete(.failure(error))
+                }
             }
-            
-            guard let data = data else {
-                onComplete(.failure(GeminiError.noData))
-                return
-            }
-            
-            self.parseStreamingResponse(data: data, onChunk: onChunk, onComplete: onComplete)
         }
-        
-        task.resume()
+        // Keep task alive until completion (no explicit store needed here).
     }
     
     private func parseStreamingResponse(
@@ -125,50 +114,50 @@ class GeminiClient: ObservableObject {
         systemPrompt: String?,
         context: [Message] = []
     ) async throws -> String {
-        guard let apiKey = apiKey else {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
             throw GeminiError.noAPIKey
         }
-        
-        let urlString = "\(Config.geminiAPIBaseURL)/models/\(Config.geminiModel):generateContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+
+        let token = try await currentUser.getIDToken()
+        guard let url = URL(string: Config.geminiBackendURL) else {
             throw GeminiError.invalidURL
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
         let body = buildRequestBody(prompt: prompt, systemPrompt: systemPrompt, context: context)
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
+        let payload: [String: Any] = [
+            "body": body
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
+
         let (data, response) = try await session.data(for: request)
-        
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw GeminiError.invalidResponse
         }
-        
+
         if httpResponse.statusCode == 429 {
             throw GeminiError.rateLimitExceeded
         }
-        
+
         if httpResponse.statusCode >= 500 {
             throw GeminiError.serverError(httpResponse.statusCode)
         }
-        
+
         guard httpResponse.statusCode == 200 else {
             throw GeminiError.httpError(httpResponse.statusCode)
         }
-        
+
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let candidates = json["candidates"] as? [[String: Any]],
-              let firstCandidate = candidates.first,
-              let content = firstCandidate["content"] as? [String: Any],
-              let parts = content["parts"] as? [[String: Any]],
-              let firstPart = parts.first,
-              let text = firstPart["text"] as? String else {
+              let ok = json["ok"] as? Bool, ok,
+              let text = json["text"] as? String else {
             throw GeminiError.invalidResponse
         }
-        
+
         return text
     }
     
@@ -293,7 +282,7 @@ enum GeminiError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .noAPIKey:
-            return "No API key configured. Please set GOOGLE_GEMINI_API_KEY in your environment (for example in a .env file)."
+            return "Cloud AI is not available. Please sign in to JamAI and ensure your account has access."
         case .invalidURL:
             return "Invalid API URL"
         case .invalidResponse:

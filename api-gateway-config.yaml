@@ -38,3 +38,14 @@ paths:
       responses:
         '200':
           description: Portal session created
+
+  /generate:
+    post:
+      summary: Generate AI response via Gemini
+      operationId: generateWithGemini
+      x-google-backend:
+        address: https://europe-west1-jamai-dev.cloudfunctions.net/generateWithGemini
+        protocol: h2
+      responses:
+        '200':
+          description: Generation successful
