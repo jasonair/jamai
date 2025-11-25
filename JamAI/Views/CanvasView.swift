@@ -422,7 +422,6 @@ struct CanvasView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scaleEffect(currentZoom, anchor: .topLeading)
             .offset(currentOffset)
-            .allowsHitTesting(formattingBinding == nil)
             
             // Toolbar overlay
             overlayControls
@@ -688,6 +687,16 @@ struct CanvasView: View {
     }
     
     private func handleNodeDrag(_ nodeId: UUID, value: DragGesture.Value) {
+        // If a text/title node is currently selected (formatting bar visible),
+        // ignore drag gestures on other nodes so clicks/drags under the
+        // formatting bar do not move them.
+        if let selectedId = viewModel.selectedNodeId,
+           let selectedNode = viewModel.nodes[selectedId],
+           (selectedNode.type == .text || selectedNode.type == .title),
+           selectedId != nodeId {
+            return
+        }
+
         if draggedNodeId == nil {
             draggedNodeId = nodeId
             viewModel.bringToFront([nodeId])
