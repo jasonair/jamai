@@ -307,13 +307,14 @@ struct NodeView: View {
                         .frame(maxHeight: .infinity) // Let content fill available space
                         
                         // Only show divider and input if not a note OR if chat section is visible
-                        if node.type != .note || showChatSection {
-                            Divider()
-                            
-                            // Input area - always visible at bottom
-                            inputView
-                                .padding(Node.padding)
-                        }
+                    if node.type != .note || showChatSection {
+                        Divider()
+                        
+                        // Input area - always visible at bottom
+                        inputView
+                            .padding(.horizontal, Node.padding / 2)
+                            .padding(.vertical, Node.padding / 2)
+                    }
                     } else {
                         Spacer(minLength: 0)
                         HStack {
@@ -1193,8 +1194,9 @@ struct NodeView: View {
                         Text("Ask a question...")
                             .font(.system(size: 15, weight: .light))
                             .foregroundColor(contentSecondaryTextColor.opacity(0.7))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 10)
+                            .padding(.leading, 5) // Shift placeholder slightly right
                             .allowsHitTesting(false)
                     }
 
@@ -1204,10 +1206,10 @@ struct NodeView: View {
                         .scrollContentBackground(.hidden)
                         // Slightly smaller external horizontal padding to offset TextEditor internal inset
                         // so the caret visually aligns with the placeholder text
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 14)
-                        .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
-                        .frame(minHeight: 60, maxHeight: 140, alignment: .topLeading)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 10)
+                        .frame(minHeight: 40, maxHeight: 100, alignment: .topLeading)
+                        .frame(minHeight: 40, maxHeight: 100, alignment: .topLeading)
                         .focused($isPromptFocused)
                         .disabled(!isSelected)
                         .onKeyPress(.return, phases: .down) { keyPress in
@@ -1236,9 +1238,9 @@ struct NodeView: View {
                 }
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
-                .padding(.horizontal, 8)
-                .padding(.top, 8)
-                .padding(.bottom, 36) // More space between text and buttons
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
+                .padding(.bottom, 36) // Extra space between text and buttons
                 
                 // Button row at bottom - aligned with text padding
                 HStack {
