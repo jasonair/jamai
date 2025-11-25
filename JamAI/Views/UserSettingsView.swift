@@ -106,25 +106,32 @@ struct UserSettingsView: View {
                     .background(Color(nsColor: .controlBackgroundColor))
                     .cornerRadius(16)
                     
-                    // Credits section with progress bar
+                    // User Prompt credits section with progress bar
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Credits")
+                        Text("User Prompt credits")
                             .font(.system(size: 18, weight: .semibold))
                         
                         VStack(alignment: .leading, spacing: 8) {
                             // Usage summary
                             HStack {
-                                Text("\(account.credits) / \(account.plan.monthlyCredits)")
+                                // Used prompts this period
+                                Text("\(formatPromptCount(usedCredits(for: account))) / \(formatPromptCount(account.plan.monthlyCredits))")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text("available")
+                                Text("used")
                                     .font(.system(size: 14))
                                     .foregroundColor(.secondary)
                                 Spacer()
-                                Text("\(account.creditsUsedThisMonth) used")
-                                    .font(.system(size: 13))
-                                    .foregroundColor(.secondary)
+                                // Remaining prompts
+                                Text("\(formatPromptCount(remainingCredits(for: account))) left")
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundColor(.primary)
                             }
-                            
+
+                            // Helper text
+                            Text("Using the local model is free and does not use prompt credits. Only cloud models consume prompt credits.")
+                                .font(.system(size: 12))
+                                .foregroundColor(.secondary)
+
                             // Progress bar
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
@@ -133,11 +140,11 @@ struct UserSettingsView: View {
                                         .fill(Color.secondary.opacity(0.15))
                                         .frame(height: 8)
                                     
-                                    // Used portion
+                                    // Used portion of this period
                                     RoundedRectangle(cornerRadius: 4)
                                         .fill(progressBarColor(for: account))
                                         .frame(
-                                            width: geometry.size.width * CGFloat(account.creditsUsedThisMonth) / CGFloat(account.plan.monthlyCredits),
+                                            width: geometry.size.width * usedFraction(for: account),
                                             height: 8
                                         )
                                 }
@@ -165,7 +172,7 @@ struct UserSettingsView: View {
                             HStack(spacing: 8) {
                                 Image(systemName: "exclamationmark.triangle.fill")
                                     .foregroundColor(.orange)
-                                Text("You've run out of credits. Upgrade your plan to continue.")
+                                Text("You've run out of prompt credits. Upgrade your plan to continue.")
                                     .font(.system(size: 13))
                             }
                             .padding(12)
@@ -506,15 +513,40 @@ struct UserSettingsView: View {
     }
     
     private func progressBarColor(for account: UserAccount) -> Color {
-        let usagePercentage = Double(account.creditsUsedThisMonth) / Double(account.plan.monthlyCredits)
+        let total = max(1, account.plan.monthlyCredits)
+        let used = max(0, min(usedCredits(for: account), total))
+        let usedPercentage = Double(used) / Double(total)
         
-        if usagePercentage >= 0.9 {
+        if usedPercentage >= 0.9 {
             return .red
-        } else if usagePercentage >= 0.7 {
+        } else if usedPercentage >= 0.7 {
             return .orange
         } else {
             return .green
         }
+    }
+    
+    private func usedFraction(for account: UserAccount) -> CGFloat {
+        let total = max(1, account.plan.monthlyCredits)
+        let used = max(0, min(usedCredits(for: account), total))
+        return CGFloat(used) / CGFloat(total)
+    }
+    
+    private func usedCredits(for account: UserAccount) -> Int {
+        let total = account.plan.monthlyCredits
+        let remaining = max(0, min(account.credits, total))
+        let derivedUsed = total - remaining
+        return max(0, min(derivedUsed, total))
+    }
+
+    private func remainingCredits(for account: UserAccount) -> Int {
+        let total = account.plan.monthlyCredits
+        let remaining = max(0, min(account.credits, total))
+        return max(0, min(remaining, total))
+    }
+
+    private func formatPromptCount(_ value: Int) -> String {
+        return String(value)
     }
     
     private func formattedPeriodStart(for account: UserAccount) -> String {
@@ -526,16 +558,8 @@ struct UserSettingsView: View {
             return formatter.string(from: periodStart)
         }
         
-        // Fallback to calendar month start for legacy users
-        let calendar = Calendar.current
-        let now = Date()
-        let components = calendar.dateComponents([.year, .month], from: now)
-        
-        if let monthStart = calendar.date(from: components) {
-            return formatter.string(from: monthStart)
-        }
-        
-        return "this month"
+        // Fallback when Stripe hasn't provided a precise billing period start
+        return "this billing period"
     }
     
     private func renewalDateText(for account: UserAccount) -> String {
@@ -552,8 +576,16 @@ struct UserSettingsView: View {
         
         // Use actual Stripe billing date for paid plans
         if let nextBilling = account.nextBillingDate {
-            let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextBilling).day ?? 0
-            return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextBilling)))"
+            let now = Date()
+            if nextBilling < now {
+                // Billing date is in the past – show it as the last renewal date
+                return "Prompts renewed on \(formatter.string(from: nextBilling))"
+            }
+            let daysRemaining = calendar.dateComponents([.day], from: now, to: nextBilling).day ?? 0
+            if daysRemaining == 0 {
+                return "Prompts renew today (\(formatter.string(from: nextBilling)))"
+            }
+            return "Prompts renew in \(daysRemaining) days (\(formatter.string(from: nextBilling)))"
         }
         
         // Fallback to calendar month calculation (legacy)
@@ -563,10 +595,10 @@ struct UserSettingsView: View {
         
         if let nextMonth = calendar.date(from: components) {
             let daysRemaining = calendar.dateComponents([.day], from: Date(), to: nextMonth).day ?? 0
-            return "Credits renew in \(daysRemaining) days (\(formatter.string(from: nextMonth)))"
+            return "Prompts renew in \(daysRemaining) days (\(formatter.string(from: nextMonth)))"
         }
         
-        return "Renews next month"
+        return "Prompts renew next month"
     }
     
     private func upgradePlan(to plan: UserPlan) {

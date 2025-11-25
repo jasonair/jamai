@@ -6,6 +6,7 @@
 import { onRequest } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { setGlobalOptions } from 'firebase-functions/v2';
+import { defineSecret } from 'firebase-functions/params';
 import * as admin from 'firebase-admin';
 import Stripe from 'stripe';
 
@@ -18,7 +19,9 @@ const db = admin.firestore();
 
 // Get Stripe keys from environment variables or Firebase config
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY || '';
-const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET || '';
+
+// Stripe webhook secret is stored in Firebase Secret Manager
+const stripeWebhookSecretParam = defineSecret('STRIPE_WEBHOOK_SECRET');
 
 // Initialize Stripe
 const stripe = stripeSecretKey ? new Stripe(stripeSecretKey, {
@@ -92,7 +95,9 @@ function mapSubscriptionStatus(status: Stripe.Subscription.Status): string {
  * Stripe Webhook Handler
  * Handles subscription lifecycle events
  */
-export const stripeWebhook = onRequest(async (req, res) => {
+export const stripeWebhook = onRequest({ secrets: [stripeWebhookSecretParam] }, async (req, res) => {
+  const stripeWebhookSecret = stripeWebhookSecretParam.value();
+
   if (!stripe || !stripeWebhookSecret) {
     console.error('❌ Stripe not configured');
     res.status(500).send('Stripe not configured');
@@ -110,6 +115,13 @@ export const stripeWebhook = onRequest(async (req, res) => {
   let event: Stripe.Event;
 
   try {
+    console.log('🔍 Stripe webhook diagnostics', {
+      hasRawBody: !!req.rawBody,
+      rawBodyType: req.rawBody ? typeof req.rawBody : null,
+      rawBodyLength: req.rawBody ? req.rawBody.length : null,
+      hasSignatureHeader: !!sig,
+      secretLength: stripeWebhookSecret.length,
+    });
     // Verify webhook signature
     event = stripe.webhooks.constructEvent(req.rawBody, sig, stripeWebhookSecret);
   } catch (err: any) {
@@ -296,15 +308,31 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
 
   const userDoc = usersSnapshot.docs[0];
   const userId = userDoc.id;
-  const userData = userDoc.data();
 
-  // Reset monthly credits
-  const credits = PLAN_CREDITS[userData.plan] || 100;
+  // Fetch latest subscription state from Stripe so we stay perfectly in sync
+  const subscription = await stripe!.subscriptions.retrieve(subscriptionId);
 
+  const priceId = subscription.items.data[0]?.price?.id || null;
+  const plan = getPlanFromPrice(priceId);
+  const credits = PLAN_CREDITS[plan] || PLAN_CREDITS['free'];
+
+  const currentPeriodStart = subscription.current_period_start
+    ? admin.firestore.Timestamp.fromMillis(subscription.current_period_start * 1000)
+    : null;
+  const nextBillingDate = subscription.current_period_end
+    ? admin.firestore.Timestamp.fromMillis(subscription.current_period_end * 1000)
+    : null;
+
+  // Reset monthly credits and align billing period fields with Stripe
   await userDoc.ref.update({
+    plan: plan,
     credits: credits,
+    creditsTotal: credits,
     creditsUsedThisMonth: 0,
     subscriptionStatus: 'active',
+    currentPeriodStart: currentPeriodStart,
+    nextBillingDate: nextBillingDate,
+    lastCreditedPeriodStart: currentPeriodStart,
   });
 
   // Log credit refresh
@@ -317,10 +345,13 @@ async function handlePaymentSucceeded(invoice: Stripe.Invoice) {
     metadata: {
       stripeInvoiceId: invoice.id,
       amountPaid: invoice.amount_paid,
+      stripeSubscriptionId: subscription.id,
+      stripePriceId: priceId,
+      plan,
     },
   });
 
-  console.log(`✅ Refreshed ${credits} credits for user ${userId}`);
+  console.log(`✅ Refreshed ${credits} credits for user ${userId} (plan=${plan})`);
 }
 
 /**

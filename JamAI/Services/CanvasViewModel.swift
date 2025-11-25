@@ -793,22 +793,7 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                if AIProviderManager.shared.activeProvider != .local {
-                                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(
-                                            promptText: prompt,
-                                            responseText: fullResponse,
-                                            contextTexts: contextTextsForBilling
-                                        )
-                                        _ = await FirebaseDataService.shared.deductCredits(
-                                            userId: userId,
-                                            amount: creditsToDeduct,
-                                            description: "AI Expand Action"
-                                        )
-                                    }
-                                }
-
-                                // Track credit usage and analytics
+                                // Track credit usage and analytics (backend handles actual deduction)
                                 if AIProviderManager.shared.activeProvider != .local {
                                     await CreditTracker.shared.trackGeneration(
                                         promptText: prompt,
@@ -1122,47 +1107,7 @@ class CanvasViewModel: ObservableObject {
         }
         
         generatingNodeId = nodeId
-        
-        // Perform web search if enabled
-        var searchResults: [SearchResult]? = nil
-        if webSearchEnabled {
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                
-                let userPlan = FirebaseDataService.shared.userAccount?.plan ?? .free
-                let creditsRemaining = FirebaseDataService.shared.userAccount?.credits ?? 0
-                let enhancedSearch = userPlan != .free // Pro+ can use enhanced search
-                
-                searchResults = await SearchManager.shared.search(
-                    query: prompt,
-                    userPlan: userPlan,
-                    enhancedSearch: enhancedSearch,
-                    creditsRemaining: creditsRemaining
-                )
-                
-                // Add user message with search results
-                guard var node = self.nodes[nodeId] else { return }
-                node.addMessage(
-                    role: .user,
-                    content: prompt,
-                    imageData: imageData,
-                    imageMimeType: imageMimeType,
-                    webSearchEnabled: true,
-                    searchResults: searchResults
-                )
-                self.nodes[nodeId] = node
-                
-                // Continue with AI generation, including search context
-                await self.continueGenerationWithSearch(
-                    nodeId: nodeId,
-                    prompt: prompt,
-                    imageData: imageData,
-                    imageMimeType: imageMimeType,
-                    searchResults: searchResults
-                )
-            }
-            return
-        }
+        // Web search path is currently disabled; always fall through to plain AI generation.
         
         // Add user message to conversation without search
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
@@ -1240,22 +1185,7 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
-                                if AIProviderManager.shared.activeProvider != .local {
-                                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                        let creditsToDeduct = CreditTracker.shared.calculateCredits(
-                                            promptText: prompt,
-                                            responseText: fullResponse,
-                                            contextTexts: contextTextsForBilling
-                                        )
-                                        _ = await FirebaseDataService.shared.deductCredits(
-                                            userId: userId,
-                                            amount: creditsToDeduct,
-                                            description: "AI Chat Message"
-                                        )
-                                    }
-                                }
-
-                                // Track credit usage and analytics
+                                // Track credit usage and analytics (backend handles actual deduction)
                                 if AIProviderManager.shared.activeProvider != .local {
                                     await CreditTracker.shared.trackGeneration(
                                         promptText: prompt,
@@ -1374,21 +1304,6 @@ class CanvasViewModel: ObservableObject {
                             if let dbActor = self?.dbActor {
                                 Task { [dbActor, finalNode] in
                                     try? await dbActor.saveNode(finalNode)
-                                }
-                            }
-                            
-                            if AIProviderManager.shared.activeProvider != .local {
-                                if let userId = FirebaseAuthService.shared.currentUser?.uid {
-                                    let creditsToDeduct = CreditTracker.shared.calculateCredits(
-                                        promptText: prompt,
-                                        responseText: fullResponse,
-                                        contextTexts: contextTextsForBilling
-                                    )
-                                    _ = await FirebaseDataService.shared.deductCredits(
-                                        userId: userId,
-                                        amount: creditsToDeduct,
-                                        description: "AI Chat Message (Web Search)"
-                                    )
                                 }
                             }
                             

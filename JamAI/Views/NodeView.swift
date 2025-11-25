@@ -1251,32 +1251,34 @@ struct NodeView: View {
                             .help("Upload image")
                         }
                         
-                        // Web search toggle button
-                        let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
+                        // Web search toggle button (temporarily disabled in UI)
+                        if false {
+                            let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
 
-                        Button(action: {
-                            webSearchEnabled.toggle()
-                        }) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 11))
+                            Button(action: {
+                                webSearchEnabled.toggle()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "globe")
+                                        .font(.system(size: 11))
 
-                                Text("Web Search")
-                                    .font(.system(size: 10, weight: .medium))
+                                    Text("Web Search")
+                                        .font(.system(size: 10, weight: .medium))
+                                }
+                                .foregroundColor(isSearchActive ? headerTextColor : contentSecondaryTextColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.clear)
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(isSearchActive ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
+                                )
                             }
-                            .foregroundColor(isSearchActive ? headerTextColor : contentSecondaryTextColor)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.clear)
-                            .cornerRadius(12)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .stroke(isSearchActive ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: 1.5)
-                            )
+                            .buttonStyle(PlainButtonStyle())
+                            .help(isSearchActive ? "Web search enabled" : "Enable web search")
+                            .disabled(isGenerating)
                         }
-                        .buttonStyle(PlainButtonStyle())
-                        .help(isSearchActive ? "Web search enabled" : "Enable web search")
-                        .disabled(isGenerating)
                     }
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)

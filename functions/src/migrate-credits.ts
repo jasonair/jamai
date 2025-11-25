@@ -111,7 +111,7 @@ export const migrateUserStats = onRequest({ invoker: 'private' }, async (req, re
 // Use the already-initialized admin instance
 const db = admin.firestore();
 
-export const migrateCreditsFields = onRequest({ invoker: 'private' }, async (req, res) => {
+export const migrateCreditsFields = onRequest({ invoker: 'public' }, async (req, res) => {
   console.log('🔄 Starting credits field migration...');
   
   try {

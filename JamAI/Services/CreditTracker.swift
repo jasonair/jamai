@@ -16,9 +16,6 @@ class CreditTracker {
     
     private init() {}
     
-    /// Credits per 1000 tokens (approximate)
-    private let creditsPerThousandTokens = 1
-    
     /// Check if user has enough credits for AI generation
     func canGenerateResponse() -> Bool {
         // If no user account is loaded, allow generation (development mode / Firebase not configured)
@@ -45,22 +42,20 @@ class CreditTracker {
         return max(1, text.count / 4)
     }
     
-    /// Calculates credits needed for a given prompt, response, and additional
-    /// context texts (conversation history, summaries, RAG/search context).
+    /// Calculates credits needed for a given prompt.
+    ///
+    /// We now charge a **flat 1 credit per AI generation** so usage is
+    /// predictable for users, independent of token counts. Token-level
+    /// analytics are still tracked separately in `trackGeneration`.
     func calculateCredits(
         promptText: String,
         responseText: String,
         contextTexts: [String] = []
     ) -> Int {
-        let promptTokens = estimateTokens(text: promptText)
-        let responseTokens = estimateTokens(text: responseText)
-        let contextTokens = contextTexts.reduce(0) { partial, text in
-            partial + estimateTokens(text: text)
-        }
-        let totalTokens = promptTokens + responseTokens + contextTokens
-        
-        // Calculate credits (1 credit per 1000 tokens, minimum 1)
-        return max(1, (totalTokens + 999) / 1000 * creditsPerThousandTokens)
+        _ = promptText
+        _ = responseText
+        _ = contextTexts
+        return 1
     }
 
     /// Tracks the detailed token usage for an AI generation event, including

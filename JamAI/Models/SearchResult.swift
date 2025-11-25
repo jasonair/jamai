@@ -37,8 +37,8 @@ enum SearchProvider: String, Codable, Sendable {
     /// Credit cost per search
     var creditCost: Int {
         switch self {
-        case .serper: return 1
-        case .perplexity: return 5
+        case .serper: return 0
+        case .perplexity: return 0
         }
     }
 }
