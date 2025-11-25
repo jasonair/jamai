@@ -916,7 +916,7 @@ struct NodeView: View {
             let truncationThreshold = 1500
             let isLongMessage = content.count > truncationThreshold
             let messageId = message?.id
-            let isExpanded = messageId.map { expandedUserMessageIds.contains($0) } ?? true
+            let isExpanded = messageId.map { expandedUserMessageIds.contains($0) } ?? false
             let shouldTruncate = isLongMessage && !isExpanded
             let displayText: String
             if shouldTruncate {
@@ -930,57 +930,75 @@ struct NodeView: View {
             return AnyView(
                 HStack {
                     Spacer(minLength: 0)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("You")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(contentSecondaryTextColor)
-                            .padding(.horizontal, 8)
-                        
-                        VStack(alignment: .leading, spacing: 8) {
-                            // Show image if present
-                            if let imageData = conversationMsg?.imageData,
-                               let nsImage = NSImage(data: imageData) {
-                                Image(nsImage: nsImage)
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fit)
-                                    .frame(maxWidth: 200, maxHeight: 200)
-                                    .cornerRadius(8)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                                    )
-                            }
+                    ZStack(alignment: .topTrailing) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("You")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(contentSecondaryTextColor)
+                                .padding(.horizontal, 8)
                             
-                            // Show text content
-                            if !displayText.isEmpty {
-                                Text(displayText)
-                                    .font(.system(size: 15, weight: .light))
-                                    .foregroundColor(contentPrimaryTextColor)
-                                    .textSelection(.enabled)
-                            }
-                            
-                            if isLongMessage, let messageId = messageId {
-                                Button(action: {
-                                    if expandedUserMessageIds.contains(messageId) {
-                                        expandedUserMessageIds.remove(messageId)
-                                    } else {
-                                        expandedUserMessageIds.insert(messageId)
-                                    }
-                                }) {
-                                    Text(isExpanded ? "Show less" : "See more")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(.accentColor)
+                            VStack(alignment: .leading, spacing: 8) {
+                                // Show image if present
+                                if let imageData = conversationMsg?.imageData,
+                                   let nsImage = NSImage(data: imageData) {
+                                    Image(nsImage: nsImage)
+                                        .resizable()
+                                        .aspectRatio(contentMode: .fit)
+                                        .frame(maxWidth: 200, maxHeight: 200)
+                                        .cornerRadius(8)
+                                        .overlay(
+                                            RoundedRectangle(cornerRadius: 8)
+                                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                        )
                                 }
-                                .buttonStyle(PlainButtonStyle())
-                                .padding(.top, 2)
+                                
+                                // Show text content
+                                if !displayText.isEmpty {
+                                    Text(displayText)
+                                        .font(.system(size: 15, weight: .light))
+                                        .foregroundColor(contentPrimaryTextColor)
+                                        .textSelection(.enabled)
+                                }
+                                
+                                if isLongMessage, let messageId = messageId {
+                                    Button(action: {
+                                        if expandedUserMessageIds.contains(messageId) {
+                                            expandedUserMessageIds.remove(messageId)
+                                        } else {
+                                            expandedUserMessageIds.insert(messageId)
+                                        }
+                                    }) {
+                                        Text(isExpanded ? "Show less" : "See more")
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(.accentColor)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                    .padding(.top, 2)
+                                }
                             }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.secondary.opacity(0.1))
+                            .cornerRadius(8)
                         }
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(8)
+                        .frame(maxWidth: 700, alignment: .leading)
+                        
+                        if let concreteMessage = message {
+                            Button(action: {
+                                revertConversation(to: concreteMessage, originalContent: content)
+                            }) {
+                                Image(systemName: "arrow.counterclockwise.circle")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(contentSecondaryTextColor.opacity(0.9))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .padding(.top, 24)
+                            .padding(.trailing, 4)
+                            .help("Revert to this prompt")
+                            .disabled(isGenerating)
+                            .opacity(isGenerating ? 0.4 : 1.0)
+                        }
                     }
-                    .frame(maxWidth: 700)
                     Spacer(minLength: 0)
                 }
             )
@@ -1469,6 +1487,37 @@ struct NodeView: View {
     }
     
     // MARK: - Actions
+    
+    private func revertConversation(to message: ConversationMessage, originalContent: String) {
+        let alert = NSAlert()
+        alert.messageText = "Revert to this step?"
+        alert.informativeText = "This will remove all messages after this prompt and move it back into the input. This cannot be undone."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "Revert")
+        alert.addButton(withTitle: "Cancel")
+        let response = alert.runModal()
+        guard response == .alertFirstButtonReturn else { return }
+        
+        let allMessages = node.conversation
+        guard let index = allMessages.firstIndex(where: { $0.id == message.id }) else { return }
+        let trimmed = Array(allMessages.prefix(index))
+        
+        var updatedNode = node
+        updatedNode.setConversation(trimmed)
+        updatedNode.prompt = originalContent
+        if let lastAssistant = trimmed.last(where: { $0.role == .assistant }) {
+            updatedNode.response = lastAssistant.content
+        } else {
+            updatedNode.response = ""
+        }
+        node = updatedNode
+        
+        promptText = originalContent
+        isPromptFocused = true
+        
+        // Ensure the node stays selected after the revert completes
+        onTap()
+    }
     
     private func showTeamMemberLimitAlert(maxAllowed: Int, currentPlan: UserPlan) {
         let alert = NSAlert()
