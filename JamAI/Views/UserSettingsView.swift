@@ -328,13 +328,13 @@ struct UserSettingsView: View {
                                 
                                 // Manage Subscription Button
                                 Button {
-                                    if let url = URL(string: "http://localhost:3000/account") {
+                                    if let url = URL(string: "https://www.usejamai.com/account") {
                                         NSWorkspace.shared.open(url)
                                     }
                                 } label: {
                                     HStack {
                                         Image(systemName: "arrow.up.right.square")
-                                        Text("Jam AI account (\(account.email))")
+                                        Text("Manage Jam AI account (\(account.email))")
                                     }
                                     .frame(maxWidth: .infinity)
                                     .frame(height: 36)
@@ -371,7 +371,7 @@ struct UserSettingsView: View {
                                 }
                                 
                                 Button {
-                                    if let url = URL(string: "http://localhost:3000/account") {
+                                    if let url = URL(string: "https://www.usejamai.com/account") {
                                         NSWorkspace.shared.open(url)
                                     }
                                 } label: {

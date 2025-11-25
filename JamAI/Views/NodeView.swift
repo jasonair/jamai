@@ -62,6 +62,7 @@ struct NodeView: View {
     @State private var processingTimer: Timer?
     @State private var visibleMessageLimit: Int = 8
     @State private var expandedUserMessageIds: Set<UUID> = []
+    @State private var isVoiceTranscribing = false
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -1129,8 +1130,11 @@ struct NodeView: View {
             Spacer(minLength: 0)
             VStack(spacing: 8) {
                 // Voice recording view
-                if recordingService.isRecording {
-                    VoiceInputView(recordingService: recordingService) { transcription in
+                if recordingService.isRecording || isVoiceTranscribing {
+                    VoiceInputView(
+                        recordingService: recordingService,
+                        isTranscribing: $isVoiceTranscribing
+                    ) { transcription in
                         // Append transcription to existing text
                         if !promptText.isEmpty {
                             promptText += " " + transcription

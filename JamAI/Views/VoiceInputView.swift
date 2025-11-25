@@ -9,9 +9,9 @@ import SwiftUI
 
 struct VoiceInputView: View {
     @ObservedObject var recordingService: AudioRecordingService
+    @Binding var isTranscribing: Bool
     let onTranscriptionComplete: (String) -> Void
     
-    @State private var isTranscribing = false
     @State private var showError = false
     @State private var errorMessage = ""
     
@@ -19,8 +19,17 @@ struct VoiceInputView: View {
     private let maxDuration: TimeInterval = 60
     
     var body: some View {
-        if recordingService.isRecording {
-            recordingView
+        Group {
+            if recordingService.isRecording {
+                recordingView
+            } else if isTranscribing {
+                transcribingView
+            }
+        }
+        .alert("Transcription Error", isPresented: $showError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(errorMessage)
         }
     }
     
@@ -68,11 +77,29 @@ struct VoiceInputView: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(Color.red.opacity(0.3), lineWidth: 1)
         )
-        .alert("Transcription Error", isPresented: $showError) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text(errorMessage)
+    }
+    
+    private var transcribingView: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+                .scaleEffect(0.7)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Transcribing...")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                Text("Converting your voice to text")
+                    .font(.system(size: 10))
+                    .foregroundColor(.secondary.opacity(0.8))
+            }
+            
+            Spacer()
         }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Color.secondary.opacity(0.05))
+        .cornerRadius(8)
     }
     
     private func stopAndTranscribe() {
