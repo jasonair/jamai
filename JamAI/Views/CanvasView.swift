@@ -231,7 +231,6 @@ struct CanvasView: View {
             .onTapGesture {
                 // Completely block if modal is presented
                 guard !modalCoordinator.isModalPresented else { return }
-                
                 // Dismiss custom context menu on tap
                 contextMenuLocation = nil
 
@@ -423,6 +422,7 @@ struct CanvasView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .scaleEffect(currentZoom, anchor: .topLeading)
             .offset(currentOffset)
+            .allowsHitTesting(formattingBinding == nil)
             
             // Toolbar overlay
             overlayControls
@@ -447,7 +447,7 @@ struct CanvasView: View {
                     }
                 )
                 .position(menuPoint)
-                .zIndex(50)
+                .zIndex(1_000_000_100)
                 .transition(.scale.combined(with: .opacity))
             }
             
@@ -494,6 +494,7 @@ struct CanvasView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .allowsHitTesting(true)
                     .ignoresSafeArea()
+                    .zIndex(2_000_000_000)
             }
         }
     }
@@ -551,6 +552,7 @@ struct CanvasView: View {
             }
         }
         .allowsHitTesting(true)
+        .zIndex(1_000_000_000)
     }
     
     
@@ -641,12 +643,24 @@ struct CanvasView: View {
 
     @ViewBuilder
     private func nodeItemView(_ node: Node) -> some View {
-        NodeItemWrapper(
+        let isSelected = viewModel.selectedNodeId == node.id
+
+        return NodeItemWrapper(
             node: binding(for: node.id),
-            isSelected: viewModel.selectedNodeId == node.id,
+            isSelected: isSelected,
             isGenerating: viewModel.generatingNodeId == node.id,
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
             onTap: { 
+                // If a text/title node is currently selected (formatting bar visible),
+                // ignore taps on other nodes so clicks under the formatting bar do not
+                // change selection.
+                if let selectedId = viewModel.selectedNodeId,
+                   let selectedNode = viewModel.nodes[selectedId],
+                   (selectedNode.type == .text || selectedNode.type == .title),
+                   selectedId != node.id {
+                    return
+                }
+
                 viewModel.bringToFront([node.id])
                 viewModel.selectedNodeId = node.id 
             },

@@ -112,7 +112,6 @@ struct MouseTrackingView: NSViewRepresentable {
                             onRightClick(flipped)
                         }
                     }
-                    // Do not swallow; allow other views/menus to respond too.
                     return event
                 default:
                     return event
