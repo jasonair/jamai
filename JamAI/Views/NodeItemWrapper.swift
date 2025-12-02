@@ -12,6 +12,7 @@ struct NodeItemWrapper: View {
     let isSelected: Bool
     let isGenerating: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
+    let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
     let onPromptSubmit: (String, Data?, String?, Bool) -> Void
     let onTitleEdit: (String) -> Void
@@ -82,6 +83,7 @@ struct NodeItemWrapper: View {
                     isSelected: isSelected,
                     isGenerating: isGenerating,
                     projectTeamMembers: projectTeamMembers,
+                    searchHighlight: searchHighlight,
                     onTap: onTap,
                     onPromptSubmit: onPromptSubmit,
                     onTitleEdit: onTitleEdit,

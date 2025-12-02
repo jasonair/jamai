@@ -18,6 +18,7 @@ class ModalCoordinator: ObservableObject {
     private var currentTeamMemberWindow: TeamMemberModalWindow?
     private var currentSettingsWindow: SettingsModalWindow?
     private var currentUserSettingsWindow: UserSettingsModalWindow?
+    private var currentSearchWindow: SearchModalWindow?
     
     // Track different modal types
     private var activeModalCount = 0
@@ -93,6 +94,27 @@ class ModalCoordinator: ObservableObject {
     func dismissUserSettingsModal() {
         currentUserSettingsWindow?.close()
         currentUserSettingsWindow = nil
+    }
+    
+    func showSearchModal(viewModel: ConversationSearchViewModel) {
+        // Close existing if any
+        dismissSearchModal()
+        
+        let modalWindow = SearchModalWindow(
+            viewModel: viewModel,
+            onDismiss: { [weak self] in
+                self?.modalDidClose()
+            }
+        )
+        
+        currentSearchWindow = modalWindow
+        modalDidOpen()
+        modalWindow.show()
+    }
+    
+    func dismissSearchModal() {
+        currentSearchWindow?.close()
+        currentSearchWindow = nil
     }
     
     // Generic modal tracking for any window/sheet

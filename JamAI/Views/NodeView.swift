@@ -14,6 +14,7 @@ struct NodeView: View {
     let isSelected: Bool
     let isGenerating: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
+    let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
     let onPromptSubmit: (String, Data?, String?, Bool) -> Void
     let onTitleEdit: (String) -> Void
@@ -211,6 +212,16 @@ struct NodeView: View {
                                             }
                                         }
                                     }
+                                    .onChange(of: searchHighlight) { _, newHighlight in
+                                        // Scroll to the highlighted message when search result is selected
+                                        if let highlight = newHighlight, highlight.nodeId == node.id {
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    proxy.scrollTo(highlight.messageId, anchor: .center)
+                                                }
+                                            }
+                                        }
+                                    }
                                 }
                             } else {
                                 // When chat is hidden, show note content
@@ -297,6 +308,16 @@ struct NodeView: View {
                                                     // Expansion streaming without a user bubble
                                                     proxy.scrollTo("legacy-assistant", anchor: .top)
                                                 }
+                                            }
+                                        }
+                                    }
+                                }
+                                .onChange(of: searchHighlight) { _, newHighlight in
+                                    // Scroll to the highlighted message when search result is selected
+                                    if let highlight = newHighlight, highlight.nodeId == node.id {
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                proxy.scrollTo(highlight.messageId, anchor: .center)
                                             }
                                         }
                                     }

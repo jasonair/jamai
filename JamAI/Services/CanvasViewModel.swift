@@ -46,6 +46,17 @@ class CanvasViewModel: ObservableObject {
     @Published var canUndo: Bool = false
     @Published var canRedo: Bool = false
     
+    // Search
+    @Published var searchHighlight: NodeSearchHighlight?
+    let searchIndex = ConversationSearchIndex()
+    lazy var searchViewModel: ConversationSearchViewModel = {
+        let vm = ConversationSearchViewModel(index: searchIndex)
+        vm.onSelectResult = { [weak self] result in
+            self?.handleSearchResultSelected(result)
+        }
+        return vm
+    }()
+    
     // Services
     let geminiClient: GeminiClient
     let ragService: RAGService
@@ -279,6 +290,9 @@ class CanvasViewModel: ObservableObject {
             
             // Force edge refresh to ensure wires render correctly on load
             positionsVersion += 1
+            
+            // Build search index from loaded nodes
+            searchIndex.rebuild(from: Array(nodes.values))
         } catch {
             errorMessage = "Failed to load project: \(error.localizedDescription)"
         }
@@ -955,6 +969,17 @@ class CanvasViewModel: ObservableObject {
                 }
             }
         }
+        
+        // Update search index if content changed
+        let contentChanged = oldNode.title != updatedNode.title ||
+            oldNode.description != updatedNode.description ||
+            oldNode.conversationJSON != updatedNode.conversationJSON
+        if contentChanged {
+            searchIndex.indexNode(updatedNode)
+        } else if geometryChanged {
+            // Just update metadata (position) if only geometry changed
+            searchIndex.updateNodeMetadata(updatedNode)
+        }
 
         // Debounce database write unless immediate
         if immediate {
@@ -1014,6 +1039,9 @@ class CanvasViewModel: ObservableObject {
         }
         
         nodes.removeValue(forKey: nodeId)
+        
+        // Remove from search index
+        searchIndex.removeNode(nodeId: nodeId)
         
         // Record node deletion with connected edges for proper undo
         undoManager.record(.deleteNode(node, connectedEdges: Array(connectedEdges)))
@@ -1782,6 +1810,51 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
             zoom = newZoom
             offset = newOffset
         }
+    }
+    
+    // MARK: - Search
+    
+    /// Show the search modal
+    func showSearchModal() {
+        // Update viewport center for proximity-based ranking
+        let viewportCenterX = (viewportSize.width / 2 - offset.width) / zoom
+        let viewportCenterY = (viewportSize.height / 2 - offset.height) / zoom
+        searchViewModel.updateViewportCenter(CGPoint(x: viewportCenterX, y: viewportCenterY))
+        
+        // Show the modal
+        ModalCoordinator.shared.showSearchModal(viewModel: searchViewModel)
+    }
+    
+    /// Handle when a search result is selected
+    func handleSearchResultSelected(_ result: ConversationSearchResult) {
+        // Navigate to the node
+        navigateToNode(result.nodeId, viewportSize: viewportSize)
+        
+        // Set the search highlight so NodeView can scroll to and highlight the message
+        searchHighlight = NodeSearchHighlight(
+            nodeId: result.nodeId,
+            messageId: result.messageId,
+            query: searchViewModel.query
+        )
+        
+        // Clear highlight after a delay to allow re-searching the same term
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 3_000_000_000) // 3 seconds
+            if self.searchHighlight?.nodeId == result.nodeId &&
+               self.searchHighlight?.messageId == result.messageId {
+                self.searchHighlight = nil
+            }
+        }
+    }
+    
+    /// Update search index when a node changes
+    func updateSearchIndex(for node: Node) {
+        searchIndex.indexNode(node)
+    }
+    
+    /// Remove a node from the search index
+    func removeFromSearchIndex(nodeId: UUID) {
+        searchIndex.removeNode(nodeId: nodeId)
     }
     
     // MARK: - Outline Ordering

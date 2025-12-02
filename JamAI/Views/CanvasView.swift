@@ -542,7 +542,8 @@ struct CanvasView: View {
                         onZoomIn: { viewModel.zoomIn() },
                         onZoomOut: { viewModel.zoomOut() },
                         onZoomReset: { viewModel.resetZoom() },
-                        onZoomFit: { viewModel.zoomToFit() }
+                        onZoomFit: { viewModel.zoomToFit() },
+                        onSearch: { viewModel.showSearchModal() }
                     )
                     Spacer()
                 }
@@ -649,6 +650,7 @@ struct CanvasView: View {
             isSelected: isSelected,
             isGenerating: viewModel.generatingNodeId == node.id,
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
+            searchHighlight: viewModel.searchHighlight?.nodeId == node.id ? viewModel.searchHighlight : nil,
             onTap: { 
                 // If a text/title node is currently selected (formatting bar visible),
                 // ignore taps on other nodes so clicks under the formatting bar do not

@@ -64,6 +64,16 @@ struct MainAppCommands: Commands {
             }
             .keyboardShortcut(.delete, modifiers: [])
         }
+        
+        // Search command
+        CommandGroup(after: .textEditing) {
+            Button("Search Conversations...") {
+                if let vm = focusedVM ?? appState.viewModel {
+                    vm.showSearchModal()
+                }
+            }
+            .keyboardShortcut("f", modifiers: .command)
+        }
 
         CommandGroup(replacing: .newItem) {
             Button("New Project...") {
