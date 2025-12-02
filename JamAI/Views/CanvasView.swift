@@ -539,9 +539,10 @@ struct CanvasView: View {
                 HStack {
                     Spacer()
                     ZoomControlsView(
+                        currentZoom: viewModel.zoom,
                         onZoomIn: { viewModel.zoomIn() },
                         onZoomOut: { viewModel.zoomOut() },
-                        onZoomReset: { viewModel.resetZoom() },
+                        onZoomTo: { level in viewModel.zoomTo(level) },
                         onZoomFit: { viewModel.zoomToFit() },
                         onSearch: { viewModel.showSearchModal() }
                     )

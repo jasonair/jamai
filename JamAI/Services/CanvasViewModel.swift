@@ -1729,18 +1729,30 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
     
     // MARK: - Zoom Controls
     
+    /// Standard zoom presets (same as design apps like Figma/Sketch)
+    private static let zoomPresets: [CGFloat] = [0.1, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5]
+    
     func zoomIn() {
-        let newZoom = min(Config.maxZoom, zoom * 1.2)
+        // Find the next preset level above current zoom
+        let nextPreset = Self.zoomPresets.first { $0 > zoom + 0.001 } ?? Config.maxZoom
+        let newZoom = min(Config.maxZoom, nextPreset)
         zoomToCenter(newZoom: newZoom)
     }
     
     func zoomOut() {
-        let newZoom = max(Config.minZoom, zoom / 1.2)
+        // Find the next preset level below current zoom
+        let prevPreset = Self.zoomPresets.last { $0 < zoom - 0.001 } ?? Config.minZoom
+        let newZoom = max(Config.minZoom, prevPreset)
         zoomToCenter(newZoom: newZoom)
     }
     
     func resetZoom() {
         zoomToCenter(newZoom: Config.defaultZoom)
+    }
+    
+    func zoomTo(_ level: CGFloat) {
+        let clampedZoom = max(Config.minZoom, min(Config.maxZoom, level))
+        zoomToCenter(newZoom: clampedZoom)
     }
     
     func zoomToFit() {

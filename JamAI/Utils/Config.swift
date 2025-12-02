@@ -37,7 +37,7 @@ enum Config {
     // Canvas
     static let gridSize: CGFloat = 50
     static let minZoom: CGFloat = 0.1
-    static let maxZoom: CGFloat = 3.0
+    static let maxZoom: CGFloat = 1.5
     static let defaultZoom: CGFloat = 1.0
     
     // Note: SwiftUI Canvas has inherent clipping limitations
