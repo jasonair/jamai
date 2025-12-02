@@ -163,18 +163,56 @@ class FirebaseDataService: ObservableObject {
                     // Setup real-time listener
                     setupUserListener(userId: userId)
                 } catch {
-                    // Document exists but is corrupted - delete and recreate
-                    print("⚠️ User document corrupted, deleting and recreating for userId: \(userId)")
+                    // Document exists but decoding failed - try to load raw data and preserve Stripe info
+                    print("⚠️ User document decoding failed for userId: \(userId)")
                     print("Decoding error: \(error)")
                     
-                    // Delete corrupted document
-                    try? await usersCollection.document(userId).delete()
-                    
-                    // Create fresh account
-                    let email = FirebaseAuthService.shared.currentUser?.email ?? ""
-                    let displayName = FirebaseAuthService.shared.currentUser?.displayName
-                    
-                    await createUserAccount(userId: userId, email: email, displayName: displayName)
+                    // Try to extract critical fields from raw data to preserve subscription
+                    if let data = document.data() {
+                        print("📋 Raw document data keys: \(data.keys)")
+                        
+                        // Extract Stripe fields to preserve them
+                        let stripeCustomerId = data["stripeCustomerId"] as? String
+                        let stripeSubscriptionId = data["stripeSubscriptionId"] as? String
+                        let planString = data["plan"] as? String
+                        let subscriptionStatusString = data["subscriptionStatus"] as? String
+                        let credits = data["credits"] as? Int
+                        
+                        print("📋 Stripe Customer ID: \(stripeCustomerId ?? "nil")")
+                        print("📋 Stripe Subscription ID: \(stripeSubscriptionId ?? "nil")")
+                        print("📋 Plan: \(planString ?? "nil")")
+                        print("📋 Subscription Status: \(subscriptionStatusString ?? "nil")")
+                        
+                        // Create account with preserved Stripe data
+                        let email = data["email"] as? String ?? FirebaseAuthService.shared.currentUser?.email ?? ""
+                        let displayName = data["displayName"] as? String ?? FirebaseAuthService.shared.currentUser?.displayName
+                        let plan = UserPlan(rawValue: planString ?? "free") ?? .free
+                        let subscriptionStatus = subscriptionStatusString.flatMap { SubscriptionStatus(rawValue: $0) }
+                        
+                        let account = UserAccount(
+                            id: userId,
+                            email: email,
+                            displayName: displayName,
+                            plan: plan,
+                            credits: credits,
+                            stripeCustomerId: stripeCustomerId,
+                            stripeSubscriptionId: stripeSubscriptionId,
+                            subscriptionStatus: subscriptionStatus
+                        )
+                        
+                        self.userAccount = account
+                        
+                        // Fix the document by re-saving with proper format
+                        await updateUserAccountDocument(userId: userId, account: account)
+                        
+                        // Setup real-time listener
+                        setupUserListener(userId: userId)
+                    } else {
+                        // No data at all - create fresh account
+                        let email = FirebaseAuthService.shared.currentUser?.email ?? ""
+                        let displayName = FirebaseAuthService.shared.currentUser?.displayName
+                        await createUserAccount(userId: userId, email: email, displayName: displayName)
+                    }
                 }
             } else {
                 // Document doesn't exist - create it
@@ -222,6 +260,33 @@ class FirebaseDataService: ObservableObject {
         } catch {
             print("Failed to update last login: \(error)")
             // Non-critical error, don't crash
+        }
+    }
+    
+    /// Update user account document with proper Firestore format (used to fix corrupted documents)
+    private func updateUserAccountDocument(userId: String, account: UserAccount) async {
+        do {
+            try await usersCollection.document(userId).setData([
+                "email": account.email,
+                "displayName": account.displayName as Any,
+                "photoURL": account.photoURL as Any,
+                "plan": account.plan.rawValue,
+                "credits": account.credits,
+                "creditsUsedThisMonth": account.creditsUsedThisMonth,
+                "createdAt": Timestamp(date: account.createdAt),
+                "lastLoginAt": Timestamp(date: account.lastLoginAt),
+                "planExpiresAt": account.planExpiresAt.map { Timestamp(date: $0) } as Any,
+                "isActive": account.isActive,
+                "stripeCustomerId": account.stripeCustomerId as Any,
+                "stripeSubscriptionId": account.stripeSubscriptionId as Any,
+                "subscriptionStatus": account.subscriptionStatus?.rawValue as Any,
+                "currentPeriodStart": account.currentPeriodStart.map { Timestamp(date: $0) } as Any,
+                "nextBillingDate": account.nextBillingDate.map { Timestamp(date: $0) } as Any,
+                "metadata": try Firestore.Encoder().encode(account.metadata)
+            ], merge: true)
+            print("✅ Fixed user document format for userId: \(userId)")
+        } catch {
+            print("❌ Failed to fix user document: \(error)")
         }
     }
     
@@ -310,7 +375,7 @@ class FirebaseDataService: ObservableObject {
         
         do {
             let data = try Firestore.Encoder().encode(transaction)
-            try await creditTransactionsCollection.document(transaction.id).setData(data)
+            try await creditTransactionsCollection.document(transaction.documentId).setData(data)
         } catch {
             print("Failed to log credit transaction: \(error)")
         }

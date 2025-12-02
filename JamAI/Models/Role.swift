@@ -141,16 +141,8 @@ struct Role: Identifiable, Codable, Sendable {
     }
     
     /// Check if a specific level is available for the given plan tier
+    /// All levels are now available to all plans
     func isLevelAvailable(_ level: ExperienceLevel, for tier: PlanTier) -> Bool {
-        guard let prompt = levelPrompts.first(where: { $0.level == level }) else {
-            return false
-        }
-        
-        // Simple tier hierarchy: Free < Pro < Enterprise
-        let tierOrder: [PlanTier: Int] = [.free: 0, .pro: 1, .enterprise: 2]
-        let requiredOrder = tierOrder[prompt.requiredTier] ?? 0
-        let currentOrder = tierOrder[tier] ?? 0
-        
-        return currentOrder >= requiredOrder
+        return levelPrompts.contains(where: { $0.level == level })
     }
 }

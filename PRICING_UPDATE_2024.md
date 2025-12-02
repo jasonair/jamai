@@ -1,53 +1,43 @@
 # JamAI Pricing Structure Update (2024)
 
-## Updated Plans
+## Updated Plans (Simplified - December 2024)
 
-The JamAI pricing has been updated to align with the website and provide clearer value tiers:
+The JamAI pricing has been simplified to match the website. All plans now have:
+- **Access to all Jam AI team members** (no limits)
+- **All experience levels** (Junior, Intermediate, Senior, Expert)
+- **Unlimited saved Jams**
+
+The only difference between plans is the number of prompt credits.
 
 ### Free Plan
 - **Price**: $0 per user/month
-- **Credits**: 100 prompt credits/month (~100K tokens ≈ $0.06 cost)
-- **Team Members**: 3 AI Team Members (Junior & Intermediate only)
-- **Models**: Local model + Gemini 2.0 Flash-Lite
+- **Credits**: 100 prompt credits/month
 - **Features**:
-  - Basic web search (Serper/Tavily)
-  - Up to 3 saved Jams
-  - Community support
-- **Note**: New users receive a 14-day trial of Pro features.
+  - 2-week Pro trial
+  - Local model + Gemini 2.0
+  - Access to all Jam AI team members
 
-### Pro Plan
+### Pro Plan (Popular)
 - **Price**: $15 per user/month
-- **Credits**: 1,000 prompt credits/month (~1M tokens ≈ $0.60 cost)
-- **Team Members**: 12 AI Team Members per Jam (All experience levels)
-- **Models**: Gemini 2.5 Flash-Lite + Claude Instant
+- **Credits**: 1,000 prompt credits/month
 - **Features**:
   - Everything in Free, plus:
-  - Advanced web search (Perplexity-style)
-  - Image generation (low res)
-  - Unlimited saved Jams
-  - Priority support
+  - 1,000 prompt credits/month
 
 ### Teams Plan
 - **Price**: $30 per user/month
-- **Credits**: 1,500 prompt credits per user/month (~1.5M tokens ≈ $0.90 cost)
-- **Team Members**: Unlimited AI Team Members
+- **Credits**: 1,500 prompt credits per user/month
 - **Features**:
   - Everything in Pro, plus:
-  - Shared credit pool & add-on purchasing
-  - Create Teams from multiple AI Team Members
-  - Unlimited saved Jams
+  - 1,500 prompt credits/user/month
 
 ### Enterprise Plan
-- **Price**: Custom pricing (starting ≈ $99 per user/month)
-- **Credits**: 5,000 prompt credits per user/month (~5M tokens ≈ $3 cost)
-- **Team Members**: Unlimited AI Team Members
+- **Price**: Let's talk (Custom pricing, starts ~$99/user/month)
+- **Credits**: 5,000 prompt credits per user/month
 - **Features**:
   - Everything in Teams, plus:
-  - Private Gemini Vertex
+  - 5,000 prompt credits/user/month
   - Dedicated account manager
-  - Custom integrations
-  - Priority support
-  - Unlimited saved Jams
 
 ## Changes Implemented
 

@@ -111,7 +111,7 @@ extension ConversationSearchResult {
     
     /// Generate an attributed string with the match highlighted
     func highlightedSnippet(highlightColor: Color = .yellow) -> AttributedString {
-        var attributed = AttributedString(snippet)
+        let attributed = AttributedString(snippet)
         
         // Find the query match in the snippet and highlight it
         // Note: This is a simplified version - the actual match position

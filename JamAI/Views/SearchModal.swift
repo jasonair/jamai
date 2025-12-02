@@ -250,12 +250,14 @@ private struct SearchResultRow: View {
             let match = String(snippet[snippet.index(snippet.startIndex, offsetBy: startIndex)..<snippet.index(snippet.startIndex, offsetBy: endIndex)])
             let after = String(snippet.suffix(from: snippet.index(snippet.startIndex, offsetBy: endIndex)))
             
-            // Use Text concatenation without background (background breaks Text concatenation)
-            Text(before)
-                + Text(match)
+            // Use string interpolation instead of deprecated Text concatenation
+            HStack(spacing: 0) {
+                Text(before)
+                Text(match)
                     .foregroundColor(.accentColor)
                     .fontWeight(.semibold)
-                + Text(after)
+                Text(after)
+            }
         } else {
             Text(snippet)
         }

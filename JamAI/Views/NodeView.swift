@@ -690,18 +690,7 @@ struct NodeView: View {
                 // Add Team Member button (only show if no team member exists)
                 if shouldShowTeamMemberTray && node.teamMember == nil {
                     Button(action: { 
-                        // Check team member limit before allowing addition
-                        if let account = dataService.userAccount {
-                            // Skip limit check if unlimited (-1)
-                            if !account.plan.hasUnlimitedTeamMembers {
-                                let currentTeamMemberCount = projectTeamMembers.count + 1 // +1 for this node
-                                if currentTeamMemberCount >= account.plan.maxTeamMembersPerJam {
-                                    // Show alert about limit reached
-                                    showTeamMemberLimitAlert(maxAllowed: account.plan.maxTeamMembersPerJam, currentPlan: account.plan)
-                                    return
-                                }
-                            }
-                        }
+                        // All plans now have unlimited team members - no limit check needed
                         
                         // Clear SwiftUI focus states
                         isTitleFocused = false
@@ -1538,15 +1527,6 @@ struct NodeView: View {
         
         // Ensure the node stays selected after the revert completes
         onTap()
-    }
-    
-    private func showTeamMemberLimitAlert(maxAllowed: Int, currentPlan: UserPlan) {
-        let alert = NSAlert()
-        alert.messageText = "Team Member Limit Reached"
-        alert.informativeText = "Your \(currentPlan.displayName) plan allows up to \(maxAllowed) AI team members. Upgrade your plan to add more team members."
-        alert.alertStyle = .informational
-        alert.addButton(withTitle: "OK")
-        alert.runModal()
     }
     
     private func selectImage() {

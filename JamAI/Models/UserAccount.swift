@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import FirebaseFirestore
 
 /// User subscription plan tiers
 enum UserPlan: String, Codable, CaseIterable {
@@ -28,7 +29,7 @@ enum UserPlan: String, Codable, CaseIterable {
         case .free: return "$0"
         case .pro: return "$15"
         case .teams: return "$30"
-        case .enterprise: return "Custom"
+        case .enterprise: return "Let's talk"
         }
     }
     
@@ -41,36 +42,9 @@ enum UserPlan: String, Codable, CaseIterable {
         }
     }
     
-    var maxTeamMembersPerJam: Int {
-        switch self {
-        case .free: return 3
-        case .pro: return 12
-        case .teams: return -1 // Unlimited
-        case .enterprise: return -1 // Unlimited
-        }
-    }
-    
-    var maxSavedJams: Int {
-        switch self {
-        case .free: return 3
-        case .pro: return -1 // Unlimited
-        case .teams: return -1 // Unlimited
-        case .enterprise: return -1 // Unlimited
-        }
-    }
-    
+    // All plans now have unlimited team members and all experience levels
     var hasUnlimitedTeamMembers: Bool {
-        return maxTeamMembersPerJam == -1
-    }
-    
-    
-    var experienceLevelAccess: String {
-        switch self {
-        case .free: return "Junior & Intermediate"
-        case .pro: return "All experience levels"
-        case .teams: return "All experience levels"
-        case .enterprise: return "All experience levels"
-        }
+        return true
     }
     
     
@@ -78,39 +52,26 @@ enum UserPlan: String, Codable, CaseIterable {
         switch self {
         case .free:
             return [
-                "100 prompt credits/month (~100K tokens)",
-                "3 AI Team Members (Junior & Intermediate)",
-                "Local model + Gemini 2.0 Flash-Lite",
-                "Basic web search (Serper/Tavily)",
-                "Up to 3 saved Jams",
-                "Community support"
+                "2-week Pro trial",
+                "100 prompt credits / month",
+                "Local model + Gemini 2.0",
+                "Access to all Jam AI team members"
             ]
         case .pro:
             return [
                 "Everything in Free, plus:",
-                "1,000 prompt credits/month (~1M tokens)",
-                "Gemini 2.5 Flash-Lite + Claude Instant",
-                "12 AI Team Members per Jam (All levels)",
-                "Advanced web search (Perplexity-style)",
-                "Image generation (low res)",
-                "Priority support"
+                "1,000 prompt credits / month"
             ]
         case .teams:
             return [
                 "Everything in Pro, plus:",
-                "1,500 prompt credits per user/month (~1.5M tokens)",
-                "Shared credit pool & add-on purchasing",
-                "Unlimited AI Team Members",
-                "Create Teams from multiple AI Team Members"
+                "1,500 prompt credits / user / month"
             ]
         case .enterprise:
             return [
                 "Everything in Teams, plus:",
-                "5,000 prompt credits per user/month (~5M tokens)",
-                "Private Gemini Vertex",
-                "Dedicated account manager",
-                "Custom integrations",
-                "Priority support"
+                "5,000 prompt credits / user / month",
+                "Dedicated account manager"
             ]
         }
     }
@@ -147,7 +108,7 @@ enum SubscriptionStatus: String, Codable {
 
 /// User account data stored in Firebase
 struct UserAccount: Codable, Identifiable {
-    let id: String // Firebase UID
+    @DocumentID var id: String? // Firebase UID (injected from document path)
     var email: String
     var displayName: String?
     var photoURL: String?
@@ -169,8 +130,21 @@ struct UserAccount: Codable, Identifiable {
     /// User metadata for analytics
     var metadata: UserMetadata
     
+    /// Computed property for non-optional ID access
+    var documentId: String {
+        return id ?? ""
+    }
+    
+    // CodingKeys for custom decoding
+    enum CodingKeys: String, CodingKey {
+        case id, email, displayName, photoURL, plan, credits, creditsUsedThisMonth
+        case createdAt, lastLoginAt, planExpiresAt, isActive
+        case stripeCustomerId, stripeSubscriptionId, subscriptionStatus
+        case currentPeriodStart, nextBillingDate, metadata
+    }
+    
     init(
-        id: String,
+        id: String? = nil,
         email: String,
         displayName: String? = nil,
         photoURL: String? = nil,
@@ -207,6 +181,39 @@ struct UserAccount: Codable, Identifiable {
         self.metadata = UserMetadata()
     }
     
+    // Custom decoder to handle Firestore timestamps and missing fields
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        
+        // DocumentID is handled by the property wrapper
+        id = try container.decodeIfPresent(String.self, forKey: .id)
+        
+        // Required fields with defaults
+        email = try container.decodeIfPresent(String.self, forKey: .email) ?? ""
+        displayName = try container.decodeIfPresent(String.self, forKey: .displayName)
+        photoURL = try container.decodeIfPresent(String.self, forKey: .photoURL)
+        plan = try container.decodeIfPresent(UserPlan.self, forKey: .plan) ?? .free
+        credits = try container.decodeIfPresent(Int.self, forKey: .credits) ?? plan.monthlyCredits
+        creditsUsedThisMonth = try container.decodeIfPresent(Int.self, forKey: .creditsUsedThisMonth) ?? 0
+        isActive = try container.decodeIfPresent(Bool.self, forKey: .isActive) ?? true
+        
+        // Stripe fields
+        stripeCustomerId = try container.decodeIfPresent(String.self, forKey: .stripeCustomerId)
+        stripeSubscriptionId = try container.decodeIfPresent(String.self, forKey: .stripeSubscriptionId)
+        subscriptionStatus = try container.decodeIfPresent(SubscriptionStatus.self, forKey: .subscriptionStatus)
+        
+        // Date fields - Firestore decoder handles Timestamp -> Date automatically
+        // But we need to handle missing fields gracefully
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        lastLoginAt = try container.decodeIfPresent(Date.self, forKey: .lastLoginAt) ?? Date()
+        planExpiresAt = try container.decodeIfPresent(Date.self, forKey: .planExpiresAt)
+        currentPeriodStart = try container.decodeIfPresent(Date.self, forKey: .currentPeriodStart)
+        nextBillingDate = try container.decodeIfPresent(Date.self, forKey: .nextBillingDate)
+        
+        // Metadata with default
+        metadata = try container.decodeIfPresent(UserMetadata.self, forKey: .metadata) ?? UserMetadata()
+    }
+    
     var hasCredits: Bool {
         return credits > 0
     }
@@ -216,20 +223,13 @@ struct UserAccount: Codable, Identifiable {
         return Date() > expiresAt
     }
 
+    // All plans now have access to all features and team members
     var canAccessAdvancedFeatures: Bool {
-        switch self.plan {
-        case .pro, .teams, .enterprise: return true
-        case .free:
-            return !isTrialExpired
-        }
+        return true
     }
 
     var allowsSeniorAndExpert: Bool {
-        switch self.plan {
-        case .pro, .teams, .enterprise: return true
-        case .free:
-            return !isTrialExpired
-        }
+        return true
     }
 }
 
@@ -304,7 +304,7 @@ struct AppConfig: Codable {
 
 /// Credit transaction for tracking usage
 struct CreditTransaction: Codable, Identifiable {
-    var id: String
+    @DocumentID var id: String? // Injected from document path
     var userId: String
     var amount: Int // Negative for usage, positive for grants
     var type: TransactionType
@@ -320,8 +320,13 @@ struct CreditTransaction: Codable, Identifiable {
         case refund = "refund"
     }
     
+    /// Computed property for non-optional ID access
+    var documentId: String {
+        return id ?? UUID().uuidString
+    }
+    
     init(
-        id: String = UUID().uuidString,
+        id: String? = nil,
         userId: String,
         amount: Int,
         type: TransactionType,
@@ -329,7 +334,7 @@ struct CreditTransaction: Codable, Identifiable {
         timestamp: Date = Date(),
         metadata: [String: String]? = nil
     ) {
-        self.id = id
+        self.id = id ?? UUID().uuidString
         self.userId = userId
         self.amount = amount
         self.type = type

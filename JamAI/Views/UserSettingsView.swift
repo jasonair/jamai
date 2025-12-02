@@ -397,25 +397,6 @@ struct UserSettingsView: View {
                         }
                     }
                     
-                    // Plan comparison
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Plans")
-                            .font(.system(size: 18, weight: .semibold))
-                        
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
-                            ForEach(UserPlan.allCases, id: \.self) { plan in
-                                PlanCard(
-                                    plan: plan,
-                                    isCurrentPlan: plan == account.plan,
-                                    onSelect: {
-                                        upgradePlan(to: plan)
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    
-                    
                     // Sign out button
                     Button {
                         showingSignOutAlert = true
@@ -601,14 +582,6 @@ struct UserSettingsView: View {
         return "Prompts renew next month"
     }
     
-    private func upgradePlan(to plan: UserPlan) {
-        guard let userId = authService.currentUser?.uid else { return }
-        
-        Task {
-            await dataService.updateUserPlan(userId: userId, plan: plan)
-        }
-    }
-    
     private func loadCreditHistory(userId: String) {
         isLoadingHistory = true
         
@@ -696,95 +669,6 @@ struct StatCard: View {
         .padding(16)
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(12)
-    }
-}
-
-// MARK: - Plan Card
-
-struct PlanCard: View {
-    let plan: UserPlan
-    let isCurrentPlan: Bool
-    let onSelect: () -> Void
-    
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.displayName)
-                        .font(.system(size: 16, weight: .bold))
-                    
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text(plan.monthlyPrice)
-                            .font(.system(size: 24, weight: .bold))
-                        if plan.monthlyPrice != "Custom" && plan.monthlyPrice != "$0" {
-                            Text("/ month")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                        } else if plan.monthlyPrice == "$0" {
-                            Text("per user/month")
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-                
-                Spacer()
-                
-                if isCurrentPlan {
-                    Text("Current")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Color.green.opacity(0.15))
-                        .cornerRadius(8)
-                }
-            }
-            
-            Divider()
-            
-            VStack(alignment: .leading, spacing: 6) {
-                Text("\(plan.monthlyCredits) prompt credits/month")
-                    .font(.system(size: 12, weight: .medium))
-                
-                Text("• \(plan.hasUnlimitedTeamMembers ? "Unlimited" : "\(plan.maxTeamMembersPerJam)") AI team members\(plan.hasUnlimitedTeamMembers ? "" : " per Jam")")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                
-                Text("• \(plan.experienceLevelAccess)")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                
-                if plan.maxSavedJams != -1 {
-                    Text("• Up to \(plan.maxSavedJams) saved Jams")
-                        .font(.system(size: 11))
-                        .foregroundColor(.secondary)
-                }
-            }
-            
-            if !isCurrentPlan {
-                Button {
-                    onSelect()
-                } label: {
-                    Text("Select")
-                        .font(.system(size: 13, weight: .medium))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 8)
-                        .background(Color.accentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(8)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding()
-        .frame(minHeight: 140)
-        .background(isCurrentPlan ? Color.accentColor.opacity(0.1) : Color(nsColor: .controlBackgroundColor))
-        .cornerRadius(12)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(isCurrentPlan ? Color.accentColor : Color.clear, lineWidth: 2)
-        )
     }
 }
 

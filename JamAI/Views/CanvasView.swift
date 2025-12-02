@@ -646,7 +646,7 @@ struct CanvasView: View {
     private func nodeItemView(_ node: Node) -> some View {
         let isSelected = viewModel.selectedNodeId == node.id
 
-        return NodeItemWrapper(
+        NodeItemWrapper(
             node: binding(for: node.id),
             isSelected: isSelected,
             isGenerating: viewModel.generatingNodeId == node.id,

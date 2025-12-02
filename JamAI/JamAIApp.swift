@@ -688,27 +688,7 @@ class AppState: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             guard let self = self else { return }
             
-            // Check saved Jams limit for Free plan
-            if let account = FirebaseDataService.shared.userAccount {
-                let maxJams = account.plan.maxSavedJams
-                let currentJamCount = self.recentProjects.count
-                
-                if maxJams != -1 && currentJamCount >= maxJams {
-                    let alert = NSAlert()
-                    alert.messageText = "Project Limit Reached"
-                    alert.informativeText = "Your \(account.plan.displayName) plan allows up to \(maxJams) saved Jams. You currently have \(currentJamCount) projects. Please delete an old project or upgrade to Pro for unlimited projects."
-                    alert.alertStyle = .warning
-                    alert.addButton(withTitle: "View Plans")
-                    alert.addButton(withTitle: "Cancel")
-                    
-                    let response = alert.runModal()
-                    if response == .alertFirstButtonReturn {
-                        // Show user settings to view plans
-                        self.showUserSettings()
-                    }
-                    return
-                }
-            }
+            // All plans now have unlimited saved Jams - no limit check needed
             
             // Create a new project immediately with an auto-generated name,
             // without prompting the user for a save location.
