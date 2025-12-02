@@ -80,12 +80,13 @@ service cloud.firestore {
                      exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
     
-    // Analytics Daily - FIXED
+    // Analytics Daily - users can read/write their own daily analytics
+    // Document ID format: {userId}_{date} e.g. "abc123_2025-12-02"
     match /analytics_daily/{document} {
-      allow write: if request.auth != null && 
-                      request.resource.data.userId == request.auth.uid;
-      allow read: if request.auth != null && 
-                     resource.data.userId == request.auth.uid;
+      // Allow read/write if the document ID starts with the user's ID
+      allow read, write: if request.auth != null && 
+                            document.matches(request.auth.uid + '_.*');
+      // Admins can read all
       allow read: if request.auth != null && 
                      exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
