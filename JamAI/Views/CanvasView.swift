@@ -53,9 +53,11 @@ struct CanvasView: View {
     @Environment(\.colorScheme) var colorScheme
     
     // Computed once per render - safer than @State modification
-    // Pre-sorted by creation date so WorldLayerView doesn't need to sort every frame
+    // Sorted by z-order so nodes on top are rendered last (and receive hit events first)
     private var nodesArray: [Node] { 
-        Array(viewModel.nodes.values).sorted(by: { $0.createdAt < $1.createdAt })
+        Array(viewModel.nodes.values).sorted { 
+            viewModel.zIndex(for: $0.id) < viewModel.zIndex(for: $1.id) 
+        }
     }
     private var edgesArray: [Edge] { Array(viewModel.edges.values) }
     
