@@ -7,6 +7,136 @@
 
 import SwiftUI
 import UniformTypeIdentifiers
+import AppKit
+
+// MARK: - Event Blocking Container
+
+/// NSView that intercepts all mouse events to prevent them from passing through
+/// to views behind it (like canvas nodes). This is necessary because SwiftUI's
+/// hit testing can leak through overlaid views.
+private class EventBlockingView: NSView {
+    override var acceptsFirstResponder: Bool { true }
+    
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // If the point is within our bounds, check subviews first
+        if bounds.contains(point) {
+            // Check if any subview wants the event (this includes the NSHostingView)
+            for subview in subviews.reversed() {
+                let subviewPoint = convert(point, to: subview)
+                if let hitView = subview.hitTest(subviewPoint) {
+                    return hitView
+                }
+            }
+            // No subview claimed it, return self to block it from going further
+            return self
+        }
+        return nil
+    }
+    
+    // Only swallow mouse events that reach us directly (not handled by subviews)
+    // These are clicks on empty areas of the outline pane
+    override func mouseDown(with event: NSEvent) {
+        // Don't pass to super - this blocks the event from propagating to canvas
+    }
+    
+    override func mouseUp(with event: NSEvent) {
+        // Don't pass to super
+    }
+    
+    override func rightMouseDown(with event: NSEvent) {
+        // Don't pass to super
+    }
+    
+    override func otherMouseDown(with event: NSEvent) {
+        // Don't pass to super
+    }
+}
+
+/// Wrapper that blocks all mouse events from passing through to views behind it
+struct EventBlockingContainer<Content: View>: NSViewRepresentable {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    func makeNSView(context: Context) -> NSView {
+        let blockingView = EventBlockingView()
+        blockingView.wantsLayer = true
+        
+        let hostingView = NSHostingView(rootView: content)
+        // Use autoresizing mask instead of constraints - let SwiftUI drive the size
+        hostingView.autoresizingMask = [.width, .height]
+        blockingView.addSubview(hostingView)
+        
+        return blockingView
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        if let hostingView = nsView.subviews.first as? NSHostingView<Content> {
+            hostingView.rootView = content
+            // Ensure hosting view fills the blocking view
+            hostingView.frame = nsView.bounds
+        }
+    }
+}
+
+// MARK: - Outline Scroll View (NSScrollView wrapper to capture scroll events)
+
+/// Custom scroll view that properly captures scroll events and prevents them from
+/// propagating to the canvas behind the outline pane.
+struct OutlineScrollView<Content: View>: NSViewRepresentable {
+    let content: Content
+    
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.hasHorizontalScroller = false
+        scrollView.autohidesScrollers = true
+        scrollView.drawsBackground = false
+        scrollView.scrollerStyle = .overlay
+        
+        // Create hosting view for SwiftUI content
+        let hostingView = NSHostingView(rootView: content)
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
+        
+        // Use a flipped document view for proper top-to-bottom layout
+        let documentView = FlippedView()
+        documentView.translatesAutoresizingMaskIntoConstraints = false
+        documentView.addSubview(hostingView)
+        
+        scrollView.documentView = documentView
+        
+        // Constrain hosting view to document view
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: documentView.topAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: documentView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: documentView.trailingAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: documentView.bottomAnchor),
+            // Make document view match scroll view width
+            documentView.widthAnchor.constraint(equalTo: scrollView.widthAnchor)
+        ])
+        
+        return scrollView
+    }
+    
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        // Update the hosting view's root view
+        if let documentView = scrollView.documentView,
+           let hostingView = documentView.subviews.first as? NSHostingView<Content> {
+            hostingView.rootView = content
+        }
+    }
+}
+
+/// Flipped NSView for proper top-to-bottom content layout in scroll view
+private class FlippedView: NSView {
+    override var isFlipped: Bool { true }
+}
 
 struct OutlineView: View {
     @ObservedObject var viewModel: CanvasViewModel
@@ -27,6 +157,18 @@ struct OutlineView: View {
     }
     
     var body: some View {
+        // Wrap in EventBlockingContainer to intercept all mouse events at AppKit level
+        // This prevents clicks from leaking through to canvas nodes behind the outline
+        EventBlockingContainer {
+            outlineContent
+        }
+        .frame(width: 280)
+        .frame(maxHeight: viewportSize.height - 120)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 2, y: 0)
+    }
+    
+    private var outlineContent: some View {
         VStack(spacing: 0) {
             // Header
             HStack {
@@ -55,8 +197,8 @@ struct OutlineView: View {
             
             Divider()
             
-            // Outline content
-            ScrollView {
+            // Outline content - wrapped in NSScrollView to properly capture scroll events
+            OutlineScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     let outlineTree = buildOutlineTree()
                     ForEach(Array(outlineTree.enumerated()), id: \.element.id) { index, outlineNode in
@@ -94,18 +236,19 @@ struct OutlineView: View {
                             .foregroundColor(.secondary)
                             .padding()
                     }
+                    
+                    // Spacer at bottom to ensure last item is fully clickable
+                    // Need enough space so the last item isn't at the very bottom edge
+                    Spacer()
+                        .frame(height: 40)
                 }
                 .padding(.vertical, 8)
                 .padding(.horizontal, 8)
             }
         }
-        .frame(width: 280)
-        .frame(maxHeight: viewportSize.height - 120)
         .background(
             panelBackground.opacity(0.88)
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 2, y: 0)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)

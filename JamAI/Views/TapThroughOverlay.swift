@@ -70,6 +70,28 @@ final class TapThroughView: NSView {
             let locationInSelf = self.convert(locationInWindow, from: nil)
             
             if self.bounds.contains(locationInSelf) {
+                // Before triggering tap, check if there's a higher-z view (like outline pane)
+                // that should receive this click instead. Use hitTest on the window's content view.
+                if let window = self.window,
+                   let contentView = window.contentView {
+                    // Convert to content view coordinates (flipped)
+                    let locationInContent = contentView.convert(locationInWindow, from: nil)
+                    if let hitView = contentView.hitTest(locationInContent) {
+                        // Check if the hit view is part of an EventBlockingView (outline pane)
+                        // or any other blocking overlay that should intercept this click
+                        var checkView: NSView? = hitView
+                        while let view = checkView {
+                            // Check by class name to detect EventBlockingView
+                            let className = String(describing: type(of: view))
+                            if className.contains("EventBlockingView") || className.contains("BlockingView") {
+                                // A blocking view is on top - don't process this click
+                                return event
+                            }
+                            checkView = view.superview
+                        }
+                    }
+                }
+                
                 // Trigger the tap callback
                 self.onTap?()
                 

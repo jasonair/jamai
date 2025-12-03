@@ -161,6 +161,20 @@ struct CanvasView: View {
                         if modalCoordinator.isModalPresented {
                             return false
                         }
+                        
+                        // If the cursor is over the outline pane, don't pan the canvas.
+                        // Let the outline's internal scrolling work instead.
+                        if showOutline {
+                            let outlineRect = CGRect(
+                                x: 20,  // padding leading
+                                y: 56,  // tab bar height + padding
+                                width: 280,  // outline width
+                                height: min(geometry.size.height - 120, geometry.size.height - 56)  // maxHeight constraint
+                            )
+                            if outlineRect.contains(mouseLocation) {
+                                return false
+                            }
+                        }
 
                         // If the cursor is over the selected node, never pan the canvas.
                         if let selectedId = viewModel.selectedNodeId,
@@ -210,6 +224,18 @@ struct CanvasView: View {
                     onRightClick: { point in
                         // Ignore right-clicks when a modal is open
                         guard !modalCoordinator.isModalPresented else { return }
+                        // Ignore right-clicks in outline pane area
+                        if showOutline {
+                            let outlineRect = CGRect(
+                                x: 20,
+                                y: 56,
+                                width: 280,
+                                height: geometry.size.height - 56
+                            )
+                            if outlineRect.contains(point) {
+                                return
+                            }
+                        }
                         contextMenuLocation = point
                     }
                 )
@@ -222,6 +248,20 @@ struct CanvasView: View {
             .onTapGesture {
                 // Completely block if modal is presented
                 guard !modalCoordinator.isModalPresented else { return }
+                
+                // Ignore taps on the outline pane area - let the outline handle them
+                if showOutline {
+                    let outlineRect = CGRect(
+                        x: 20,
+                        y: 56,
+                        width: 280,
+                        height: min(geometry.size.height - 120, geometry.size.height - 56)
+                    )
+                    if outlineRect.contains(mouseLocation) {
+                        return
+                    }
+                }
+                
                 // Dismiss custom context menu on tap
                 contextMenuLocation = nil
 
@@ -242,6 +282,18 @@ struct CanvasView: View {
                         if modalCoordinator.isModalPresented {
                             return
                         }
+                        // Block if drag started in outline pane area
+                        if showOutline {
+                            let outlineRect = CGRect(
+                                x: 20,
+                                y: 56,
+                                width: 280,
+                                height: geometry.size.height - 56
+                            )
+                            if outlineRect.contains(value.startLocation) {
+                                return
+                            }
+                        }
                         // Store the initial offset when drag starts (only once per gesture)
                         if gestureState == nil {
                             gestureState = viewModel.offset
@@ -252,6 +304,18 @@ struct CanvasView: View {
                         // Block if modal is open
                         if modalCoordinator.isModalPresented {
                             return
+                        }
+                        // Block if drag started in outline pane area
+                        if showOutline {
+                            let outlineRect = CGRect(
+                                x: 20,
+                                y: 56,
+                                width: 280,
+                                height: geometry.size.height - 56
+                            )
+                            if outlineRect.contains(value.startLocation) {
+                                return
+                            }
                         }
                         
                         if draggedNodeId == nil && !isResizingActive {
@@ -273,6 +337,18 @@ struct CanvasView: View {
                         // Block if modal is open
                         if modalCoordinator.isModalPresented {
                             return
+                        }
+                        // Block if pinch started in outline pane area
+                        if showOutline {
+                            let outlineRect = CGRect(
+                                x: 20,
+                                y: 56,
+                                width: 280,
+                                height: geometry.size.height - 56
+                            )
+                            if outlineRect.contains(mouseLocation) {
+                                return
+                            }
                         }
                         guard !isResizingActive else { return }
                         
@@ -326,6 +402,18 @@ struct CanvasView: View {
                 // Block if modal is open
                 if modalCoordinator.isModalPresented {
                     return
+                }
+                // Block if double-tap is in outline pane area
+                if showOutline {
+                    let outlineRect = CGRect(
+                        x: 20,
+                        y: 56,
+                        width: 280,
+                        height: geometry.size.height - 56
+                    )
+                    if outlineRect.contains(location) {
+                        return
+                    }
                 }
                 
                 // Double-click to create new node
