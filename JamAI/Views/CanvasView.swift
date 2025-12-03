@@ -45,7 +45,6 @@ struct CanvasView: View {
     
     // Pan debounce timer for two-finger scrolling
     @State private var panDebounceTimer: Timer?
-    @State private var scrollSelectedNodeId: UUID? = nil
     
     // Cached node frames to avoid rebuilding on every render
     @State private var cachedNodeFrames: [UUID: CGRect] = [:]
@@ -94,6 +93,9 @@ struct CanvasView: View {
     // and whose endpoints are visible (except during navigation, where
     // viewport culling is disabled to avoid pop-in).
     private var visibleEdges: [Edge] {
+        // Hide all edges during pan for smooth performance
+        guard !viewModel.isPanning else { return [] }
+        
         // If nothing is selected, hide all edges for performance and clarity
         guard let selectedId = viewModel.selectedNodeId else { return [] }
         
@@ -177,12 +179,9 @@ struct CanvasView: View {
                             return false
                         }
 
-                        // First scroll event in a burst: capture and temporarily clear selection
+                        // First scroll event in a burst: start panning mode
+                        // Keep selection intact so selected node stays expanded (no flashing)
                         if panDebounceTimer == nil {
-                            scrollSelectedNodeId = viewModel.selectedNodeId
-                            if scrollSelectedNodeId != nil {
-                                viewModel.selectedNodeId = nil
-                            }
                             viewModel.isPanning = true
                         }
 
@@ -199,14 +198,6 @@ struct CanvasView: View {
                             Task { @MainActor in
                                 panDebounceTimer = nil
                                 viewModel.isPanning = false
-
-                                if let savedId = scrollSelectedNodeId {
-                                    // Only restore if nothing else has selected a node
-                                    if viewModel.selectedNodeId == nil {
-                                        viewModel.selectedNodeId = savedId
-                                    }
-                                }
-                                scrollSelectedNodeId = nil
                             }
                         }
                         
@@ -242,7 +233,6 @@ struct CanvasView: View {
                     viewModel.selectedTool = .select
                 case .select:
                     viewModel.selectedNodeId = nil
-                    scrollSelectedNodeId = nil
                 }
             }
             .simultaneousGesture(
