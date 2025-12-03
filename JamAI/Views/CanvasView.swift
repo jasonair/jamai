@@ -654,7 +654,13 @@ struct CanvasView: View {
                 }
 
                 viewModel.bringToFront([node.id])
-                viewModel.selectedNodeId = node.id 
+                
+                // If clicking an unselected node, navigate to center it on canvas
+                if viewModel.selectedNodeId != node.id {
+                    viewModel.navigateToNode(node.id, viewportSize: viewportSize)
+                } else {
+                    viewModel.selectedNodeId = node.id
+                }
             },
             onPromptSubmit: { prompt, imageData, imageMimeType, webSearchEnabled in handlePromptSubmit(prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled, for: node.id) },
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
@@ -673,7 +679,6 @@ struct CanvasView: View {
             onResizeActiveChanged: { active in isResizingActive = active },
             onResizeLiveGeometryChange: { w, h in viewModel.updateNodeGeometryDuringDrag(node.id, width: w, height: h) },
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
-            onCenterOnCanvas: { viewModel.navigateToNode(node.id, viewportSize: viewportSize) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
         )
         .zIndex(viewModel.zIndex(for: node.id))

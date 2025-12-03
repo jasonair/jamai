@@ -31,7 +31,6 @@ struct NodeView: View {
     let onResizeCompensationChange: (CGSize) -> Void
     let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
-    let onCenterOnCanvas: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     
     @State private var isEditingTitle = false
@@ -55,9 +54,11 @@ struct NodeView: View {
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
     @State private var scrollViewID = UUID()
-    @State private var hasInitiallyLoaded = false
-    @State private var shouldScrollToBottomOnNextAppear = false
-    @State private var isPreparingScrollToBottom = false
+    @State private var isScrollReady = false
+    @State private var isCoverFadingOut = false
+    @State private var isContentVisible = false
+    @State private var isClosing = false
+    @State private var showExpandedContent = false
     @State private var processingMessageIndex = 0
     @State private var processingOpacity: Double = 1.0
     @State private var processingTimer: Timer?
@@ -86,75 +87,82 @@ struct NodeView: View {
                 Divider()
                 
                 // Team Member Tray (only for non-note nodes or notes with chat enabled)
-                if shouldShowTeamMemberTray && isSelected {
-                    if let teamMember = node.teamMember {
-                        TeamMemberTray(
-                            teamMember: teamMember,
-                            role: roleManager.role(withId: teamMember.roleId),
-                            personality: node.personality,
-                            onSettings: { 
-                                // Clear SwiftUI focus states
-                                isTitleFocused = false
-                                isPromptFocused = false
-                                isDescFocused = false
-                                
-                                // Show modal - sheet detection will handle scroll
-                                modalCoordinator.showTeamMemberModal(
-                                    existingMember: node.teamMember,
-                                    projectTeamMembers: projectTeamMembers,
-                                    onSave: { newMember in
-                                    onTeamMemberChange(newMember)
+                // Animate slide-down from behind header
+                if shouldShowTeamMemberTray && (isSelected || showExpandedContent) && node.teamMember != nil {
+                    VStack(spacing: 0) {
+                        if let teamMember = node.teamMember {
+                            TeamMemberTray(
+                                teamMember: teamMember,
+                                role: roleManager.role(withId: teamMember.roleId),
+                                personality: node.personality,
+                                onSettings: { 
+                                    // Clear SwiftUI focus states
+                                    isTitleFocused = false
+                                    isPromptFocused = false
+                                    isDescFocused = false
                                     
-                                    // Track analytics for team member addition/change
-                                    if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
-                                        Task {
-                                            await AnalyticsService.shared.trackTeamMemberUsage(
-                                                userId: userId,
-                                                projectId: node.projectId,
-                                                nodeId: node.id,
-                                                roleId: role.id,
-                                                roleName: role.name,
-                                                roleCategory: role.category.rawValue,
-                                                experienceLevel: newMember.experienceLevel.rawValue,
-                                                actionType: .attached // Or .changed if we distinguish
-                                            )
+                                    // Show modal - sheet detection will handle scroll
+                                    modalCoordinator.showTeamMemberModal(
+                                        existingMember: node.teamMember,
+                                        projectTeamMembers: projectTeamMembers,
+                                        onSave: { newMember in
+                                        onTeamMemberChange(newMember)
+                                        
+                                        // Track analytics for team member addition/change
+                                        if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                            Task {
+                                                await AnalyticsService.shared.trackTeamMemberUsage(
+                                                    userId: userId,
+                                                    projectId: node.projectId,
+                                                    nodeId: node.id,
+                                                    roleId: role.id,
+                                                    roleName: role.name,
+                                                    roleCategory: role.category.rawValue,
+                                                    experienceLevel: newMember.experienceLevel.rawValue,
+                                                    actionType: .attached // Or .changed if we distinguish
+                                                )
+                                            }
                                         }
-                                    }
-                                },
-                                    onRemove: { 
-                                    let oldMember = node.teamMember // Capture before it's nil
-                                    onTeamMemberChange(nil)
+                                    },
+                                        onRemove: { 
+                                        let oldMember = node.teamMember // Capture before it's nil
+                                        onTeamMemberChange(nil)
 
-                                    // Track analytics for team member removal
-                                    if let member = oldMember, let role = roleManager.role(withId: member.roleId), let userId = dataService.userAccount?.id {
-                                        Task {
-                                            await AnalyticsService.shared.trackTeamMemberUsage(
-                                                userId: userId,
-                                                projectId: node.projectId,
-                                                nodeId: node.id,
-                                                roleId: role.id,
-                                                roleName: role.name,
-                                                roleCategory: role.category.rawValue,
-                                                experienceLevel: member.experienceLevel.rawValue,
-                                                actionType: .removed
-                                            )
+                                        // Track analytics for team member removal
+                                        if let member = oldMember, let role = roleManager.role(withId: member.roleId), let userId = dataService.userAccount?.id {
+                                            Task {
+                                                await AnalyticsService.shared.trackTeamMemberUsage(
+                                                    userId: userId,
+                                                    projectId: node.projectId,
+                                                    nodeId: node.id,
+                                                    roleId: role.id,
+                                                    roleName: role.name,
+                                                    roleCategory: role.category.rawValue,
+                                                    experienceLevel: member.experienceLevel.rawValue,
+                                                    actionType: .removed
+                                                )
+                                            }
                                         }
                                     }
+                                    )
+                                },
+                                onPersonalityChange: { newPersonality in
+                                    node.personality = newPersonality
                                 }
-                                )
-                            },
-                            onPersonalityChange: { newPersonality in
-                                node.personality = newPersonality
-                            }
-                        )
-                        
-                        Divider()
+                            )
+                            
+                            Divider()
+                        }
                     }
+                    .frame(height: isScrollReady ? nil : 0)
+                    .clipped()
+                    .animation(.easeOut(duration: 0.3), value: isScrollReady)
                 }
                 
                 // Content with fixed input at bottom
+                ZStack {
                 VStack(spacing: 0) {
-                    if isSelected {
+                    if isSelected || showExpandedContent {
                         // Content area - different layout for notes vs standard nodes
                         // Use flexible frame to account for team member tray height
                         Group {
@@ -179,27 +187,22 @@ struct NodeView: View {
                                             
                                             // Conversation thread - no width constraint, let MarkdownText handle it
                                             conversationView
-                                                .id(scrollViewID)
+                                            
+                                            // Bottom anchor for scrolling to end
+                                            Color.clear
+                                                .frame(height: 1)
+                                                .id("scroll-bottom-anchor")
                                         }
                                         .padding(Node.padding)
                                     }
                                     .disabled(!isSelected)
-                                    .opacity(isPreparingScrollToBottom ? 0 : 1)
+                                    .opacity(isContentVisible ? 1 : 0)
                                     .onAppear {
-                                        // Auto-scroll on initial load and when explicitly requested
-                                        if !hasInitiallyLoaded || shouldScrollToBottomOnNextAppear {
-                                            hasInitiallyLoaded = true
-                                            shouldScrollToBottomOnNextAppear = false
-                                            isPreparingScrollToBottom = true
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                if let last = node.conversation.last {
-                                                    proxy.scrollTo(last.id, anchor: .bottom)
-                                                }
-                                                DispatchQueue.main.async {
-                                                    isPreparingScrollToBottom = false
-                                                }
-                                            }
-                                        }
+                                        // Reset states and scroll to bottom
+                                        isScrollReady = false
+                                        isCoverFadingOut = false
+                                        isContentVisible = false
+                                        scrollToBottomThenShow(proxy: proxy)
                                     }
                                     .onChange(of: node.conversation.count) { oldCount, newCount in
                                         if newCount > oldCount {
@@ -226,8 +229,13 @@ struct NodeView: View {
                             } else {
                                 // When chat is hidden, show note content
                                 // Single TextEditor handles both reading and editing
+                                // No scrolling needed, so mark as ready immediately
                                 noteDescriptionView
                                     .padding(Node.padding)
+                                    .onAppear {
+                                        isScrollReady = true
+                                        isContentVisible = true
+                                    }
                             }
                         } else {
                             // For standard nodes: ScrollView with conversation
@@ -244,33 +252,22 @@ struct NodeView: View {
                                         
                                         // Conversation thread - no width constraint, let MarkdownText handle it
                                         conversationView
-                                            .id(scrollViewID)
+                                        
+                                        // Bottom anchor for scrolling to end
+                                        Color.clear
+                                            .frame(height: 1)
+                                            .id("scroll-bottom-anchor")
                                     }
                                     .padding(Node.padding)
                                 }
                                 .disabled(!isSelected)
-                                .opacity(isPreparingScrollToBottom ? 0 : 1)
+                                .opacity(isContentVisible ? 1 : 0)
                                 .onAppear {
-                                    // Auto-scroll on initial load and when explicitly requested
-                                    if !hasInitiallyLoaded || shouldScrollToBottomOnNextAppear {
-                                        hasInitiallyLoaded = true
-                                        shouldScrollToBottomOnNextAppear = false
-                                        isPreparingScrollToBottom = true
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                                proxy.scrollTo(lastAssistantId, anchor: .bottom)
-                                            } else if let lastMessageId = node.conversation.last?.id {
-                                                proxy.scrollTo(lastMessageId, anchor: .bottom)
-                                            } else if !node.response.isEmpty {
-                                                proxy.scrollTo("legacy-assistant", anchor: .bottom)
-                                            } else if !node.prompt.isEmpty {
-                                                proxy.scrollTo("legacy-user", anchor: .bottom)
-                                            }
-                                            DispatchQueue.main.async {
-                                                isPreparingScrollToBottom = false
-                                            }
-                                        }
-                                    }
+                                    // Reset states and scroll to bottom
+                                    isScrollReady = false
+                                    isCoverFadingOut = false
+                                    isContentVisible = false
+                                    scrollToBottomThenShow(proxy: proxy)
                                 }
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
@@ -336,39 +333,52 @@ struct NodeView: View {
                             .padding(.horizontal, Node.padding / 2)
                             .padding(.vertical, Node.padding / 2)
                     }
-                    } else {
-                        Spacer(minLength: 0)
-                        HStack {
+                    }
+                }
+                
+                // Cover view - shown when not selected OR when selected but content not visible yet
+                if !isSelected || !isContentVisible || isClosing {
+                    ZStack {
+                        // Background stays solid
+                        contentBackground
+                        
+                        // Icon and text fade out
+                        VStack {
                             Spacer(minLength: 0)
-                            VStack(spacing: 8) {
-                                if let teamMember = node.teamMember,
-                                   let role = roleManager.role(withId: teamMember.roleId) {
-                                    Image(systemName: role.icon)
-                                        .resizable()
-                                        .scaledToFit()
-                                        .frame(width: 40, height: 40)
+                            HStack {
+                                Spacer(minLength: 0)
+                                VStack(spacing: 8) {
+                                    if let teamMember = node.teamMember,
+                                       let role = roleManager.role(withId: teamMember.roleId) {
+                                        Image(systemName: role.icon)
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 40, height: 40)
+                                            .foregroundColor(headerTextColor)
+                                            .opacity(0.8)
+                                        Text(teamMember.displayName(with: role))
+                                            .font(.system(size: 11, weight: .medium))
+                                            .foregroundColor(headerTextColor.opacity(0.8))
+                                    }
+                                    Text(node.title.isEmpty ? "Untitled" : node.title)
+                                        .font(.system(size: 18, weight: .semibold))
                                         .foregroundColor(headerTextColor)
-                                        .opacity(0.8)
-                                    Text(teamMember.displayName(with: role))
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(headerTextColor.opacity(0.8))
+                                        .multilineTextAlignment(.center)
+                                        .lineLimit(3)
+                                        .padding(.horizontal, 12)
+                                        .padding(.vertical, 6)
+                                        .background(headerBackground)
+                                        .cornerRadius(8)
+                                        .frame(maxWidth: 260)
                                 }
-                                Text(node.title.isEmpty ? "Untitled" : node.title)
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(headerTextColor)
-                                    .multilineTextAlignment(.center)
-                                    .lineLimit(3)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(headerBackground)
-                                    .cornerRadius(8)
-                                    .frame(maxWidth: 260)
+                                .offset(y: -10)
+                                Spacer(minLength: 0)
                             }
-                            .offset(y: -10)
                             Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        .opacity(isCoverFadingOut ? 0 : 1)
                     }
+                }
                 }
                 .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
                 .background(contentBackground)
@@ -419,11 +429,9 @@ struct NodeView: View {
         }
         .onChange(of: isSelected) { oldValue, newValue in
             if newValue {
-                // When transitioning from unselected to selected, ensure the
-                // scroll view will scroll to the bottom the next time it appears.
-                if !oldValue {
-                    shouldScrollToBottomOnNextAppear = true
-                }
+                // Opening - set showExpandedContent immediately
+                showExpandedContent = true
+                isClosing = false
                 // Only focus prompt for non-note nodes or when chat section is visible
                 // Notes can be scrolled and clicked to focus without auto-focusing
                 if node.type != .note || showChatSection {
@@ -431,14 +439,38 @@ struct NodeView: View {
                 }
                 isEditingTitle = false
             } else {
-                // When deselected, clear all focus states
-                // Content is already auto-saved, just clear focus
+                // Closing - animate out before hiding content
+                isClosing = true
                 isDescFocused = false
                 isPromptFocused = false
                 isTitleFocused = false
                 isEditingTitle = false
                 isEditingDescription = false
-                // Scroll detection now uses ViewModel's selectedNodeId - no first responder needed
+                
+                // Step 1: Fade out content
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isContentVisible = false
+                }
+                
+                // Step 2: Fade in cover icon/text
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.easeIn(duration: 0.15)) {
+                        isCoverFadingOut = false
+                    }
+                    
+                    // Step 3: Slide up team bar
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.easeIn(duration: 0.2)) {
+                            isScrollReady = false
+                        }
+                        
+                        // Finally: Hide expanded content after animations complete
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            showExpandedContent = false
+                            isClosing = false
+                        }
+                    }
+                }
             }
         }
         .allowsHitTesting(!modalCoordinator.isModalPresented) // Disable all interaction when modal is open
@@ -571,8 +603,9 @@ struct NodeView: View {
     private var headerHeight: CGFloat {
         var height: CGFloat = 60 // Base header height
         
-        // Add team member tray height if present and node is selected
-        if shouldShowTeamMemberTray && node.teamMember != nil && isSelected {
+        // Add team member tray height if present, selected, AND scroll is ready
+        // This ensures the cover stays in place while the tray animates in
+        if shouldShowTeamMemberTray && node.teamMember != nil && isSelected && isScrollReady {
             height += 60 // Team member tray height (~50-60px)
         }
         
@@ -761,14 +794,6 @@ struct NodeView: View {
                 .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
             } else {
                 Spacer()
-
-                Button(action: onCenterOnCanvas) {
-                    Image(systemName: "scope")
-                        .foregroundColor(headerTextColor)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Center on Canvas")
             }
         }
         .padding(.horizontal, Node.padding)
@@ -1497,6 +1522,44 @@ struct NodeView: View {
     }
     
     // MARK: - Actions
+    
+    private func scrollToBottomThenShow(proxy: ScrollViewProxy) {
+        // Scroll multiple times while hidden to ensure scroll position is at the end
+        // Content needs time to fully lay out before scroll will work correctly
+        // Then reveal the content with a fade-in animation
+        let scrollDelays: [Double] = [0.1, 0.25, 0.4, 0.55, 0.7]
+        
+        for delay in scrollDelays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+            }
+        }
+        
+        // After scrolling is complete, trigger animations in sequence
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            // One final scroll right before showing to ensure position is correct
+            proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+            
+            // Step 1: Team bar slides down
+            withAnimation(.easeOut(duration: 0.3)) {
+                isScrollReady = true
+            }
+            
+            // Step 2: Cover icon/text fades out (after team bar animation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isCoverFadingOut = true
+                }
+                
+                // Step 3: Content fades in (after cover fades out)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    withAnimation(.easeIn(duration: 0.2)) {
+                        isContentVisible = true
+                    }
+                }
+            }
+        }
+    }
     
     private func revertConversation(to message: ConversationMessage, originalContent: String) {
         let alert = NSAlert()
