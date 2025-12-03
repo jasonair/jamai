@@ -1658,8 +1658,25 @@ struct NodeView: View {
             Task {
                 do {
                     try await recordingService.startRecording()
+                } catch let error as AudioRecordingError {
+                    await MainActor.run {
+                        if case .permissionDenied = error {
+                            // Open System Settings > Privacy & Security > Microphone
+                            if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone") {
+                                NSWorkspace.shared.open(url)
+                            }
+                        } else {
+                            // Show generic error alert for other errors
+                            let alert = NSAlert()
+                            alert.messageText = "Recording Error"
+                            alert.informativeText = error.localizedDescription
+                            alert.alertStyle = .warning
+                            alert.addButton(withTitle: "OK")
+                            alert.runModal()
+                        }
+                    }
                 } catch {
-                    // Show error alert on main thread
+                    // Handle unexpected errors
                     await MainActor.run {
                         let alert = NSAlert()
                         alert.messageText = "Recording Error"
