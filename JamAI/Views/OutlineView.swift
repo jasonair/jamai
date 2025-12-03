@@ -378,6 +378,10 @@ private struct OutlineItemView: View {
                     Image(systemName: "note.text")
                         .font(.system(size: 10))
                         .foregroundColor(nodeColor)
+                } else if outlineNode.node.type == .text || outlineNode.node.type == .title {
+                    Text("T")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(nodeColor)
                 } else {
                     Circle()
                         .fill(nodeColor)
@@ -428,9 +432,23 @@ private struct OutlineItemView: View {
     }
     
     private var nodeTitle: String {
+        // For regular nodes, use the title
         if !outlineNode.node.title.isEmpty {
             return outlineNode.node.title
         }
+        
+        // For text/title nodes without a title, show preview of description (which holds the text content)
+        if outlineNode.node.type == .text || outlineNode.node.type == .title {
+            let text = outlineNode.node.description.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                // Show first 30 characters with ellipsis if longer
+                if text.count > 30 {
+                    return String(text.prefix(30)) + "..."
+                }
+                return text
+            }
+        }
+        
         return "Untitled"
     }
     
