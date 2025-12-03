@@ -14,7 +14,7 @@ import AppKit
 /// NSView that intercepts all mouse events to prevent them from passing through
 /// to views behind it (like canvas nodes). This is necessary because SwiftUI's
 /// hit testing can leak through overlaid views.
-private class EventBlockingView: NSView {
+class EventBlockingView: NSView {
     override var acceptsFirstResponder: Bool { true }
     
     override func hitTest(_ point: NSPoint) -> NSView? {
@@ -246,9 +246,7 @@ struct OutlineView: View {
                 .padding(.horizontal, 8)
             }
         }
-        .background(
-            panelBackground.opacity(0.88)
-        )
+        .background(panelBackground)
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
