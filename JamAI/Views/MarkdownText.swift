@@ -848,11 +848,19 @@ private class TableLayerView: NSView {
         container.borderColor = borderColor
         container.borderWidth = 0.5
         
-        // Background for header cells
+        // Background for all cells - use system default colors that work in both light/dark mode
+        // This ensures tables have a consistent background regardless of node color
         if isHeader {
+            // Header: slightly darker/more prominent background
             let bgColor: CGColor = isDarkMode
-                ? NSColor.white.withAlphaComponent(0.08).cgColor
-                : NSColor.black.withAlphaComponent(0.05).cgColor
+                ? NSColor(calibratedRed: 0.18, green: 0.18, blue: 0.20, alpha: 1.0).cgColor  // Dark grey
+                : NSColor(calibratedRed: 0.92, green: 0.92, blue: 0.94, alpha: 1.0).cgColor  // Light grey
+            container.backgroundColor = bgColor
+        } else {
+            // Data rows: standard background
+            let bgColor: CGColor = isDarkMode
+                ? NSColor(calibratedRed: 0.14, green: 0.14, blue: 0.16, alpha: 1.0).cgColor  // Darker grey
+                : NSColor(calibratedRed: 0.98, green: 0.98, blue: 0.99, alpha: 1.0).cgColor  // Near white
             container.backgroundColor = bgColor
         }
         
