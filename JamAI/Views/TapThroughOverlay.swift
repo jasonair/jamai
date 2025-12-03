@@ -71,23 +71,51 @@ final class TapThroughView: NSView {
             
             if self.bounds.contains(locationInSelf) {
                 // Before triggering tap, check if there's a higher-z view (like outline pane)
-                // that should receive this click instead. Use hitTest on the window's content view.
+                // that should receive this click instead.
                 if let window = self.window,
                    let contentView = window.contentView {
-                    // Convert to content view coordinates (flipped)
+                    // Use the content view's frame height for coordinate conversion
+                    let contentHeight = contentView.frame.height
+                    // Convert window coordinates (origin at bottom-left) to flipped coordinates (origin at top-left)
+                    let flippedY = contentHeight - locationInWindow.y
+                    
+                    // Direct coordinate check for outline pane area
+                    // Outline pane: x=20 to 300, y=56 (from top) to bottom
+                    // This is a reliable fallback since hitTest may not work correctly with SwiftUI hosting views
+                    #if DEBUG
+                    print("[TapThroughView] Click at window: (\(locationInWindow.x), \(locationInWindow.y)), flippedY: \(flippedY), contentHeight: \(contentHeight)")
+                    #endif
+                    if locationInWindow.x >= 20 && locationInWindow.x <= 300 && flippedY >= 56 {
+                        // Click is in the outline pane area - don't process this tap
+                        #if DEBUG
+                        print("[TapThroughView] Blocked - in outline pane area")
+                        #endif
+                        return event
+                    }
+                    
+                    // Also check zoom controls area (top center) and background toggle (bottom right)
+                    // Zoom controls: roughly centered, y < 100 from top
+                    let centerX = contentView.frame.width / 2
+                    if flippedY >= 60 && flippedY <= 100 && abs(locationInWindow.x - centerX) < 150 {
+                        // Click is in zoom controls area
+                        return event
+                    }
+                    
+                    // Background toggle: bottom right corner
+                    if flippedY >= contentHeight - 80 && locationInWindow.x >= contentView.frame.width - 200 {
+                        // Click is in background toggle area
+                        return event
+                    }
+                    
+                    // Fallback: use hitTest to check for other overlays
                     let locationInContent = contentView.convert(locationInWindow, from: nil)
                     if let hitView = contentView.hitTest(locationInContent) {
-                        // Check if the hit view is part of an EventBlockingView (outline pane)
-                        // or any other blocking overlay that should intercept this click
-                        var checkView: NSView? = hitView
-                        while let view = checkView {
-                            // Check by class name to detect EventBlockingView
-                            let className = String(describing: type(of: view))
-                            if className.contains("EventBlockingView") || className.contains("BlockingView") {
-                                // A blocking view is on top - don't process this click
-                                return event
-                            }
-                            checkView = view.superview
+                        // Check if the hit view is NOT related to this TapThroughView
+                        let isHitViewRelatedToSelf = (hitView === self) || hitView.isDescendant(of: self) || self.isDescendant(of: hitView)
+                        
+                        if !isHitViewRelatedToSelf {
+                            // The click hit a different view - don't process this tap
+                            return event
                         }
                     }
                 }

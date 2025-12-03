@@ -65,9 +65,16 @@ struct EventBlockingContainer<Content: View>: NSViewRepresentable {
         blockingView.wantsLayer = true
         
         let hostingView = NSHostingView(rootView: content)
-        // Use autoresizing mask instead of constraints - let SwiftUI drive the size
-        hostingView.autoresizingMask = [.width, .height]
+        hostingView.translatesAutoresizingMaskIntoConstraints = false
         blockingView.addSubview(hostingView)
+        
+        // Use constraints to ensure hosting view fills the blocking view
+        NSLayoutConstraint.activate([
+            hostingView.topAnchor.constraint(equalTo: blockingView.topAnchor),
+            hostingView.leadingAnchor.constraint(equalTo: blockingView.leadingAnchor),
+            hostingView.trailingAnchor.constraint(equalTo: blockingView.trailingAnchor),
+            hostingView.bottomAnchor.constraint(equalTo: blockingView.bottomAnchor)
+        ])
         
         return blockingView
     }
@@ -75,8 +82,6 @@ struct EventBlockingContainer<Content: View>: NSViewRepresentable {
     func updateNSView(_ nsView: NSView, context: Context) {
         if let hostingView = nsView.subviews.first as? NSHostingView<Content> {
             hostingView.rootView = content
-            // Ensure hosting view fills the blocking view
-            hostingView.frame = nsView.bounds
         }
     }
 }
@@ -157,48 +162,33 @@ struct OutlineView: View {
     }
     
     var body: some View {
-        // Wrap in EventBlockingContainer to intercept all mouse events at AppKit level
-        // This prevents clicks from leaking through to canvas nodes behind the outline
-        EventBlockingContainer {
-            outlineContent
-        }
-        .frame(width: 280)
-        .frame(maxHeight: viewportSize.height - 120)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 2, y: 0)
-    }
-    
-    private var outlineContent: some View {
+        // Structure: Header outside EventBlockingContainer, scroll content inside
+        // This ensures the header button is always clickable
         VStack(spacing: 0) {
-            // Header
-            HStack {
-                Image(systemName: "list.bullet.indent")
-                    .font(.system(size: 14))
-                Text("Outline")
-                    .font(.headline)
-                Spacer()
-                
-                // Collapse button
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isCollapsed.toggle()
-                    }
-                }) {
-                    Image(systemName: "sidebar.left")
-                        .font(.system(size: 14))
-                        .foregroundColor(.secondary)
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Hide Outline")
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
-            .background(headerBackground)
+            // Header - outside EventBlockingContainer for reliable click handling
+            headerView
             
             Divider()
             
-            // Outline content - wrapped in NSScrollView to properly capture scroll events
-            OutlineScrollView {
+            // Scroll content wrapped in EventBlockingContainer to block canvas interaction
+            EventBlockingContainer {
+                scrollContent
+            }
+        }
+        .frame(width: 280)
+        .frame(maxHeight: viewportSize.height - 120)
+        .background(panelBackground)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 2, y: 0)
+    }
+    
+    private var scrollContent: some View {
+        // Outline content - wrapped in NSScrollView to properly capture scroll events
+        OutlineScrollView {
                 VStack(alignment: .leading, spacing: 2) {
                     let outlineTree = buildOutlineTree()
                     ForEach(Array(outlineTree.enumerated()), id: \.element.id) { index, outlineNode in
@@ -245,12 +235,35 @@ struct OutlineView: View {
                 .padding(.vertical, 8)
                 .padding(.horizontal, 8)
             }
+    }
+    
+    // MARK: - Header View
+    
+    private var headerView: some View {
+        HStack {
+            Image(systemName: "list.bullet.indent")
+                .font(.system(size: 14))
+            Text("Outline")
+                .font(.headline)
+            Spacer()
+            
+            // Collapse button
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    isCollapsed.toggle()
+                }
+            }) {
+                Image(systemName: "sidebar.left")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Hide Outline")
         }
-        .background(panelBackground)
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(colorScheme == .dark ? 0.1 : 0.3), lineWidth: 0.5)
-        )
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(headerBackground)
+        .contentShape(Rectangle())
     }
     
     // MARK: - Outline Tree Building
