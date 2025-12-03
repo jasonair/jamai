@@ -328,8 +328,8 @@ struct UserSettingsView: View {
                                 
                                 // Manage Subscription Button
                                 Button {
-                                    if let url = URL(string: "https://www.usejamai.com/account") {
-                                        NSWorkspace.shared.open(url)
+                                    Task {
+                                        await openAccountPageWithAuth()
                                     }
                                 } label: {
                                     HStack {
@@ -371,8 +371,8 @@ struct UserSettingsView: View {
                                 }
                                 
                                 Button {
-                                    if let url = URL(string: "https://www.usejamai.com/account") {
-                                        NSWorkspace.shared.open(url)
+                                    Task {
+                                        await openAccountPageWithAuth()
                                     }
                                 } label: {
                                     HStack {
@@ -482,7 +482,40 @@ struct UserSettingsView: View {
         }
     }
     
+    // MARK: - Constants
+    
+    private let accountPageURL = "https://www.usejamai.com/account"
+    
     // MARK: - Helpers
+    
+    /// Opens the account page with Firebase auth token for seamless session handoff
+    private func openAccountPageWithAuth() async {
+        guard let user = authService.currentUser else {
+            print("No user logged in")
+            return
+        }
+        
+        do {
+            // Get fresh ID token from Firebase (force refresh to ensure it's not near expiration)
+            let idToken = try await user.getIDToken(forcingRefresh: true)
+            
+            // Construct URL with token parameter
+            var components = URLComponents(string: accountPageURL)
+            components?.queryItems = [
+                URLQueryItem(name: "auth_token", value: idToken)
+            ]
+            
+            if let url = components?.url {
+                NSWorkspace.shared.open(url)
+            }
+        } catch {
+            print("Failed to get ID token: \(error)")
+            // Fallback to opening without token
+            if let url = URL(string: accountPageURL) {
+                NSWorkspace.shared.open(url)
+            }
+        }
+    }
     
     private func planColor(for plan: UserPlan) -> Color {
         switch plan {
