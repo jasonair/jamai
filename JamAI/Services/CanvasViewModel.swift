@@ -129,6 +129,10 @@ class CanvasViewModel: ObservableObject {
 
         let noteX = parent.x + parent.width + 50
         let noteY = parent.y + 40
+        
+        // Inherit color from parent node (including "none" for default styling)
+        let inheritedColor = parent.color
+        
         var note = Node(
             projectId: project.id,
             parentId: parentId,
@@ -141,7 +145,7 @@ class CanvasViewModel: ObservableObject {
             descriptionSource: .user,
             isExpanded: true,
             isFrozenContext: false,
-            color: "lightYellow",
+            color: inheritedColor,
             type: .note
         )
         var ancestry = parent.ancestry
