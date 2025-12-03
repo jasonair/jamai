@@ -238,6 +238,14 @@ struct CanvasView: View {
                                 return
                             }
                         }
+                        // Ignore right-clicks inside any node - let node's RightClickExpandOverlay handle it
+                        let canvasPos = screenToCanvas(point, in: geometry.size)
+                        for node in viewModel.nodes.values {
+                            let nodeRect = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+                            if nodeRect.contains(canvasPos) {
+                                return
+                            }
+                        }
                         contextMenuLocation = point
                     }
                 )
@@ -511,18 +519,21 @@ struct CanvasView: View {
                 CanvasContextMenu(
                     onCreateChat: {
                         let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
-                        viewModel.createNode(at: canvasPos)
+                        // Dismiss menu first, then create node
                         contextMenuLocation = nil
+                        viewModel.createNode(at: canvasPos)
                     },
                     onCreateNote: {
                         let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
-                        viewModel.createFreeformNote(at: canvasPos)
+                        // Dismiss menu first, then create note
                         contextMenuLocation = nil
+                        viewModel.createFreeformNote(at: canvasPos)
                     },
                     onCreateTitle: {
                         let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
-                        viewModel.createTitleLabel(at: canvasPos)
+                        // Dismiss menu first, then create title
                         contextMenuLocation = nil
+                        viewModel.createTitleLabel(at: canvasPos)
                     }
                 )
                 .position(menuPoint)

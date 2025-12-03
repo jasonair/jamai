@@ -465,7 +465,7 @@ class CanvasViewModel: ObservableObject {
                 descriptionSource: .user,
                 isExpanded: true,
                 isFrozenContext: false,
-                color: "lightYellow",
+                color: "none",
                 type: .note
             )
             note.systemPromptSnapshot = self.project.systemPrompt
