@@ -242,16 +242,6 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(appState.viewModel == nil)
-                
-                Button("Export JSON...") {
-                    appState.exportJSON()
-                }
-                .keyboardShortcut("e", modifiers: [.command, .shift])
-                
-                Button("Export Markdown...") {
-                    appState.exportMarkdown()
-                }
-                .disabled(appState.viewModel == nil)
                 // Close items
                 Divider()
                 Button("Close Project") { appState.closeProject() }
@@ -268,20 +258,6 @@ struct JamAIApp: App {
                 Button("Zoom") { NSApp.keyWindow?.zoom(nil) }
             }
         
-            CommandGroup(after: .pasteboard) {
-                Button("Copy Node") {
-                    appState.viewModel?.copyNode(appState.viewModel?.selectedNodeId ?? UUID())
-                }
-                .keyboardShortcut("c", modifiers: .command)
-                .disabled(appState.viewModel?.selectedNodeId == nil)
-                
-                Button("Paste Node") {
-                    appState.viewModel?.pasteNode(at: .zero)
-                }
-                .keyboardShortcut("v", modifiers: .command)
-                .disabled(appState.viewModel == nil)
-            }
-            
             CommandGroup(after: .undoRedo) {
                 Button("Zoom In") {
                     appState.viewModel?.zoomIn()
@@ -335,6 +311,7 @@ struct JamAIApp: App {
                 Button("Account...") {
                     appState.showUserSettings()
                 }
+                .keyboardShortcut("a", modifiers: [.command, .option])
                 .disabled(!authService.isAuthenticated)
             }
             
