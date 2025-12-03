@@ -81,83 +81,10 @@ struct NodeView: View {
         return AnyView(
         ZStack(alignment: .bottomTrailing) {
             VStack(alignment: .leading, spacing: 0) {
-                // Header
+                // Header - fixed at top
                 headerView
                 
                 Divider()
-                
-                // Team Member Tray (only for non-note nodes or notes with chat enabled)
-                // Animate slide-down from behind header
-                if shouldShowTeamMemberTray && (isSelected || showExpandedContent) && node.teamMember != nil {
-                    VStack(spacing: 0) {
-                        if let teamMember = node.teamMember {
-                            TeamMemberTray(
-                                teamMember: teamMember,
-                                role: roleManager.role(withId: teamMember.roleId),
-                                personality: node.personality,
-                                onSettings: { 
-                                    // Clear SwiftUI focus states
-                                    isTitleFocused = false
-                                    isPromptFocused = false
-                                    isDescFocused = false
-                                    
-                                    // Show modal - sheet detection will handle scroll
-                                    modalCoordinator.showTeamMemberModal(
-                                        existingMember: node.teamMember,
-                                        projectTeamMembers: projectTeamMembers,
-                                        onSave: { newMember in
-                                        onTeamMemberChange(newMember)
-                                        
-                                        // Track analytics for team member addition/change
-                                        if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
-                                            Task {
-                                                await AnalyticsService.shared.trackTeamMemberUsage(
-                                                    userId: userId,
-                                                    projectId: node.projectId,
-                                                    nodeId: node.id,
-                                                    roleId: role.id,
-                                                    roleName: role.name,
-                                                    roleCategory: role.category.rawValue,
-                                                    experienceLevel: newMember.experienceLevel.rawValue,
-                                                    actionType: .attached // Or .changed if we distinguish
-                                                )
-                                            }
-                                        }
-                                    },
-                                        onRemove: { 
-                                        let oldMember = node.teamMember // Capture before it's nil
-                                        onTeamMemberChange(nil)
-
-                                        // Track analytics for team member removal
-                                        if let member = oldMember, let role = roleManager.role(withId: member.roleId), let userId = dataService.userAccount?.id {
-                                            Task {
-                                                await AnalyticsService.shared.trackTeamMemberUsage(
-                                                    userId: userId,
-                                                    projectId: node.projectId,
-                                                    nodeId: node.id,
-                                                    roleId: role.id,
-                                                    roleName: role.name,
-                                                    roleCategory: role.category.rawValue,
-                                                    experienceLevel: member.experienceLevel.rawValue,
-                                                    actionType: .removed
-                                                )
-                                            }
-                                        }
-                                    }
-                                    )
-                                },
-                                onPersonalityChange: { newPersonality in
-                                    node.personality = newPersonality
-                                }
-                            )
-                            
-                            Divider()
-                        }
-                    }
-                    .frame(height: isScrollReady ? nil : 0)
-                    .clipped()
-                    .animation(.easeOut(duration: 0.3), value: isScrollReady)
-                }
                 
                 // Content with fixed input at bottom
                 ZStack {
@@ -229,12 +156,25 @@ struct NodeView: View {
                             } else {
                                 // When chat is hidden, show note content
                                 // Single TextEditor handles both reading and editing
-                                // No scrolling needed, so mark as ready immediately
                                 noteDescriptionView
                                     .padding(Node.padding)
+                                    .opacity(isContentVisible ? 1 : 0)
                                     .onAppear {
+                                        // No scrolling needed for notes, but still sequence animations
                                         isScrollReady = true
-                                        isContentVisible = true
+                                        isCoverFadingOut = false
+                                        isContentVisible = false
+                                        
+                                        // Fade out cover first, then fade in note content
+                                        withAnimation(.easeOut(duration: 0.2)) {
+                                            isCoverFadingOut = true
+                                        }
+                                        
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                                            withAnimation(.easeIn(duration: 0.2)) {
+                                                isContentVisible = true
+                                            }
+                                        }
                                     }
                             }
                         } else {
@@ -382,6 +322,80 @@ struct NodeView: View {
                 }
                 .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
                 .background(contentBackground)
+                .overlay(alignment: .top) {
+                    // Team Member Tray - slides down from top as overlay
+                    if shouldShowTeamMemberTray && (isSelected || showExpandedContent) && node.teamMember != nil {
+                        VStack(spacing: 0) {
+                            if let teamMember = node.teamMember {
+                                TeamMemberTray(
+                                    teamMember: teamMember,
+                                    role: roleManager.role(withId: teamMember.roleId),
+                                    personality: node.personality,
+                                    onSettings: { 
+                                        // Clear SwiftUI focus states
+                                        isTitleFocused = false
+                                        isPromptFocused = false
+                                        isDescFocused = false
+                                        
+                                        // Show modal - sheet detection will handle scroll
+                                        modalCoordinator.showTeamMemberModal(
+                                            existingMember: node.teamMember,
+                                            projectTeamMembers: projectTeamMembers,
+                                            onSave: { newMember in
+                                            onTeamMemberChange(newMember)
+                                            
+                                            // Track analytics for team member addition/change
+                                            if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                                Task {
+                                                    await AnalyticsService.shared.trackTeamMemberUsage(
+                                                        userId: userId,
+                                                        projectId: node.projectId,
+                                                        nodeId: node.id,
+                                                        roleId: role.id,
+                                                        roleName: role.name,
+                                                        roleCategory: role.category.rawValue,
+                                                        experienceLevel: newMember.experienceLevel.rawValue,
+                                                        actionType: .attached
+                                                    )
+                                                }
+                                            }
+                                        },
+                                            onRemove: { 
+                                            let oldMember = node.teamMember
+                                            onTeamMemberChange(nil)
+
+                                            // Track analytics for team member removal
+                                            if let member = oldMember, let role = roleManager.role(withId: member.roleId), let userId = dataService.userAccount?.id {
+                                                Task {
+                                                    await AnalyticsService.shared.trackTeamMemberUsage(
+                                                        userId: userId,
+                                                        projectId: node.projectId,
+                                                        nodeId: node.id,
+                                                        roleId: role.id,
+                                                        roleName: role.name,
+                                                        roleCategory: role.category.rawValue,
+                                                        experienceLevel: member.experienceLevel.rawValue,
+                                                        actionType: .removed
+                                                    )
+                                                }
+                                            }
+                                        }
+                                        )
+                                    },
+                                    onPersonalityChange: { newPersonality in
+                                        node.personality = newPersonality
+                                    }
+                                )
+                                
+                                Divider()
+                            }
+                        }
+                        .background(contentBackground)
+                        .offset(y: isScrollReady ? 0 : -70)
+                        .animation(.easeOut(duration: 0.3), value: isScrollReady)
+                    }
+                }
+                .clipped()
                 .overlay(
                     TapThroughOverlay(onTap: onTap, isNodeSelected: isSelected)
                 )
@@ -601,15 +615,8 @@ struct NodeView: View {
     }
     
     private var headerHeight: CGFloat {
-        var height: CGFloat = 60 // Base header height
-        
-        // Add team member tray height if present, selected, AND scroll is ready
-        // This ensures the cover stays in place while the tray animates in
-        if shouldShowTeamMemberTray && node.teamMember != nil && isSelected && isScrollReady {
-            height += 60 // Team member tray height (~50-60px)
-        }
-        
-        return height
+        // Fixed header height - team tray animates separately and doesn't affect this
+        return 60
     }
     
     // MARK: - Subviews
@@ -668,130 +675,142 @@ struct NodeView: View {
                 }
             }
             
-            if isSelected {
-                // Title
-                if isEditingTitle {
-                    TextField("Title", text: $editedTitle, onCommit: {
-                        onTitleEdit(editedTitle)
-                        isEditingTitle = false
-                    })
-                    .textFieldStyle(PlainTextFieldStyle())
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(headerTextColor)
-                    .focused($isTitleFocused)
-                } else {
-                    HStack(spacing: 8) {
-                        Text(node.title.isEmpty ? "Untitled" : node.title)
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
-                            .onTapGesture {
-                                // Block if modal is open
-                                if modalCoordinator.isModalPresented { return }
-                                editedTitle = node.title
-                                isEditingTitle = true
-                                isTitleFocused = true
+            if isSelected || showExpandedContent {
+                // Title and icons with fade animation
+                Group {
+                    // Title
+                    if isEditingTitle {
+                        TextField("Title", text: $editedTitle, onCommit: {
+                            onTitleEdit(editedTitle)
+                            isEditingTitle = false
+                        })
+                        .textFieldStyle(PlainTextFieldStyle())
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(headerTextColor)
+                        .focused($isTitleFocused)
+                    } else {
+                        HStack(spacing: 8) {
+                            Text(node.title.isEmpty ? "Untitled" : node.title)
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+                                .onTapGesture {
+                                    // Block if modal is open
+                                    if modalCoordinator.isModalPresented { return }
+                                    editedTitle = node.title
+                                    isEditingTitle = true
+                                    isTitleFocused = true
+                                }
+                            
+                            if isGenerating {
+                                ProgressView()
+                                    .scaleEffect(0.6)
+                                    .frame(width: 16, height: 16)
                             }
-                        
-                        if isGenerating {
-                            ProgressView()
-                                .scaleEffect(0.6)
-                                .frame(width: 16, height: 16)
                         }
                     }
                 }
+                .opacity(isContentVisible ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isContentVisible)
                 
                 Spacer()
                 
-                // Delete button
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .foregroundColor(headerTextColor)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Delete Node")
-                
-                // Create child node button
-                Button(action: onCreateChild) {
-                    Image(systemName: "plus.square.on.square")
-                        .foregroundColor(headerTextColor)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help("Create Child Node")
-                
-                // Add Team Member button (only show if no team member exists)
-                if shouldShowTeamMemberTray && node.teamMember == nil {
-                    Button(action: { 
-                        // All plans now have unlimited team members - no limit check needed
-                        
-                        // Clear SwiftUI focus states
-                        isTitleFocused = false
-                        isPromptFocused = false
-                        isDescFocused = false
-                        
-                        // Show modal - sheet detection will handle scroll
-                        modalCoordinator.showTeamMemberModal(
-                            existingMember: nil,
-                            projectTeamMembers: projectTeamMembers,
-                            onSave: { newMember in
-                                onTeamMemberChange(newMember)
-                                
-                                // Track analytics for team member addition
-                                if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
-                                    Task {
-                                        await AnalyticsService.shared.trackTeamMemberUsage(
-                                            userId: userId,
-                                            projectId: node.projectId,
-                                            nodeId: node.id,
-                                            roleId: role.id,
-                                            roleName: role.name,
-                                            roleCategory: role.category.rawValue,
-                                            experienceLevel: newMember.experienceLevel.rawValue,
-                                            actionType: .attached
-                                        )
+                // Header action buttons with fade animation
+                Group {
+                    // Delete button
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundColor(headerTextColor)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Delete Node")
+                    
+                    // Create child node button
+                    Button(action: onCreateChild) {
+                        Image(systemName: "plus.square.on.square")
+                            .foregroundColor(headerTextColor)
+                            .font(.system(size: 16))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Create Child Node")
+                    
+                    // Add Team Member button (only show if no team member exists)
+                    if shouldShowTeamMemberTray && node.teamMember == nil {
+                        Button(action: { 
+                            // All plans now have unlimited team members - no limit check needed
+                            
+                            // Clear SwiftUI focus states
+                            isTitleFocused = false
+                            isPromptFocused = false
+                            isDescFocused = false
+                            
+                            // Show modal - sheet detection will handle scroll
+                            modalCoordinator.showTeamMemberModal(
+                                existingMember: nil,
+                                projectTeamMembers: projectTeamMembers,
+                                onSave: { newMember in
+                                    onTeamMemberChange(newMember)
+                                    
+                                    // Track analytics for team member addition
+                                    if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
+                                        Task {
+                                            await AnalyticsService.shared.trackTeamMemberUsage(
+                                                userId: userId,
+                                                projectId: node.projectId,
+                                                nodeId: node.id,
+                                                roleId: role.id,
+                                                roleName: role.name,
+                                                roleCategory: role.category.rawValue,
+                                                experienceLevel: newMember.experienceLevel.rawValue,
+                                                actionType: .attached
+                                            )
+                                        }
                                     }
-                                }
-                            },
-                            onRemove: nil
-                        )
-                    }) {
-                        Image(systemName: "person.badge.plus")
-                            .foregroundColor(headerTextColor)
-                            .font(.system(size: 16))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Add Team Member")
-                }
-                
-                // JAM button (for notes only)
-                if node.type == .note {
-                    Button(action: {
-                        showChatSection.toggle()
-                        if showChatSection {
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                isPromptFocused = true
-                            }
+                                },
+                                onRemove: nil
+                            )
+                        }) {
+                            Image(systemName: "person.badge.plus")
+                                .foregroundColor(headerTextColor)
+                                .font(.system(size: 16))
                         }
-                    }) {
-                        Image(systemName: "bubble.left.fill")
+                        .buttonStyle(PlainButtonStyle())
+                        .help("Add Team Member")
+                    }
+                    
+                    // JAM button (for notes only)
+                    if node.type == .note {
+                        Button(action: {
+                            showChatSection.toggle()
+                            if showChatSection {
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                    isPromptFocused = true
+                                }
+                            }
+                        }) {
+                            Image(systemName: "bubble.left.fill")
+                                .foregroundColor(headerTextColor)
+                                .font(.system(size: 16))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                        .help(showChatSection ? "Hide chat" : "Jam with this note")
+                    }
+                    
+                    // Toggle size button (maximize/minimize)
+                    Button(action: onMaximizeAndCenter) {
+                        let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
+                        let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
+                        Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
                             .foregroundColor(headerTextColor)
                             .font(.system(size: 16))
                     }
                     .buttonStyle(PlainButtonStyle())
-                    .help(showChatSection ? "Hide chat" : "Jam with this note")
+                    .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
                 }
-                
-                // Toggle size button (maximize/minimize)
-                Button(action: onMaximizeAndCenter) {
-                    let maxWidth = node.type == .note ? Node.maxNoteWidth : Node.maxWidth
-                    let isMaximized = node.width >= maxWidth && node.height >= Node.maxHeight
-                    Image(systemName: isMaximized ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right")
-                        .foregroundColor(headerTextColor)
-                        .font(.system(size: 16))
-                }
-                .buttonStyle(PlainButtonStyle())
-                .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
+                .opacity(isContentVisible ? 1 : 0)
+                .animation(.easeInOut(duration: 0.2), value: isContentVisible)
             } else {
                 Spacer()
             }
@@ -800,6 +819,7 @@ struct NodeView: View {
         .padding(.top, Node.padding)
         .padding(.bottom, Node.padding)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: 60) // Fixed header height
         .background(
             headerBackground
                 .padding(.top, -Node.padding)
