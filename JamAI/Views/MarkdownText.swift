@@ -680,15 +680,17 @@ private struct CodeBlockView: View {
     }
     
     private var headerBackground: Color {
+        // Solid background colors that work regardless of node color
         colorScheme == .dark
-            ? Color.white.opacity(0.08)
-            : Color.black.opacity(0.04)
+            ? Color(nsColor: NSColor(calibratedRed: 0.18, green: 0.18, blue: 0.20, alpha: 1.0))  // Dark grey
+            : Color(nsColor: NSColor(calibratedRed: 0.92, green: 0.92, blue: 0.94, alpha: 1.0))  // Light grey
     }
     
     private var codeBackground: Color {
+        // Solid background colors that work regardless of node color
         colorScheme == .dark
-            ? Color.white.opacity(0.05)
-            : Color.black.opacity(0.03)
+            ? Color(nsColor: NSColor(calibratedRed: 0.14, green: 0.14, blue: 0.16, alpha: 1.0))  // Darker grey
+            : Color(nsColor: NSColor(calibratedRed: 0.98, green: 0.98, blue: 0.99, alpha: 1.0))  // Near white
     }
     
     private var borderColor: Color {
