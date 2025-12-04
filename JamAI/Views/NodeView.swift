@@ -668,7 +668,7 @@ struct NodeView: View {
         // Padding at top of content to clear team member tray when present
         // Team tray is ~44px height + divider
         if shouldShowTeamMemberTray && node.teamMember != nil {
-            return 50
+            return 35
         }
         return 0
     }
