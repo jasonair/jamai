@@ -420,28 +420,7 @@ struct CanvasView: View {
                         viewModel.isZooming = false  // Re-enable markdown rendering
                     }
             )
-            .onTapGesture(count: 2) { location in
-                // Block if modal is open
-                if modalCoordinator.isModalPresented {
-                    return
-                }
-                // Block if double-tap is in outline pane area
-                if showOutline {
-                    let outlineRect = CGRect(
-                        x: 20,
-                        y: 56,
-                        width: 280,
-                        height: geometry.size.height - 56
-                    )
-                    if outlineRect.contains(location) {
-                        return
-                    }
-                }
-                
-                // Double-click to create new node
-                let canvasPos = screenToCanvas(location, in: geometry.size)
-                viewModel.createNode(at: canvasPos)
-            }
+            // Double-click to create node disabled - use right-click menu instead
             .task {
                 // Use task to prevent duplicate renders
                 lastZoom = viewModel.zoom

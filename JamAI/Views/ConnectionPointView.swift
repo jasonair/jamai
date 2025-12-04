@@ -58,10 +58,19 @@ struct ConnectionPointView: View {
                         Circle()
                             .stroke(strokeColor, lineWidth: 1.5)
                     )
-            } else if isValidDropTarget {
-                // Green filled circle for valid drop target
+            } else if isValidDropTarget && isHovered {
+                // Expanded green circle when hovering over valid drop target
                 Circle()
-                    .fill(Color.green.opacity(0.8))
+                    .fill(Color.green.opacity(0.9))
+                    .frame(width: pointSize * 1.5, height: pointSize * 1.5)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.green, lineWidth: 2)
+                    )
+            } else if isValidDropTarget {
+                // Green filled circle for valid drop target (not hovered)
+                Circle()
+                    .fill(Color.green.opacity(0.6))
                     .frame(width: pointSize, height: pointSize)
                     .overlay(
                         Circle()
@@ -79,7 +88,7 @@ struct ConnectionPointView: View {
             }
         }
         .shadow(color: shadowColor, radius: isHovered ? 3 : 1, x: 0, y: 1)
-        .scaleEffect(isHovered || isValidDropTarget ? 1.2 : 1.0)
+        .scaleEffect((isHovered && !isValidDropTarget) ? 1.2 : 1.0)  // Don't scale if already expanded for drop target
         .animation(.easeInOut(duration: 0.15), value: isHovered)
         .animation(.easeInOut(duration: 0.15), value: isValidDropTarget)
         .onHover { hovering in
@@ -106,6 +115,7 @@ struct ConnectionPointView: View {
             }
         }
         .cursor(deleteMode ? .pointingHand : (isHovered ? .crosshair : .arrow))
+        .help(tooltipText)
         .popover(isPresented: $showDeleteConfirmation, arrowEdge: .top) {
             VStack(spacing: 12) {
                 Text("Delete this connection?")
@@ -131,6 +141,16 @@ struct ConnectionPointView: View {
     
     private var deleteMode: Bool {
         hasConnection && isHovered && isOptionKeyPressed && !isWiring
+    }
+    
+    private var tooltipText: String {
+        if isValidDropTarget {
+            return "Click to connect"
+        } else if hasConnection {
+            return "Click to add connection • ⌥+click to delete"
+        } else {
+            return "Click to connect knowledge to other nodes"
+        }
     }
     
     private var fillColor: Color {

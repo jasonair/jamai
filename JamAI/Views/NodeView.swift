@@ -77,6 +77,7 @@ struct NodeView: View {
     @State private var visibleMessageLimit: Int = 8
     @State private var expandedUserMessageIds: Set<UUID> = []
     @State private var isVoiceTranscribing = false
+    @State private var showDeleteConfirmation = false
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -752,14 +753,38 @@ struct NodeView: View {
                 
                 // Header action buttons with fade animation
                 Group {
-                    // Delete button
-                    Button(action: onDelete) {
+                    // Delete button with confirmation
+                    Button(action: { showDeleteConfirmation = true }) {
                         Image(systemName: "trash")
                             .foregroundColor(headerTextColor)
                             .font(.system(size: 16))
                     }
                     .buttonStyle(PlainButtonStyle())
                     .help("Delete Node")
+                    .popover(isPresented: $showDeleteConfirmation, arrowEdge: .bottom) {
+                        VStack(spacing: 12) {
+                            Text("Delete this node?")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("This action cannot be undone.")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
+                            
+                            HStack(spacing: 12) {
+                                Button("Cancel") {
+                                    showDeleteConfirmation = false
+                                }
+                                .buttonStyle(.bordered)
+                                
+                                Button("Delete") {
+                                    showDeleteConfirmation = false
+                                    onDelete()
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(.red)
+                            }
+                        }
+                        .padding(12)
+                    }
                     
                     // Create child node button
                     Button(action: onCreateChild) {
