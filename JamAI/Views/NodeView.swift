@@ -113,7 +113,10 @@ struct NodeView: View {
                                 ScrollViewReader { proxy in
                                     ScrollView {
                                         VStack(alignment: .leading, spacing: 12) {
-                                            // Note description (read-only when chat is visible)
+                                            // Top padding to clear header and team member tray
+                                            Color.clear.frame(height: teamTrayPadding)
+                                            
+                                            // Show description as first message if it exists (legacy data)
                                             if !node.description.isEmpty {
                                                 HStack {
                                                     Spacer(minLength: 0)
@@ -195,12 +198,19 @@ struct NodeView: View {
                             ScrollViewReader { proxy in
                                 ScrollView {
                                     VStack(alignment: .leading, spacing: 12) {
-                                        // Description - centered
-                                        HStack {
-                                            Spacer(minLength: 0)
-                                            descriptionView
-                                                .frame(maxWidth: 700)
-                                            Spacer(minLength: 0)
+                                        // Top padding to clear header and team member tray
+                                        Color.clear.frame(height: teamTrayPadding)
+                                        
+                                        // Show description as first message if it exists (legacy data)
+                                        if !node.description.isEmpty {
+                                            HStack {
+                                                Spacer(minLength: 0)
+                                                Text(node.description)
+                                                    .font(.system(size: 15, weight: .light))
+                                                    .foregroundColor(contentSecondaryTextColor)
+                                                    .frame(maxWidth: 700)
+                                                Spacer(minLength: 0)
+                                            }
                                         }
                                         
                                         // Conversation thread - no width constraint, let MarkdownText handle it
@@ -654,6 +664,15 @@ struct NodeView: View {
         return 60
     }
     
+    private var teamTrayPadding: CGFloat {
+        // Padding at top of content to clear team member tray when present
+        // Team tray is ~44px height + divider
+        if shouldShowTeamMemberTray && node.teamMember != nil {
+            return 50
+        }
+        return 0
+    }
+    
     // MARK: - Subviews
     
     private var headerView: some View {
@@ -884,30 +903,6 @@ struct NodeView: View {
                 .padding(.top, -Node.padding)
                 .padding(.horizontal, -Node.padding)
         )
-    }
-    
-    private var descriptionView: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            if isEditingDescription {
-                TextField("Description", text: $editedDescription, onCommit: {
-                    onDescriptionEdit(editedDescription)
-                    isEditingDescription = false
-                })
-                .textFieldStyle(PlainTextFieldStyle())
-                .font(.system(size: 15, weight: .light))
-            } else {
-                Text(node.description.isEmpty ? "No description" : node.description)
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundColor(node.description.isEmpty ? contentSecondaryTextColor : contentPrimaryTextColor)
-                    .onTapGesture {
-                        // Block if modal is open
-                        if modalCoordinator.isModalPresented { return }
-                        editedDescription = node.description
-                        isEditingDescription = true
-                        isDescFocused = true
-                    }
-            }
-        }
     }
     
     private var noteDescriptionView: some View {
