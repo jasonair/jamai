@@ -52,8 +52,8 @@ struct EdgeLayer: View {
 
     // Gap between node edge and connection point center (must match ConnectionPointsOverlayInline.edgeGap)
     // Connection circles are positioned edgeGap pixels OUTSIDE the node bounds
-    // With 3px gap + 8px radius, circle center is 11px from node edge
-    private let connectionPointOffset: CGFloat = 11
+    // With 6px gap + 8px radius, circle center is 14px from node edge
+    private let connectionPointOffset: CGFloat = 14
     
     // Choose best side ports (left/right/top/bottom) based on relative positions
     // Points are offset to align with connection circle centers (outside the node)
@@ -99,6 +99,8 @@ struct AnimatedDashedEdgeView: View {
     let strokeColor: Color
     let dashPhase: CGFloat
     
+    private let circleRadius: CGFloat = 8.0  // Match connection point radius
+    
     var body: some View {
         ZStack {
             // Dashed bezier curve with animated flow
@@ -114,9 +116,25 @@ struct AnimatedDashedEdgeView: View {
                     )
                 )
             
-            // Half-circle cap at the end (target)
-            EdgeHalfCircleCap(from: from, to: to, horizontalPreferred: horizontalPreferred)
-                .fill(strokeColor)
+            // Full circle at source (start) point
+            Circle()
+                .fill(Color.white)
+                .frame(width: circleRadius * 2, height: circleRadius * 2)
+                .overlay(
+                    Circle()
+                        .stroke(strokeColor, lineWidth: 1.5)
+                )
+                .position(from)
+            
+            // Full circle at target (end) point
+            Circle()
+                .fill(Color.white)
+                .frame(width: circleRadius * 2, height: circleRadius * 2)
+                .overlay(
+                    Circle()
+                        .stroke(strokeColor, lineWidth: 1.5)
+                )
+                .position(to)
         }
     }
 }
@@ -148,44 +166,3 @@ struct EdgeShape: Shape {
     }
 }
 
-/// Half-circle cap at the target end of an edge
-struct EdgeHalfCircleCap: Shape {
-    let from: CGPoint
-    let to: CGPoint
-    let horizontalPreferred: Bool
-    
-    private let radius: CGFloat = 6.0
-    
-    func path(in rect: CGRect) -> Path {
-        // Calculate the angle from the control point to the end point
-        let control2: CGPoint
-        if horizontalPreferred {
-            let dx = (to.x - from.x) * 0.5
-            control2 = CGPoint(x: to.x - dx, y: to.y)
-        } else {
-            let dy = (to.y - from.y) * 0.5
-            control2 = CGPoint(x: to.x, y: to.y - dy)
-        }
-        
-        // Angle pointing from control2 toward the target
-        let angle = atan2(to.y - control2.y, to.x - control2.x)
-        
-        var path = Path()
-        
-        // Draw a half-circle (semicircle) at the target point
-        // The flat side faces the incoming edge, curved side faces the node
-        let startAngle = Angle(radians: Double(angle) - .pi / 2)
-        let endAngle = Angle(radians: Double(angle) + .pi / 2)
-        
-        path.addArc(
-            center: to,
-            radius: radius,
-            startAngle: startAngle,
-            endAngle: endAngle,
-            clockwise: false
-        )
-        path.closeSubpath()
-        
-        return path
-    }
-}
