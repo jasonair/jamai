@@ -50,7 +50,13 @@ struct EdgeLayer: View {
         return edgeColor
     }
 
+    // Gap between node edge and connection point center (must match ConnectionPointsOverlayInline.edgeGap)
+    // Connection circles are positioned edgeGap pixels OUTSIDE the node bounds
+    // With 3px gap + 8px radius, circle center is 11px from node edge
+    private let connectionPointOffset: CGFloat = 11
+    
     // Choose best side ports (left/right/top/bottom) based on relative positions
+    // Points are offset to align with connection circle centers (outside the node)
     private func bestPorts(from s: CGRect, to t: CGRect) -> (CGPoint, CGPoint, Bool) {
         let sc = CGPoint(x: s.midX, y: s.midY)
         let tc = CGPoint(x: t.midX, y: t.midY)
@@ -58,22 +64,26 @@ struct EdgeLayer: View {
         let dy = tc.y - sc.y
         if abs(dx) >= abs(dy) {
             if dx >= 0 {
-                let start = CGPoint(x: s.maxX, y: sc.y)
-                let end = CGPoint(x: t.minX, y: tc.y)
+                // Source exits right (circle is to the right of node), target enters left (circle is to the left of node)
+                let start = CGPoint(x: s.maxX + connectionPointOffset, y: sc.y)
+                let end = CGPoint(x: t.minX - connectionPointOffset, y: tc.y)
                 return (start, end, true)
             } else {
-                let start = CGPoint(x: s.minX, y: sc.y)
-                let end = CGPoint(x: t.maxX, y: tc.y)
+                // Source exits left, target enters right
+                let start = CGPoint(x: s.minX - connectionPointOffset, y: sc.y)
+                let end = CGPoint(x: t.maxX + connectionPointOffset, y: tc.y)
                 return (start, end, true)
             }
         } else {
             if dy >= 0 {
-                let start = CGPoint(x: sc.x, y: s.maxY)
-                let end = CGPoint(x: tc.x, y: t.minY)
+                // Source exits bottom, target enters top
+                let start = CGPoint(x: sc.x, y: s.maxY + connectionPointOffset)
+                let end = CGPoint(x: tc.x, y: t.minY - connectionPointOffset)
                 return (start, end, false)
             } else {
-                let start = CGPoint(x: sc.x, y: s.minY)
-                let end = CGPoint(x: tc.x, y: t.maxY)
+                // Source exits top, target enters bottom
+                let start = CGPoint(x: sc.x, y: s.minY - connectionPointOffset)
+                let end = CGPoint(x: tc.x, y: t.maxY + connectionPointOffset)
                 return (start, end, false)
             }
         }

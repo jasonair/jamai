@@ -477,6 +477,9 @@ struct CanvasView: View {
                 lastFrameUpdateVersion = viewModel.positionsVersion
             }
             .onDisappear {
+                // Flush any pending writes before leaving
+                viewModel.save()
+                
                 // Clean up pan debounce timer
                 panDebounceTimer?.invalidate()
                 panDebounceTimer = nil

@@ -23,8 +23,8 @@ struct ConnectionPointView: View {
     
     @Environment(\.colorScheme) private var colorScheme
     
-    private let pointSize: CGFloat = 14
-    private let hitAreaSize: CGFloat = 28
+    private let pointSize: CGFloat = 16
+    private let hitAreaSize: CGFloat = 32
     
     var body: some View {
         ZStack {
@@ -200,8 +200,10 @@ struct ConnectionPointsOverlayInline: View {
     let onClickToConnect: (UUID, ConnectionSide) -> Void
     let onDeleteConnection: ((UUID, ConnectionSide) -> Void)?
     
-    // Gap between connection point and node edge
-    private let edgeGap: CGFloat = 10
+    // Gap between node edge and the nearest edge of the connection circle
+    // Circle center is positioned at (gap + radius) from node edge
+    // With pointSize=16 (radius=8) and gap=3, center is at 11px from node edge
+    private let edgeGap: CGFloat = 11  // 3px gap + 8px radius
     
     init(
         nodeId: UUID,
