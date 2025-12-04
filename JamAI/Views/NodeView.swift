@@ -33,6 +33,18 @@ struct NodeView: View {
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     
+    // Wiring props
+    var isWiring: Bool = false
+    var wireSourceNodeId: UUID? = nil
+    var onClickToStartWiring: ((UUID, ConnectionSide) -> Void)? = nil
+    var onClickToConnect: ((UUID, ConnectionSide) -> Void)? = nil
+    var onDeleteConnection: ((UUID, ConnectionSide) -> Void)? = nil
+    var hasTopConnection: Bool = false
+    var hasRightConnection: Bool = false
+    var hasBottomConnection: Bool = false
+    var hasLeftConnection: Bool = false
+    
+    @State private var isHovered: Bool = false
     @State private var isEditingTitle = false
     @State private var isEditingDescription = false
     @State private var editedTitle = ""
@@ -416,6 +428,28 @@ struct NodeView: View {
                 RoundedRectangle(cornerRadius: Node.cornerRadius)
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
+            // Connection points for manual wiring
+            .overlay(
+                ConnectionPointsOverlayInline(
+                    nodeId: node.id,
+                    nodeWidth: node.width,
+                    nodeHeight: node.height,
+                    isNodeHovered: isHovered,
+                    isNodeSelected: isSelected,
+                    isWiring: isWiring,
+                    wireSourceNodeId: wireSourceNodeId,
+                    hasTopConnection: hasTopConnection,
+                    hasRightConnection: hasRightConnection,
+                    hasBottomConnection: hasBottomConnection,
+                    hasLeftConnection: hasLeftConnection,
+                    onClickToStartWiring: onClickToStartWiring ?? { _, _ in },
+                    onClickToConnect: onClickToConnect ?? { _, _ in },
+                    onDeleteConnection: onDeleteConnection
+                )
+            )
+            .onHover { hovering in
+                isHovered = hovering
+            }
             .onTapGesture {
                 // Block node selection if modal is open
                 guard !modalCoordinator.isModalPresented else { return }

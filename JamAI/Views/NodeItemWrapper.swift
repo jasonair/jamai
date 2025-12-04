@@ -32,6 +32,18 @@ struct NodeItemWrapper: View {
     let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
+    
+    // Wiring callbacks
+    let isWiring: Bool
+    let wireSourceNodeId: UUID?
+    let onClickToStartWiring: (UUID, ConnectionSide) -> Void
+    let onClickToConnect: (UUID, ConnectionSide) -> Void
+    let onDeleteConnection: (UUID, ConnectionSide) -> Void
+    let hasTopConnection: Bool
+    let hasRightConnection: Bool
+    let hasBottomConnection: Bool
+    let hasLeftConnection: Bool
+    
     @State private var isResizingActive: Bool = false
     @State private var resizeCompensation: CGSize = .zero
     @State private var isTitleResizing: Bool = false
@@ -104,7 +116,16 @@ struct NodeItemWrapper: View {
                     },
                     onResizeLiveGeometryChange: onResizeLiveGeometryChange,
                     onMaximizeAndCenter: onMaximizeAndCenter,
-                    onTeamMemberChange: onTeamMemberChange
+                    onTeamMemberChange: onTeamMemberChange,
+                    isWiring: isWiring,
+                    wireSourceNodeId: wireSourceNodeId,
+                    onClickToStartWiring: onClickToStartWiring,
+                    onClickToConnect: onClickToConnect,
+                    onDeleteConnection: onDeleteConnection,
+                    hasTopConnection: hasTopConnection,
+                    hasRightConnection: hasRightConnection,
+                    hasBottomConnection: hasBottomConnection,
+                    hasLeftConnection: hasLeftConnection
                 )
             }
         }
@@ -113,12 +134,19 @@ struct NodeItemWrapper: View {
             y: node.y + displayHeight / 2
         )
         .offset(resizeCompensation)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 3, coordinateSpace: .global)
+        .gesture(
+            DragGesture(minimumDistance: 5, coordinateSpace: .global)
                 .onChanged { value in
-                    if !isResizingActive { onDragChanged(value) }
+                    // Don't move node if we're wiring or resizing
+                    if !isResizingActive && !isWiring {
+                        onDragChanged(value)
+                    }
                 }
-                .onEnded { _ in onDragEnded() }
+                .onEnded { _ in
+                    if !isWiring {
+                        onDragEnded()
+                    }
+                }
         )
         // Invisible tagging view so AppKit hit-testing can recognize node areas
         .overlay(NodeHitTag().allowsHitTesting(false))

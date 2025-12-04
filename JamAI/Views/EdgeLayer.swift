@@ -14,28 +14,28 @@ struct EdgeLayer: View {
     @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
-        // Use Shape-based rendering instead of Canvas to avoid clipping issues
-        // Shapes don't clip at coordinate boundaries like Canvas does
-        ZStack {
-            ForEach(edges, id: \.id) { edge in
-                if let sFrame = frames[edge.sourceId],
-                   let tFrame = frames[edge.targetId] {
-                    let (start, end, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
-                    
-                    ZStack {
-                        // The bezier curve edge
-                        EdgeShape(from: start, to: end, horizontalPreferred: isHorizontal)
-                            .stroke(strokeColor(for: edge), lineWidth: 2.0)
+        TimelineView(.animation) { timeline in
+            let phase = timeline.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 1.0) * 14
+            
+            ZStack {
+                ForEach(edges, id: \.id) { edge in
+                    if let sFrame = frames[edge.sourceId],
+                       let tFrame = frames[edge.targetId] {
+                        let (start, end, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
                         
-                        // The arrow head
-                        EdgeArrowShape(from: start, to: end, horizontalPreferred: isHorizontal)
-                            .stroke(strokeColor(for: edge), lineWidth: 2.0)
+                        // All edges are dashed with animation (RAG context flow)
+                        AnimatedDashedEdgeView(
+                            from: start,
+                            to: end,
+                            horizontalPreferred: isHorizontal,
+                            strokeColor: strokeColor(for: edge),
+                            dashPhase: CGFloat(phase)
+                        )
                     }
                 }
             }
         }
     }
-    
     
     private var edgeColor: Color {
         colorScheme == .dark
@@ -51,40 +51,62 @@ struct EdgeLayer: View {
     }
 
     // Choose best side ports (left/right/top/bottom) based on relative positions
-    // Returns: (startWorldPoint, endWorldPoint, prefersHorizontalBezier)
     private func bestPorts(from s: CGRect, to t: CGRect) -> (CGPoint, CGPoint, Bool) {
         let sc = CGPoint(x: s.midX, y: s.midY)
         let tc = CGPoint(x: t.midX, y: t.midY)
         let dx = tc.x - sc.x
         let dy = tc.y - sc.y
         if abs(dx) >= abs(dy) {
-            // Prefer horizontal routing
-            // Wire exits from source's right/left edge and enters target's left/right edge
             if dx >= 0 {
-                // Target is to the right: exit from source's right, enter target's left
                 let start = CGPoint(x: s.maxX, y: sc.y)
                 let end = CGPoint(x: t.minX, y: tc.y)
                 return (start, end, true)
             } else {
-                // Target is to the left: exit from source's left, enter target's right
                 let start = CGPoint(x: s.minX, y: sc.y)
                 let end = CGPoint(x: t.maxX, y: tc.y)
                 return (start, end, true)
             }
         } else {
-            // Prefer vertical routing
-            // Wire exits from source's top/bottom edge and enters target's bottom/top edge
             if dy >= 0 {
-                // Target is below: exit from source's bottom, enter target's top
                 let start = CGPoint(x: sc.x, y: s.maxY)
                 let end = CGPoint(x: tc.x, y: t.minY)
                 return (start, end, false)
             } else {
-                // Target is above: exit from source's top, enter target's bottom
                 let start = CGPoint(x: sc.x, y: s.minY)
                 let end = CGPoint(x: tc.x, y: t.maxY)
                 return (start, end, false)
             }
+        }
+    }
+}
+
+// MARK: - Animated Dashed Edge View
+
+struct AnimatedDashedEdgeView: View {
+    let from: CGPoint
+    let to: CGPoint
+    let horizontalPreferred: Bool
+    let strokeColor: Color
+    let dashPhase: CGFloat
+    
+    var body: some View {
+        ZStack {
+            // Dashed bezier curve with animated flow
+            EdgeShape(from: from, to: to, horizontalPreferred: horizontalPreferred)
+                .stroke(
+                    strokeColor,
+                    style: StrokeStyle(
+                        lineWidth: 2.0,
+                        lineCap: .round,
+                        lineJoin: .round,
+                        dash: [8, 6],
+                        dashPhase: -dashPhase  // Negative for flow toward target
+                    )
+                )
+            
+            // Half-circle cap at the end (target)
+            EdgeHalfCircleCap(from: from, to: to, horizontalPreferred: horizontalPreferred)
+                .fill(strokeColor)
         }
     }
 }
@@ -101,13 +123,11 @@ struct EdgeShape: Shape {
         path.move(to: from)
         
         if horizontalPreferred {
-            // Horizontal routing: control points extend left/right
             let dx = (to.x - from.x) * 0.5
             let control1 = CGPoint(x: from.x + dx, y: from.y)
             let control2 = CGPoint(x: to.x - dx, y: to.y)
             path.addCurve(to: to, control1: control1, control2: control2)
         } else {
-            // Vertical routing: control points extend up/down
             let dy = (to.y - from.y) * 0.5
             let control1 = CGPoint(x: from.x, y: from.y + dy)
             let control2 = CGPoint(x: to.x, y: to.y - dy)
@@ -118,10 +138,13 @@ struct EdgeShape: Shape {
     }
 }
 
-struct EdgeArrowShape: Shape {
+/// Half-circle cap at the target end of an edge
+struct EdgeHalfCircleCap: Shape {
     let from: CGPoint
     let to: CGPoint
     let horizontalPreferred: Bool
+    
+    private let radius: CGFloat = 6.0
     
     func path(in rect: CGRect) -> Path {
         // Calculate the angle from the control point to the end point
@@ -134,20 +157,24 @@ struct EdgeArrowShape: Shape {
             control2 = CGPoint(x: to.x, y: to.y - dy)
         }
         
+        // Angle pointing from control2 toward the target
         let angle = atan2(to.y - control2.y, to.x - control2.x)
-        let arrowSize: CGFloat = 10.0
         
         var path = Path()
-        path.move(to: to)
-        path.addLine(to: CGPoint(
-            x: to.x - arrowSize * cos(angle - .pi / 6),
-            y: to.y - arrowSize * sin(angle - .pi / 6)
-        ))
-        path.move(to: to)
-        path.addLine(to: CGPoint(
-            x: to.x - arrowSize * cos(angle + .pi / 6),
-            y: to.y - arrowSize * sin(angle + .pi / 6)
-        ))
+        
+        // Draw a half-circle (semicircle) at the target point
+        // The flat side faces the incoming edge, curved side faces the node
+        let startAngle = Angle(radians: Double(angle) - .pi / 2)
+        let endAngle = Angle(radians: Double(angle) + .pi / 2)
+        
+        path.addArc(
+            center: to,
+            radius: radius,
+            startAngle: startAngle,
+            endAngle: endAngle,
+            clockwise: false
+        )
+        path.closeSubpath()
         
         return path
     }

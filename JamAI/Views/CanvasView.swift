@@ -152,6 +152,12 @@ struct CanvasView: View {
             // Track mouse and capture two-finger pan scrolling
             .onChange(of: mouseLocation) { _, newValue in
                 viewModel.mousePosition = newValue
+                
+                // Update wire endpoint when wiring is active
+                if viewModel.isWiring {
+                    let canvasPoint = screenToCanvas(newValue, in: geometry.size)
+                    viewModel.updateWireEndpoint(canvasPoint)
+                }
             }
             .overlay(
                 MouseTrackingView(
@@ -274,6 +280,12 @@ struct CanvasView: View {
                 
                 // Dismiss custom context menu on tap
                 contextMenuLocation = nil
+                
+                // Cancel wiring if active (clicked on empty canvas)
+                if viewModel.isWiring {
+                    viewModel.cancelWiring()
+                    return
+                }
 
                 // Place annotation if a tool is active; otherwise deselect
                 switch viewModel.selectedTool {
@@ -499,6 +511,20 @@ struct CanvasView: View {
             .offset(currentOffset)
             .drawingGroup(opaque: false, colorMode: .nonLinear)  // Rasterize after transforms
             .allowsHitTesting(false)
+            
+            // Wire preview during drag-to-connect
+            if viewModel.isWiring {
+                WirePreviewLayer(
+                    sourceNodeId: viewModel.wireSourceNodeId,
+                    sourceSide: viewModel.wireSourceSide,
+                    endPoint: viewModel.wireEndPoint,
+                    nodes: viewModel.nodes
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .scaleEffect(currentZoom, anchor: .topLeading)
+                .offset(currentOffset)
+                .allowsHitTesting(false)
+            }
             
             // Nodes - only renders visible nodes (viewport culling with 40% margin)
             WorldLayerView(
@@ -780,7 +806,22 @@ struct CanvasView: View {
             onResizeActiveChanged: { active in isResizingActive = active },
             onResizeLiveGeometryChange: { w, h in viewModel.updateNodeGeometryDuringDrag(node.id, width: w, height: h) },
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
-            onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) }
+            onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) },
+            isWiring: viewModel.isWiring,
+            wireSourceNodeId: viewModel.wireSourceNodeId,
+            onClickToStartWiring: { nodeId, side in
+                viewModel.startWiring(from: nodeId, side: side)
+            },
+            onClickToConnect: { targetNodeId, side in
+                viewModel.completeWiring(to: targetNodeId)
+            },
+            onDeleteConnection: { nodeId, side in
+                viewModel.deleteEdgesForNode(nodeId, side: side)
+            },
+            hasTopConnection: viewModel.hasConnection(nodeId: node.id, side: .top),
+            hasRightConnection: viewModel.hasConnection(nodeId: node.id, side: .right),
+            hasBottomConnection: viewModel.hasConnection(nodeId: node.id, side: .bottom),
+            hasLeftConnection: viewModel.hasConnection(nodeId: node.id, side: .left)
         )
         .zIndex(viewModel.zIndex(for: node.id))
     }
@@ -1013,8 +1054,13 @@ extension View {
         self
             .onKeyPress(.escape) {
                 Task { @MainActor in
-                    viewModel.selectedTool = .select
-                    viewModel.selectedNodeId = nil
+                    // Cancel wiring if active
+                    if viewModel.isWiring {
+                        viewModel.cancelWiring()
+                    } else {
+                        viewModel.selectedTool = .select
+                        viewModel.selectedNodeId = nil
+                    }
                 }
                 return .handled
             }

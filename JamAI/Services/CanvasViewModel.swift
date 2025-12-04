@@ -42,6 +42,13 @@ class CanvasViewModel: ObservableObject {
     @Published var zOrder: [UUID: Double] = [:]
     private var zCounter: Double = 0
     
+    // Manual wiring state
+    @Published var isWiring: Bool = false
+    @Published var wireSourceNodeId: UUID?
+    @Published var wireSourceSide: ConnectionSide?
+    @Published var wireEndPoint: CGPoint? // Mouse position during drag (in canvas coordinates)
+    @Published var hoveredNodeId: UUID? // Node currently hovered for connection point visibility
+    
     // Forward undo manager state for UI binding
     @Published var canUndo: Bool = false
     @Published var canRedo: Bool = false
@@ -60,6 +67,7 @@ class CanvasViewModel: ObservableObject {
     // Services
     let geminiClient: GeminiClient
     let ragService: RAGService
+    let embeddingService: NodeEmbeddingService
     let database: Database
     let dbActor: DatabaseActor
     let undoManager: CanvasUndoManager
@@ -81,6 +89,7 @@ class CanvasViewModel: ObservableObject {
         self.dbActor = DatabaseActor(db: database)
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
+        self.embeddingService = NodeEmbeddingService(geminiClient: geminiClient)
         self.undoManager = CanvasUndoManager()
         if AIProviderManager.shared.activeProvider == .local {
             let model = AIProviderManager.shared.activeModelName ?? AIProviderManager.availableLocalModels.first
@@ -323,6 +332,215 @@ class CanvasViewModel: ObservableObject {
             zOrder[id] = zCounter
         }
         objectWillChange.send()
+    }
+    
+    // MARK: - Manual Wiring
+    
+    /// Start a wiring operation from a connection point
+    func startWiring(from nodeId: UUID, side: ConnectionSide) {
+        guard nodes[nodeId] != nil else { return }
+        isWiring = true
+        wireSourceNodeId = nodeId
+        wireSourceSide = side
+        wireEndPoint = nil
+        if Config.enableVerboseLogging {
+            print("🔌 Started wiring from node \(nodeId) side \(side)")
+        }
+    }
+    
+    /// Update the wire endpoint during drag
+    func updateWireEndpoint(_ point: CGPoint) {
+        wireEndPoint = point
+    }
+    
+    /// Complete wiring by connecting to a target node
+    func completeWiring(to targetNodeId: UUID) {
+        guard let sourceId = wireSourceNodeId else {
+            resetWiringState()
+            return
+        }
+        
+        // Prevent self-connection
+        guard sourceId != targetNodeId else {
+            if Config.enableVerboseLogging {
+                print("🔌 Cannot wire node to itself")
+            }
+            resetWiringState()
+            return
+        }
+        
+        // Prevent duplicate edges (same source → target)
+        let existingEdge = edges.values.first { edge in
+            edge.sourceId == sourceId && edge.targetId == targetNodeId
+        }
+        guard existingEdge == nil else {
+            if Config.enableVerboseLogging {
+                print("🔌 Edge already exists between these nodes")
+            }
+            resetWiringState()
+            return
+        }
+        
+        // Get source node color for the edge
+        let sourceColor = nodes[sourceId]?.color
+        let edgeColor = (sourceColor != nil && sourceColor != "none") ? sourceColor : nil
+        
+        // Create the edge
+        let edge = Edge(
+            projectId: project.id,
+            sourceId: sourceId,
+            targetId: targetNodeId,
+            color: edgeColor
+        )
+        
+        edges[edge.id] = edge
+        undoManager.record(.createEdge(edge))
+        scheduleDebouncedWrite(edgeId: edge.id)
+        
+        // Force edge refresh
+        positionsVersion += 1
+        
+        if Config.enableVerboseLogging {
+            print("🔌 Created edge from \(sourceId) to \(targetNodeId)")
+        }
+        
+        resetWiringState()
+    }
+    
+    /// Cancel the current wiring operation
+    func cancelWiring() {
+        if Config.enableVerboseLogging && isWiring {
+            print("🔌 Wiring cancelled")
+        }
+        resetWiringState()
+    }
+    
+    /// Reset all wiring state
+    private func resetWiringState() {
+        isWiring = false
+        wireSourceNodeId = nil
+        wireSourceSide = nil
+        wireEndPoint = nil
+    }
+    
+    /// Find node at a given canvas position (for drop target detection)
+    func nodeAt(canvasPosition: CGPoint) -> UUID? {
+        for (id, node) in nodes {
+            let frame = CGRect(
+                x: node.x,
+                y: node.y,
+                width: node.width,
+                height: node.height
+            )
+            if frame.contains(canvasPosition) {
+                return id
+            }
+        }
+        return nil
+    }
+    
+    /// Check if a node has a connection on a specific side
+    func hasConnection(nodeId: UUID, side: ConnectionSide) -> Bool {
+        guard let node = nodes[nodeId] else { return false }
+        let nodeFrame = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+        
+        for edge in edges.values {
+            // Check if this node is the source
+            if edge.sourceId == nodeId {
+                guard let targetNode = nodes[edge.targetId] else { continue }
+                let targetFrame = CGRect(x: targetNode.x, y: targetNode.y, width: targetNode.width, height: targetNode.height)
+                let exitSide = determineExitSide(from: nodeFrame, to: targetFrame)
+                if exitSide == side {
+                    return true
+                }
+            }
+            // Check if this node is the target
+            if edge.targetId == nodeId {
+                guard let sourceNode = nodes[edge.sourceId] else { continue }
+                let sourceFrame = CGRect(x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height)
+                let entrySide = determineEntrySide(from: sourceFrame, to: nodeFrame)
+                if entrySide == side {
+                    return true
+                }
+            }
+        }
+        return false
+    }
+    
+    /// Determine which side an edge exits from the source node
+    private func determineExitSide(from source: CGRect, to target: CGRect) -> ConnectionSide {
+        let sc = CGPoint(x: source.midX, y: source.midY)
+        let tc = CGPoint(x: target.midX, y: target.midY)
+        let dx = tc.x - sc.x
+        let dy = tc.y - sc.y
+        
+        if abs(dx) >= abs(dy) {
+            return dx >= 0 ? .right : .left
+        } else {
+            return dy >= 0 ? .bottom : .top
+        }
+    }
+    
+    /// Determine which side an edge enters the target node
+    private func determineEntrySide(from source: CGRect, to target: CGRect) -> ConnectionSide {
+        let sc = CGPoint(x: source.midX, y: source.midY)
+        let tc = CGPoint(x: target.midX, y: target.midY)
+        let dx = tc.x - sc.x
+        let dy = tc.y - sc.y
+        
+        if abs(dx) >= abs(dy) {
+            return dx >= 0 ? .left : .right
+        } else {
+            return dy >= 0 ? .top : .bottom
+        }
+    }
+    
+    /// Delete all edges connected to a node on a specific side
+    func deleteEdgesForNode(_ nodeId: UUID, side: ConnectionSide) {
+        guard let node = nodes[nodeId] else { return }
+        let nodeFrame = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+        
+        var edgesToDelete: [Edge] = []
+        
+        for edge in edges.values {
+            // Check if this node is the source and the edge exits from this side
+            if edge.sourceId == nodeId {
+                guard let targetNode = nodes[edge.targetId] else { continue }
+                let targetFrame = CGRect(x: targetNode.x, y: targetNode.y, width: targetNode.width, height: targetNode.height)
+                let exitSide = determineExitSide(from: nodeFrame, to: targetFrame)
+                if exitSide == side {
+                    edgesToDelete.append(edge)
+                }
+            }
+            // Check if this node is the target and the edge enters from this side
+            if edge.targetId == nodeId {
+                guard let sourceNode = nodes[edge.sourceId] else { continue }
+                let sourceFrame = CGRect(x: sourceNode.x, y: sourceNode.y, width: sourceNode.width, height: sourceNode.height)
+                let entrySide = determineEntrySide(from: sourceFrame, to: nodeFrame)
+                if entrySide == side {
+                    edgesToDelete.append(edge)
+                }
+            }
+        }
+        
+        for edge in edgesToDelete {
+            edges.removeValue(forKey: edge.id)
+            pendingEdgeWrites.remove(edge.id)
+            undoManager.record(.deleteEdge(edge))
+            
+            // Delete from database
+            let dbActor = self.dbActor
+            Task { [dbActor, edgeId = edge.id] in
+                try? await dbActor.deleteEdge(id: edgeId)
+            }
+            
+            if Config.enableVerboseLogging {
+                print("🔌 Deleted edge \(edge.id)")
+            }
+        }
+        
+        // Force edge refresh
+        positionsVersion += 1
     }
     
     func createNode(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) {
@@ -1233,12 +1451,38 @@ class CanvasViewModel: ObservableObject {
                                 
                                 await self?.autoGenerateTitleAndDescription(for: nodeId)
                                 
+                                // Auto-generate embedding for RAG (background, non-blocking)
+                                await self?.updateNodeEmbedding(for: nodeId)
+                                
                             case .failure(let error):
                                 self?.errorMessage = error.localizedDescription
                             }
                         }
                     }
                 )
+            }
+        }
+    }
+    
+    /// Update node embedding for RAG-based context retrieval
+    private func updateNodeEmbedding(for nodeId: UUID) async {
+        guard var node = nodes[nodeId] else { return }
+        
+        // Skip if using local provider (no embedding API)
+        guard AIProviderManager.shared.activeProvider != .local else { return }
+        
+        do {
+            let updated = try await embeddingService.updateEmbeddingIfNeeded(for: &node)
+            if updated {
+                nodes[nodeId] = node
+                let dbActor = self.dbActor
+                Task { [dbActor, node] in
+                    try? await dbActor.saveNode(node)
+                }
+            }
+        } catch {
+            if Config.enableVerboseLogging {
+                print("⚠️ Failed to update embedding for node \(nodeId): \(error.localizedDescription)")
             }
         }
     }
@@ -1387,12 +1631,62 @@ class CanvasViewModel: ObservableObject {
 
 private func buildAIContext(for node: Node) -> [AIChatMessage] {
     var messages: [AIChatMessage] = []
+    
+    // 1. Context from parent node (existing behavior)
     if let parentId = node.parentId,
        let parent = nodes[parentId],
        let summary = parent.summary,
        !summary.isEmpty {
-        messages.append(AIChatMessage(role: .user, content: "Context from previous conversation: \(summary)"))
+        messages.append(AIChatMessage(role: .user, content: "Context from parent conversation: \(summary)"))
     }
+    
+    // 2. Context from connected nodes via edges (RAG-based)
+    // Find all incoming edges (edges where this node is the target)
+    let incomingEdges = edges.values.filter { $0.targetId == node.id }
+    
+    if Config.enableVerboseLogging {
+        print("🔗 Building AI context for node '\(node.title)' (id: \(node.id))")
+        print("🔗 Total edges: \(edges.count), incoming edges: \(incomingEdges.count)")
+    }
+    
+    if !incomingEdges.isEmpty {
+        var connectedContextParts: [String] = []
+        
+        for edge in incomingEdges {
+            guard let sourceNode = nodes[edge.sourceId] else {
+                if Config.enableVerboseLogging {
+                    print("🔗 Source node \(edge.sourceId) not found for edge")
+                }
+                continue
+            }
+            
+            if Config.enableVerboseLogging {
+                print("🔗 Found connected source node: '\(sourceNode.title)' (id: \(sourceNode.id))")
+            }
+            
+            // Build context snippet from connected node
+            let snippet = embeddingService.buildContextSnippet(from: sourceNode)
+            if !snippet.isEmpty {
+                let nodeName = sourceNode.title.isEmpty ? "Connected Node" : sourceNode.title
+                connectedContextParts.append("[\(nodeName)]: \(snippet)")
+            } else if Config.enableVerboseLogging {
+                print("🔗 Empty snippet from node '\(sourceNode.title)'")
+            }
+        }
+        
+        if !connectedContextParts.isEmpty {
+            let connectedContext = connectedContextParts.joined(separator: "\n\n")
+            if Config.enableVerboseLogging {
+                print("🔗 Adding connected context to AI (\(connectedContext.count) chars)")
+            }
+            messages.append(AIChatMessage(
+                role: .user,
+                content: "Context from connected knowledge sources:\n\n\(connectedContext)"
+            ))
+        }
+    }
+    
+    // 3. Node's own conversation history
     if !node.conversation.isEmpty {
         let recentMessages = Array(node.conversation.suffix(project.kTurns * 2))
         let isLocal = AIProviderManager.shared.activeProvider == .local

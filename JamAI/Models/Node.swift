@@ -73,6 +73,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     // Image data (for image nodes)
     var imageData: Data?
     
+    // Embeddings for RAG
+    var embeddingJSON: String? // JSON array of Float values for semantic search
+    var embeddingUpdatedAt: Date? // When the embedding was last generated
+    
     // Metadata
     var createdAt: Date
     var updatedAt: Date
@@ -107,6 +111,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         fontFamily: String? = nil,
         shapeKind: ShapeKind? = nil,
         imageData: Data? = nil,
+        embeddingJSON: String? = nil,
+        embeddingUpdatedAt: Date? = nil,
         displayOrder: Int? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -147,6 +153,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.fontFamily = fontFamily
         self.shapeKind = shapeKind
         self.imageData = imageData
+        self.embeddingJSON = embeddingJSON
+        self.embeddingUpdatedAt = embeddingUpdatedAt
         self.displayOrder = displayOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -233,6 +241,33 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         set {
             personalityRawValue = newValue.rawValue
         }
+    }
+    
+    // MARK: - Embedding Properties
+    
+    /// Decoded embedding vector for semantic search
+    var embedding: [Float]? {
+        guard let json = embeddingJSON,
+              let data = json.data(using: .utf8),
+              let array = try? JSONDecoder().decode([Float].self, from: data) else {
+            return nil
+        }
+        return array
+    }
+    
+    /// Set the embedding vector and update timestamp
+    mutating func setEmbedding(_ embedding: [Float]) {
+        if let data = try? JSONEncoder().encode(embedding),
+           let json = String(data: data, encoding: .utf8) {
+            self.embeddingJSON = json
+            self.embeddingUpdatedAt = Date()
+        }
+    }
+    
+    /// Check if embedding needs to be updated (content changed since last embedding)
+    var needsEmbeddingUpdate: Bool {
+        guard let embeddingDate = embeddingUpdatedAt else { return true }
+        return updatedAt > embeddingDate
     }
     
     static func == (lhs: Node, rhs: Node) -> Bool {
