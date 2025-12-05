@@ -14,6 +14,9 @@ struct ZoomControlsView: View {
     let onZoomTo: (CGFloat) -> Void
     let onZoomFit: () -> Void
     let onSearch: () -> Void
+    let onCreateChat: () -> Void
+    let onCreateNote: () -> Void
+    let onCreateTitle: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -48,6 +51,14 @@ struct ZoomControlsView: View {
             
             // Search
             ZoomButton(icon: "magnifyingglass", action: onSearch, tooltip: "Search Conversations (⌘F)")
+            
+            Divider()
+                .frame(width: 1, height: 20)
+            
+            // Creation tools
+            ZoomButton(icon: "plus.circle", action: onCreateChat, tooltip: "New Chat")
+            ZoomButton(icon: "doc.text", action: onCreateNote, tooltip: "New Note")
+            ZoomButton(icon: "textformat.size", action: onCreateTitle, tooltip: "New Title")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

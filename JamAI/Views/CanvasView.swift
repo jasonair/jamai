@@ -651,7 +651,19 @@ struct CanvasView: View {
                         onZoomOut: { viewModel.zoomOut() },
                         onZoomTo: { level in viewModel.zoomTo(level) },
                         onZoomFit: { viewModel.zoomToFit() },
-                        onSearch: { viewModel.showSearchModal() }
+                        onSearch: { viewModel.showSearchModal() },
+                        onCreateChat: {
+                            let centerPos = viewportCenterInCanvas()
+                            viewModel.createNode(at: centerPos)
+                        },
+                        onCreateNote: {
+                            let centerPos = viewportCenterInCanvas()
+                            viewModel.createFreeformNote(at: centerPos)
+                        },
+                        onCreateTitle: {
+                            let centerPos = viewportCenterInCanvas()
+                            viewModel.createTitleLabel(at: centerPos)
+                        }
                     )
                     Spacer()
                 }
@@ -1002,6 +1014,12 @@ struct CanvasView: View {
             x: (point.x - viewModel.offset.width) / viewModel.zoom,
             y: (point.y - viewModel.offset.height) / viewModel.zoom
         )
+    }
+    
+    /// Calculate the center of the current viewport in canvas coordinates
+    private func viewportCenterInCanvas() -> CGPoint {
+        let screenCenter = CGPoint(x: viewportSize.width / 2, y: viewportSize.height / 2)
+        return screenToCanvas(screenCenter, in: viewportSize)
     }
     
     private func adjustZoom(to newZoom: CGFloat, viewSize: CGSize) {
