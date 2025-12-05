@@ -15,6 +15,14 @@ struct IndexedMessageRef: Sendable {
     let position: Int // Character offset in the message content
 }
 
+/// Match type for search results
+enum SearchMatchType: Sendable {
+    case title          // Match in node title
+    case teamMember     // Match in team member role name
+    case conversation   // Match in conversation content
+    case note           // Match in note content
+}
+
 /// A single search result with context
 struct ConversationSearchResult: Identifiable, Sendable {
     let id: UUID
@@ -28,6 +36,8 @@ struct ConversationSearchResult: Identifiable, Sendable {
     let fullContent: String
     let timestamp: Date
     let nodePosition: CGPoint // For viewport-based ranking
+    let matchType: SearchMatchType
+    let teamMemberRoleName: String? // For display in results
     
     init(
         nodeId: UUID,
@@ -39,7 +49,9 @@ struct ConversationSearchResult: Identifiable, Sendable {
         matchRange: Range<String.Index>?,
         fullContent: String,
         timestamp: Date,
-        nodePosition: CGPoint
+        nodePosition: CGPoint,
+        matchType: SearchMatchType = .conversation,
+        teamMemberRoleName: String? = nil
     ) {
         self.id = UUID()
         self.nodeId = nodeId
@@ -52,6 +64,8 @@ struct ConversationSearchResult: Identifiable, Sendable {
         self.fullContent = fullContent
         self.timestamp = timestamp
         self.nodePosition = nodePosition
+        self.matchType = matchType
+        self.teamMemberRoleName = teamMemberRoleName
     }
 }
 
@@ -86,8 +100,8 @@ final class ConversationSearchIndex {
     /// NodeId -> set of message IDs (for efficient node removal)
     private var nodeMessages: [UUID: Set<UUID>] = [:]
     
-    /// Node metadata cache
-    private var nodeMetadata: [UUID: (title: String, color: String, position: CGPoint)] = [:]
+    /// Node metadata cache (includes team member role name for search)
+    private var nodeMetadata: [UUID: (title: String, color: String, position: CGPoint, teamMemberRoleName: String?)] = [:]
     
     // MARK: - Configuration
     
@@ -112,18 +126,37 @@ final class ConversationSearchIndex {
     
     /// Index a single node (for incremental updates)
     func indexNode(_ node: Node) {
+        // Get team member role name if present
+        var teamMemberRoleName: String? = nil
+        if let teamMember = node.teamMember,
+           let role = RoleManager.shared.role(withId: teamMember.roleId) {
+            teamMemberRoleName = role.name
+        }
+        
         // Store node metadata
         nodeMetadata[node.id] = (
             title: node.title.isEmpty ? "Untitled" : node.title,
             color: node.color,
-            position: CGPoint(x: node.x, y: node.y)
+            position: CGPoint(x: node.x, y: node.y),
+            teamMemberRoleName: teamMemberRoleName
         )
         
         // Remove existing entries for this node first
         removeNode(nodeId: node.id)
         
-        // Index node title
+        // Index node title (use special messageIndex -1)
         indexText(node.title, nodeId: node.id, messageId: node.id, messageIndex: -1)
+        
+        // Index team member role name (use special messageIndex -3)
+        if let roleName = teamMemberRoleName {
+            let teamMemberMessageId = UUID(uuidString: "00000000-0000-0000-0000-\(node.id.uuidString.suffix(12))") ?? UUID()
+            indexText(roleName, nodeId: node.id, messageId: teamMemberMessageId, messageIndex: -3)
+            messageTexts[teamMemberMessageId] = "Team Member: \(roleName)"
+            if nodeMessages[node.id] == nil {
+                nodeMessages[node.id] = []
+            }
+            nodeMessages[node.id]?.insert(teamMemberMessageId)
+        }
         
         // Index conversation messages
         let messages = node.conversation
@@ -161,10 +194,18 @@ final class ConversationSearchIndex {
     
     /// Update node metadata (position, title, color) without reindexing content
     func updateNodeMetadata(_ node: Node) {
+        // Get team member role name if present
+        var teamMemberRoleName: String? = nil
+        if let teamMember = node.teamMember,
+           let role = RoleManager.shared.role(withId: teamMember.roleId) {
+            teamMemberRoleName = role.name
+        }
+        
         nodeMetadata[node.id] = (
             title: node.title.isEmpty ? "Untitled" : node.title,
             color: node.color,
-            position: CGPoint(x: node.x, y: node.y)
+            position: CGPoint(x: node.x, y: node.y),
+            teamMemberRoleName: teamMemberRoleName
         )
     }
     
@@ -270,6 +311,14 @@ final class ConversationSearchIndex {
             if let range = fullText.range(of: trimmedQuery, options: .caseInsensitive) {
                 let snippet = generateSnippet(text: fullText, matchRange: range)
                 
+                // Determine match type based on content
+                let matchType = determineMatchType(
+                    fullText: fullText,
+                    messageId: messageId,
+                    nodeId: nodeId,
+                    nodeTitle: metadata.title
+                )
+                
                 // Determine message role (default to user if not found in conversation)
                 let messageRole: MessageRole = .user
                 
@@ -283,7 +332,9 @@ final class ConversationSearchIndex {
                     matchRange: range,
                     fullContent: fullText,
                     timestamp: Date(),
-                    nodePosition: metadata.position
+                    nodePosition: metadata.position,
+                    matchType: matchType,
+                    teamMemberRoleName: metadata.teamMemberRoleName
                 )
                 results.append(result)
             }
@@ -312,6 +363,14 @@ final class ConversationSearchIndex {
             
             let snippet = generateSnippet(text: text, matchRange: originalRange)
             
+            // Determine match type based on content
+            let matchType = determineMatchType(
+                fullText: text,
+                messageId: messageId,
+                nodeId: nodeId,
+                nodeTitle: metadata.title
+            )
+            
             let result = ConversationSearchResult(
                 nodeId: nodeId,
                 nodeTitle: metadata.title,
@@ -322,7 +381,9 @@ final class ConversationSearchIndex {
                 matchRange: originalRange,
                 fullContent: text,
                 timestamp: Date(),
-                nodePosition: metadata.position
+                nodePosition: metadata.position,
+                matchType: matchType,
+                teamMemberRoleName: metadata.teamMemberRoleName
             )
             results.append(result)
             
@@ -332,6 +393,30 @@ final class ConversationSearchIndex {
         }
         
         return sortResults(results, query: query, viewportCenter: viewportCenter)
+    }
+    
+    // MARK: - Match Type Detection
+    
+    /// Determine the type of match based on content and context
+    private func determineMatchType(
+        fullText: String,
+        messageId: UUID,
+        nodeId: UUID,
+        nodeTitle: String
+    ) -> SearchMatchType {
+        // Check if this is a title match (messageId equals nodeId for title entries)
+        if messageId == nodeId {
+            return .title
+        }
+        
+        // Check if this is a team member match (text starts with "Team Member:")
+        if fullText.hasPrefix("Team Member:") {
+            return .teamMember
+        }
+        
+        // Check if this is a note match (would need to track note content separately)
+        // For now, default to conversation
+        return .conversation
     }
     
     // MARK: - Snippet Generation
@@ -358,6 +443,9 @@ final class ConversationSearchIndex {
         snippet = snippet.replacingOccurrences(of: "\n", with: " ")
         snippet = snippet.replacingOccurrences(of: "  ", with: " ")
         
+        // Strip markdown formatting
+        snippet = stripMarkdown(snippet)
+        
         // Add ellipsis
         if lower > text.startIndex {
             snippet = "…" + snippet
@@ -367,6 +455,41 @@ final class ConversationSearchIndex {
         }
         
         return snippet.trimmingCharacters(in: .whitespaces)
+    }
+    
+    /// Strip common markdown formatting from text for clean display
+    private func stripMarkdown(_ text: String) -> String {
+        var result = text
+        
+        // Remove bold/italic markers: **text**, *text*, __text__, _text_
+        // Handle bold first (** and __), then italic (* and _)
+        result = result.replacingOccurrences(of: "\\*\\*([^*]+)\\*\\*", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "__([^_]+)__", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "\\*([^*]+)\\*", with: "$1", options: .regularExpression)
+        result = result.replacingOccurrences(of: "_([^_]+)_", with: "$1", options: .regularExpression)
+        
+        // Remove inline code: `code`
+        result = result.replacingOccurrences(of: "`([^`]+)`", with: "$1", options: .regularExpression)
+        
+        // Remove headers: # ## ### etc at start of lines
+        result = result.replacingOccurrences(of: "^#{1,6}\\s*", with: "", options: .regularExpression)
+        
+        // Remove bullet points: - * at start
+        result = result.replacingOccurrences(of: "^[\\-\\*]\\s+", with: "", options: .regularExpression)
+        
+        // Remove numbered lists: 1. 2. etc
+        result = result.replacingOccurrences(of: "^\\d+\\.\\s+", with: "", options: .regularExpression)
+        
+        // Remove links: [text](url) -> text
+        result = result.replacingOccurrences(of: "\\[([^\\]]+)\\]\\([^)]+\\)", with: "$1", options: .regularExpression)
+        
+        // Remove standalone asterisks that might remain
+        result = result.replacingOccurrences(of: "\\s\\*\\s", with: " ", options: .regularExpression)
+        
+        // Clean up any double spaces created
+        result = result.replacingOccurrences(of: "  +", with: " ", options: .regularExpression)
+        
+        return result
     }
     
     // MARK: - Result Sorting

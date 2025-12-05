@@ -198,6 +198,9 @@ private struct SearchResultRow: View {
                         .foregroundColor(.primary)
                         .lineLimit(1)
                     
+                    // Match type badge
+                    matchTypeBadge
+                    
                     Spacer()
                     
                     // Navigate hint
@@ -208,7 +211,7 @@ private struct SearchResultRow: View {
                 }
                 
                 // Snippet with highlighted match
-                highlightedSnippetView
+                snippetView
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
                     .lineLimit(2)
@@ -233,10 +236,57 @@ private struct SearchResultRow: View {
         }
     }
     
-    // MARK: - Highlighted Snippet
+    // MARK: - Match Type Badge
     
     @ViewBuilder
-    private var highlightedSnippetView: some View {
+    private var matchTypeBadge: some View {
+        switch result.matchType {
+        case .title:
+            Label("Title", systemImage: "textformat")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.orange)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(4)
+        case .teamMember:
+            Label(result.teamMemberRoleName ?? "Team Member", systemImage: "person.fill")
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(.purple)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(Color.purple.opacity(0.15))
+                .cornerRadius(4)
+        case .conversation, .note:
+            EmptyView()
+        }
+    }
+    
+    // MARK: - Snippet View
+    
+    @ViewBuilder
+    private var snippetView: some View {
+        switch result.matchType {
+        case .title:
+            // For title matches, show a preview of conversation content instead
+            Text("Match in node title")
+                .italic()
+        case .teamMember:
+            // For team member matches, show role info
+            if let roleName = result.teamMemberRoleName {
+                Text("Has team member: \(roleName)")
+                    .italic()
+            } else {
+                highlightedSnippetView
+            }
+        case .conversation, .note:
+            highlightedSnippetView
+        }
+    }
+    
+    // MARK: - Highlighted Snippet
+    
+    private var highlightedSnippetView: Text {
         let snippet = result.snippet
         let lowercaseSnippet = snippet.lowercased()
         let lowercaseQuery = query.lowercased()
@@ -250,16 +300,14 @@ private struct SearchResultRow: View {
             let match = String(snippet[snippet.index(snippet.startIndex, offsetBy: startIndex)..<snippet.index(snippet.startIndex, offsetBy: endIndex)])
             let after = String(snippet.suffix(from: snippet.index(snippet.startIndex, offsetBy: endIndex)))
             
-            // Use string interpolation instead of deprecated Text concatenation
-            HStack(spacing: 0) {
-                Text(before)
+            // Use Text concatenation for proper inline text flow
+            return Text(before) +
                 Text(match)
                     .foregroundColor(.accentColor)
-                    .fontWeight(.semibold)
+                    .fontWeight(.semibold) +
                 Text(after)
-            }
         } else {
-            Text(snippet)
+            return Text(snippet)
         }
     }
 }
