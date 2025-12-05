@@ -1484,6 +1484,46 @@ class CanvasViewModel: ObservableObject {
             }
         }
         
+        // Check if this is a master orchestrator node that should route to an expert
+        if node.orchestratorRole == .master, imageData == nil {
+            Task { @MainActor in
+                do {
+                    let routingResult = try await OrchestratorService.shared.checkForExpertRouting(
+                        masterNodeId: nodeId,
+                        prompt: prompt,
+                        viewModel: self
+                    )
+                    
+                    if routingResult.shouldRoute,
+                       let delegateId = routingResult.delegateNodeId {
+                        // Route to the expert delegate
+                        let questionToAsk = routingResult.refinedQuestion ?? prompt
+                        try await OrchestratorService.shared.routeToExpert(
+                            masterNodeId: nodeId,
+                            delegateNodeId: delegateId,
+                            question: questionToAsk,
+                            viewModel: self
+                        )
+                        return
+                    }
+                } catch {
+                    print("⚠️ Expert routing check failed: \(error)")
+                    // Fall through to normal generation
+                }
+                
+                // No routing needed, proceed with normal generation
+                self.generateResponseDirect(for: nodeId, prompt: prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled)
+            }
+            return
+        }
+        
+        generateResponseDirect(for: nodeId, prompt: prompt, imageData: imageData, imageMimeType: imageMimeType, webSearchEnabled: webSearchEnabled)
+    }
+    
+    /// Direct response generation without expert routing check
+    private func generateResponseDirect(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false) {
+        guard var node = nodes[nodeId] else { return }
+        
         generatingNodeId = nodeId
         // Web search path is currently disabled; always fall through to plain AI generation.
         

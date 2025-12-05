@@ -340,6 +340,183 @@ final class OrchestratorService: ObservableObject {
         activeSessions[sessionId] = session
     }
     
+    // MARK: - Expert Routing (Defer to Delegate)
+    
+    /// Result of checking if a question should be routed to an expert
+    struct ExpertRoutingResult {
+        let shouldRoute: Bool
+        let delegateNodeId: UUID?
+        let delegateRoleName: String?
+        let refinedQuestion: String?
+    }
+    
+    /// Check if a question from the master node should be routed to a specific delegate
+    func checkForExpertRouting(
+        masterNodeId: UUID,
+        prompt: String,
+        viewModel: CanvasViewModel
+    ) async throws -> ExpertRoutingResult {
+        guard let masterNode = viewModel.nodes[masterNodeId],
+              masterNode.orchestratorRole == .master else {
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        }
+        
+        // Find connected delegate nodes via edges (works even after app restart)
+        // Look for nodes that are delegates connected to this master
+        let connectedDelegateIds = viewModel.edges.values
+            .filter { $0.sourceId == masterNodeId }
+            .map { $0.targetId }
+        
+        // Get the connected delegates and their roles
+        let delegateInfo = connectedDelegateIds.compactMap { delegateId -> (UUID, String, String)? in
+            guard let node = viewModel.nodes[delegateId],
+                  node.orchestratorRole == .delegate,
+                  let teamMember = node.teamMember,
+                  let role = RoleManager.shared.role(withId: teamMember.roleId) else {
+                return nil
+            }
+            return (delegateId, role.id, role.name)
+        }
+        
+        guard !delegateInfo.isEmpty else {
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        }
+        
+        // Build prompt to check if routing is needed
+        let routingPrompt = buildRoutingCheckPrompt(userPrompt: prompt, delegates: delegateInfo)
+        
+        // Ask AI if this should be routed
+        let response = try await generateAnalysis(prompt: routingPrompt, viewModel: viewModel)
+        return parseRoutingResponse(from: response, delegates: delegateInfo)
+    }
+    
+    /// Route a question to a delegate, get response, and return it to master
+    func routeToExpert(
+        masterNodeId: UUID,
+        delegateNodeId: UUID,
+        question: String,
+        viewModel: CanvasViewModel
+    ) async throws {
+        guard let masterNode = viewModel.nodes[masterNodeId],
+              let delegateNode = viewModel.nodes[delegateNodeId] else {
+            throw OrchestratorError.nodeNotFound
+        }
+        
+        // Mark both nodes as orchestrating for visual feedback
+        viewModel.orchestratingNodeIds.insert(masterNodeId)
+        viewModel.orchestratingNodeIds.insert(delegateNodeId)
+        
+        // Send question to delegate
+        viewModel.generateResponse(for: delegateNodeId, prompt: question)
+        
+        // Wait for delegate response
+        try await waitForGeneration(nodeId: delegateNodeId, viewModel: viewModel)
+        
+        // Get the delegate's response
+        guard let updatedDelegate = viewModel.nodes[delegateNodeId],
+              let delegateResponse = updatedDelegate.conversation.last(where: { $0.role == .assistant }) else {
+            viewModel.orchestratingNodeIds.remove(masterNodeId)
+            viewModel.orchestratingNodeIds.remove(delegateNodeId)
+            throw OrchestratorError.delegatesNotComplete
+        }
+        
+        // Clear delegate from orchestrating
+        viewModel.orchestratingNodeIds.remove(delegateNodeId)
+        
+        // Get delegate role name for attribution
+        let roleName = delegateNode.teamMember.flatMap { RoleManager.shared.role(withId: $0.roleId)?.name } ?? "Expert"
+        
+        // Build synthesis prompt that attributes the response
+        let attributionPrompt = """
+        The \(roleName) specialist has provided the following expert response to your question:
+        
+        ---
+        **\(roleName)'s Response:**
+        \(delegateResponse.content)
+        ---
+        
+        Please present this expert insight to the user, adding any relevant context or follow-up suggestions. Attribute the response to the \(roleName).
+        """
+        
+        // Generate attributed response in master node
+        viewModel.generateResponse(for: masterNodeId, prompt: attributionPrompt)
+        
+        // Wait for master synthesis
+        try await waitForGeneration(nodeId: masterNodeId, viewModel: viewModel)
+        
+        // Clear master from orchestrating
+        viewModel.orchestratingNodeIds.remove(masterNodeId)
+    }
+    
+    /// Build prompt to check if a question should be routed to an expert
+    private func buildRoutingCheckPrompt(userPrompt: String, delegates: [(UUID, String, String)]) -> String {
+        let delegateList = delegates.map { "- \($0.2) (roleId: \($0.1))" }.joined(separator: "\n")
+        
+        return """
+        You are analyzing a follow-up question to determine if it should be routed to a specific expert.
+        
+        ## User's Question
+        \(userPrompt)
+        
+        ## Available Experts (already consulted previously)
+        \(delegateList)
+        
+        ## Your Task
+        Determine if this question is specifically asking for one expert's perspective, or if it's a general question.
+        
+        Look for phrases like:
+        - "from a [role] perspective..."
+        - "what would the [role] say..."
+        - "ask the [role]..."
+        - Domain-specific questions that clearly belong to one expert
+        
+        Respond ONLY with valid JSON:
+        {
+          "shouldRoute": true/false,
+          "roleId": "the-role-id-to-route-to" or null,
+          "reason": "Brief explanation",
+          "refinedQuestion": "The question to ask the expert, rephrased if needed" or null
+        }
+        """
+    }
+    
+    /// Parse the routing check response
+    private func parseRoutingResponse(from response: String, delegates: [(UUID, String, String)]) -> ExpertRoutingResult {
+        let jsonString = extractJSON(from: response)
+        
+        guard let data = jsonString.data(using: .utf8) else {
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        }
+        
+        struct RoutingResponse: Codable {
+            let shouldRoute: Bool
+            let roleId: String?
+            let reason: String?
+            let refinedQuestion: String?
+        }
+        
+        do {
+            let parsed = try JSONDecoder().decode(RoutingResponse.self, from: data)
+            
+            if parsed.shouldRoute, let roleId = parsed.roleId {
+                // Find the delegate with this role
+                if let delegate = delegates.first(where: { $0.1 == roleId }) {
+                    return ExpertRoutingResult(
+                        shouldRoute: true,
+                        delegateNodeId: delegate.0,
+                        delegateRoleName: delegate.2,
+                        refinedQuestion: parsed.refinedQuestion
+                    )
+                }
+            }
+            
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        } catch {
+            print("⚠️ Failed to parse routing response: \(error)")
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        }
+    }
+    
     // MARK: - Private Helpers
     
     /// Build the prompt for AI to analyze and propose roles
