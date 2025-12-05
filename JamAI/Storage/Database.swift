@@ -253,6 +253,18 @@ final class Database: Sendable {
                 }
             }
             
+            // Add orchestrator columns if they don't exist (migration for Jam Squad)
+            if try db.columns(in: "nodes").first(where: { $0.name == "orchestrator_session_id" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "orchestrator_session_id", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "orchestrator_role" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "orchestrator_role", .text)
+                }
+            }
+            
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -439,8 +451,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, embedding_json, embedding_updated_at, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, embedding_json, embedding_updated_at, orchestrator_session_id, orchestrator_role, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -473,6 +485,8 @@ final class Database: Sendable {
                     node.imageData,
                     node.embeddingJSON,
                     node.embeddingUpdatedAt,
+                    node.orchestratorSessionId?.uuidString,
+                    node.orchestratorRoleRaw,
                     node.displayOrder,
                     node.createdAt,
                     node.updatedAt
@@ -519,6 +533,8 @@ final class Database: Sendable {
                     imageData: row["image_data"] as Data?,
                     embeddingJSON: row["embedding_json"] as String?,
                     embeddingUpdatedAt: row["embedding_updated_at"] as Date?,
+                    orchestratorSessionId: (row["orchestrator_session_id"] as String?).flatMap { UUID(uuidString: $0) },
+                    orchestratorRoleRaw: row["orchestrator_role"] as String?,
                     displayOrder: row["display_order"] as Int?,
                     createdAt: row["created_at"],
                     updatedAt: row["updated_at"]

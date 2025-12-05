@@ -35,6 +35,7 @@ struct NodeItemWrapper: View {
     let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
+    let onJamSquad: ((String) -> Void)?
     
     // Wiring callbacks
     let isWiring: Bool
@@ -123,6 +124,7 @@ struct NodeItemWrapper: View {
                     onResizeLiveGeometryChange: onResizeLiveGeometryChange,
                     onMaximizeAndCenter: onMaximizeAndCenter,
                     onTeamMemberChange: onTeamMemberChange,
+                    onJamSquad: onJamSquad,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,

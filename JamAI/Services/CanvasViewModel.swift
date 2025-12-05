@@ -30,6 +30,7 @@ class CanvasViewModel: ObservableObject {
     @Published var errorNodeId: UUID? // Node that encountered an error during generation
     @Published var nodesWithUnreadResponse: Set<UUID> = [] // Nodes with new AI responses not yet viewed
     @Published var errorMessage: String?
+    @Published var orchestratingNodeIds: Set<UUID> = [] // Nodes involved in active orchestration
     
     // Canvas state
     @Published var offset: CGSize = .zero
@@ -1351,6 +1352,23 @@ class CanvasViewModel: ObservableObject {
         positionsVersion += 1
         
         // Always use debounced write for reliable persistence
+        scheduleDebouncedWrite(edgeId: edge.id)
+    }
+    
+    /// Add a new edge to the canvas
+    func addEdge(_ edge: Edge) {
+        // Prevent duplicate edges
+        let existingEdge = edges.values.first { 
+            $0.sourceId == edge.sourceId && $0.targetId == edge.targetId 
+        }
+        guard existingEdge == nil else { return }
+        
+        objectWillChange.send()
+        edges[edge.id] = edge
+        undoManager.record(.createEdge(edge))
+        positionsVersion += 1
+        
+        // Use debounced write for reliable persistence
         scheduleDebouncedWrite(edgeId: edge.id)
     }
     

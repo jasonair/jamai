@@ -748,7 +748,7 @@ struct CanvasView: View {
         NodeItemWrapper(
             node: binding(for: node.id),
             isSelected: isSelected,
-            isGenerating: viewModel.generatingNodeId == node.id,
+            isGenerating: viewModel.generatingNodeId == node.id || viewModel.orchestratingNodeIds.contains(node.id),
             hasError: viewModel.errorNodeId == node.id,
             hasUnreadResponse: viewModel.nodesWithUnreadResponse.contains(node.id),
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
@@ -792,6 +792,7 @@ struct CanvasView: View {
             onResizeLiveGeometryChange: { w, h in viewModel.updateNodeGeometryDuringDrag(node.id, width: w, height: h) },
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) },
+            onJamSquad: { prompt in handleJamSquad(prompt, for: node.id) },
             isWiring: viewModel.isWiring,
             wireSourceNodeId: viewModel.wireSourceNodeId,
             onClickToStartWiring: { nodeId, side in
@@ -934,6 +935,36 @@ struct CanvasView: View {
         guard var node = viewModel.nodes[nodeId] else { return }
         node.setTeamMember(member)
         viewModel.updateNode(node)
+    }
+    
+    private func handleJamSquad(_ prompt: String, for nodeId: UUID) {
+        Task { @MainActor in
+            // Mark master node as orchestrating immediately for visual feedback
+            viewModel.orchestratingNodeIds.insert(nodeId)
+            
+            do {
+                // Step 1: Analyze and propose roles
+                var session = try await OrchestratorService.shared.analyzeAndPropose(
+                    nodeId: nodeId,
+                    prompt: prompt,
+                    viewModel: viewModel
+                )
+                
+                // For now, auto-approve all proposed roles and run orchestration
+                // In the future, this will show a UI for user approval
+                if !session.proposedRoles.isEmpty {
+                    try await OrchestratorService.shared.runOrchestration(
+                        session: &session,
+                        viewModel: viewModel
+                    )
+                }
+            } catch {
+                print("❌ Jam Squad error: \(error)")
+                viewModel.errorMessage = "Jam Squad failed: \(error.localizedDescription)"
+                // Clear orchestrating state on error
+                viewModel.orchestratingNodeIds.remove(nodeId)
+            }
+        }
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)

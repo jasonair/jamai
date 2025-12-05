@@ -35,6 +35,7 @@ struct NodeView: View {
     let onResizeLiveGeometryChange: (CGFloat, CGFloat) -> Void
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
+    let onJamSquad: ((String) -> Void)?  // Callback for Jam Squad orchestration
     
     // Wiring props
     var isWiring: Bool = false
@@ -65,6 +66,7 @@ struct NodeView: View {
     @State private var selectedImageData: Data?
     @State private var selectedImageMimeType: String?
     @State private var webSearchEnabled = false
+    @State private var teamModeEnabled = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isPromptFocused: Bool
     @FocusState private var isDescFocused: Bool
@@ -81,6 +83,8 @@ struct NodeView: View {
     @State private var expandedUserMessageIds: Set<UUID> = []
     @State private var isVoiceTranscribing = false
     @State private var showDeleteConfirmation = false
+    @State private var showJamSquadProposal = false
+    @State private var orchestratorSession: OrchestratorSession?
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -1468,6 +1472,28 @@ struct NodeView: View {
                             .help("Upload image")
                         }
                         
+                        // Team mode toggle (multi-agent orchestration)
+                        if node.type == .standard && onJamSquad != nil {
+                            Button(action: {
+                                teamModeEnabled.toggle()
+                            }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: teamModeEnabled ? "checkmark.square.fill" : "square")
+                                        .font(.system(size: 14))
+                                    Text("Team")
+                                        .font(.system(size: 11, weight: .medium))
+                                }
+                                .foregroundColor(teamModeEnabled ? .accentColor : contentSecondaryTextColor)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(teamModeEnabled ? Color.accentColor.opacity(0.15) : Color.clear)
+                                .cornerRadius(8)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                            .help(teamModeEnabled ? "Team mode enabled - send will assemble expert panel" : "Enable team mode")
+                            .disabled(isGenerating)
+                        }
+                        
                         // Web search toggle button (temporarily disabled in UI)
                         if false {
                             let isSearchActive = webSearchEnabled || (isGenerating && node.conversation.last(where: { $0.role == .user })?.webSearchEnabled == true)
@@ -1777,6 +1803,17 @@ struct NodeView: View {
         // Allow sending with just an image or just text or both
         if !promptText.isEmpty || selectedImage != nil {
             let textToSend = promptText.isEmpty ? "" : promptText
+            
+            // Check if team mode is enabled
+            if teamModeEnabled && !textToSend.isEmpty {
+                // Trigger team orchestration instead of normal submission
+                onJamSquad?(textToSend)
+                promptText = ""
+                teamModeEnabled = false // Reset after triggering
+                isPromptFocused = true
+                return
+            }
+            
             onPromptSubmit(textToSend, selectedImageData, selectedImageMimeType, webSearchEnabled)
             promptText = ""
             selectedImage = nil

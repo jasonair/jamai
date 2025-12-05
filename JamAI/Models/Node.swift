@@ -77,6 +77,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var embeddingJSON: String? // JSON array of Float values for semantic search
     var embeddingUpdatedAt: Date? // When the embedding was last generated
     
+    // Orchestrator (Jam Squad)
+    var orchestratorSessionId: UUID? // ID of the orchestration session this node belongs to
+    var orchestratorRoleRaw: String? // Raw OrchestratorRole value (master/delegate)
+    
     // Metadata
     var createdAt: Date
     var updatedAt: Date
@@ -113,6 +117,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         imageData: Data? = nil,
         embeddingJSON: String? = nil,
         embeddingUpdatedAt: Date? = nil,
+        orchestratorSessionId: UUID? = nil,
+        orchestratorRoleRaw: String? = nil,
         displayOrder: Int? = nil,
         createdAt: Date = Date(),
         updatedAt: Date = Date()
@@ -155,6 +161,8 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.imageData = imageData
         self.embeddingJSON = embeddingJSON
         self.embeddingUpdatedAt = embeddingUpdatedAt
+        self.orchestratorSessionId = orchestratorSessionId
+        self.orchestratorRoleRaw = orchestratorRoleRaw
         self.displayOrder = displayOrder
         self.createdAt = createdAt
         self.updatedAt = updatedAt
@@ -268,6 +276,34 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var needsEmbeddingUpdate: Bool {
         guard let embeddingDate = embeddingUpdatedAt else { return true }
         return updatedAt > embeddingDate
+    }
+    
+    // MARK: - Orchestrator Properties
+    
+    /// The role of this node in an orchestration session
+    var orchestratorRole: OrchestratorRole? {
+        get {
+            guard let raw = orchestratorRoleRaw else { return nil }
+            return OrchestratorRole(rawValue: raw)
+        }
+        set {
+            orchestratorRoleRaw = newValue?.rawValue
+        }
+    }
+    
+    /// Whether this node is part of an orchestration session
+    var isInOrchestration: Bool {
+        orchestratorSessionId != nil
+    }
+    
+    /// Whether this node is the master/orchestrator of a session
+    var isOrchestrator: Bool {
+        orchestratorRole == .master
+    }
+    
+    /// Whether this node is a delegate/specialist in a session
+    var isDelegate: Bool {
+        orchestratorRole == .delegate
     }
     
     static func == (lhs: Node, rhs: Node) -> Bool {
