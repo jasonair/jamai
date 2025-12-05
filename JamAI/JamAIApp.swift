@@ -259,11 +259,9 @@ struct JamAIApp: App {
                     }
                 }
                 
-                // Clear tabs on sign-in to show welcome screen
+                // Restore previously open tabs when authenticated
                 if authService.isAuthenticated && appState.tabs.isEmpty {
-                    // User just signed in, ensure we show welcome screen
-                    appState.tabs = []
-                    appState.activeTabId = nil
+                    appState.restoreOpenTabs()
                 }
             }
             .onChange(of: authService.isAuthenticated) { _, isAuthenticated in
@@ -287,6 +285,11 @@ struct JamAIApp: App {
                         }
                         
                         isLoadingUserAccount = false
+                        
+                        // Restore tabs after user account loads
+                        if appState.tabs.isEmpty {
+                            appState.restoreOpenTabs()
+                        }
                     }
                 } else {
                     // Clear user account when logged out
@@ -476,6 +479,10 @@ class AppState: ObservableObject {
     // Track security-scoped resources per tab
     private var accessingResources: Set<URL> = []
     
+    // Keys for UserDefaults persistence
+    private static let openTabsKey = "openTabURLs"
+    private static let activeTabURLKey = "activeTabURL"
+    
     init() {
         // Load appearance mode from UserDefaults
         if let savedMode = UserDefaults.standard.string(forKey: "appAppearanceMode"),
@@ -491,6 +498,73 @@ class AppState: ObservableObject {
                 self?.recentProjects = projects
             }
             .store(in: &cancellables)
+    }
+    
+    /// Restore previously open tabs from UserDefaults
+    func restoreOpenTabs() {
+        let savedPaths = UserDefaults.standard.array(forKey: Self.openTabsKey) as? [String] ?? []
+        print("🔄 Restoring tabs - found \(savedPaths.count) saved paths: \(savedPaths)")
+        
+        guard !savedPaths.isEmpty else {
+            print("🔄 No saved tabs to restore")
+            return
+        }
+        
+        let activeTabPath = UserDefaults.standard.string(forKey: Self.activeTabURLKey)
+        var restoredActiveTabId: UUID?
+        
+        for path in savedPaths {
+            let url = URL(fileURLWithPath: path)
+            
+            // Only restore if file still exists
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                print("⚠️ Skipping missing file: \(path)")
+                continue
+            }
+            
+            print("📂 Restoring tab: \(url.lastPathComponent)")
+            
+            // Open the project (this will add it to tabs)
+            openProjectInNewTab(url: url)
+            
+            // Track which tab should be active
+            if path == activeTabPath, let lastTab = tabs.last {
+                restoredActiveTabId = lastTab.id
+            }
+        }
+        
+        // Restore active tab selection, or go to home if none specified
+        if let restoredId = restoredActiveTabId {
+            activeTabId = restoredId
+        } else if !tabs.isEmpty {
+            // Default to first tab if active tab wasn't found
+            activeTabId = tabs.first?.id
+        }
+        
+        print("✅ Restored \(tabs.count) tabs")
+    }
+    
+    /// Save current open tabs to UserDefaults
+    private func saveOpenTabs() {
+        // Only save non-temporary tabs (temporary = unsaved new projects)
+        let tabPaths = tabs.compactMap { tab -> String? in
+            guard !tab.isTemporary else { return nil }
+            return tab.projectURL.path
+        }
+        
+        print("💾 Saving \(tabPaths.count) open tabs: \(tabPaths)")
+        
+        UserDefaults.standard.set(tabPaths, forKey: Self.openTabsKey)
+        
+        // Save active tab URL
+        if let activeTab = activeTab, !activeTab.isTemporary {
+            UserDefaults.standard.set(activeTab.projectURL.path, forKey: Self.activeTabURLKey)
+        } else {
+            UserDefaults.standard.removeObject(forKey: Self.activeTabURLKey)
+        }
+        
+        // Force synchronize to ensure data is written immediately
+        UserDefaults.standard.synchronize()
     }
     
     deinit {
@@ -517,6 +591,7 @@ class AppState: ObservableObject {
     
     func selectTab(_ id: UUID) {
         activeTabId = id
+        saveOpenTabs()
     }
     
     func closeTab(_ id: UUID) {
@@ -695,6 +770,9 @@ class AppState: ObservableObject {
                 activeTabId = nil
             }
         }
+        
+        // Save open tabs state after closing
+        saveOpenTabs()
     }
     
     func closeProject() {
@@ -761,6 +839,9 @@ class AppState: ObservableObject {
             tabs.append(newTab)
             activeTabId = newTab.id
             recordRecent(url: normalizedURL)
+            
+            // Save open tabs state
+            saveOpenTabs()
             
             // Track project opened analytics
             if let userId = FirebaseAuthService.shared.currentUser?.uid {
