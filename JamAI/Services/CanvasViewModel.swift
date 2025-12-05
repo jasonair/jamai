@@ -20,6 +20,7 @@ class CanvasViewModel: ObservableObject {
     @Published var edges: [UUID: Edge] = [:]
     @Published var selectedNodeId: UUID?
     @Published var generatingNodeId: UUID?
+    @Published var errorNodeId: UUID? // Node that encountered an error during generation
     @Published var errorMessage: String?
     
     // Canvas state
@@ -1136,7 +1137,14 @@ class CanvasViewModel: ObservableObject {
                                 await self?.autoGenerateTitleForExpansion(for: nodeId, selectedText: selectedText)
                                 
                             case .failure(let error):
+                                self?.errorNodeId = nodeId
                                 self?.errorMessage = error.localizedDescription
+                                // Clear error state after brief display
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    if self?.errorNodeId == nodeId {
+                                        self?.errorNodeId = nil
+                                    }
+                                }
                             }
                         }
                     }
@@ -1544,7 +1552,14 @@ class CanvasViewModel: ObservableObject {
                                 await self?.updateNodeEmbedding(for: nodeId)
                                 
                             case .failure(let error):
+                                self?.errorNodeId = nodeId
                                 self?.errorMessage = error.localizedDescription
+                                // Clear error state after brief display
+                                DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                    if self?.errorNodeId == nodeId {
+                                        self?.errorNodeId = nil
+                                    }
+                                }
                             }
                         }
                     }
@@ -1688,7 +1703,14 @@ class CanvasViewModel: ObservableObject {
                             await self?.autoGenerateTitleAndDescription(for: nodeId)
                             
                         case .failure(let error):
+                            self?.errorNodeId = nodeId
                             self?.errorMessage = error.localizedDescription
+                            // Clear error state after brief display
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                                if self?.errorNodeId == nodeId {
+                                    self?.errorNodeId = nil
+                                }
+                            }
                         }
                     }
                 }

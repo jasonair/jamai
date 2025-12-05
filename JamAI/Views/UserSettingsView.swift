@@ -397,6 +397,31 @@ struct UserSettingsView: View {
                         }
                     }
                     
+                    // Visual Effects section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Visual Effects")
+                            .font(.system(size: 18, weight: .semibold))
+                        
+                        VStack(spacing: 12) {
+                            Toggle(isOn: Binding(
+                                get: { UserDefaults.standard.object(forKey: Config.thinkingGlowEnabledKey) as? Bool ?? true },
+                                set: { UserDefaults.standard.set($0, forKey: Config.thinkingGlowEnabledKey) }
+                            )) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Thinking Glow")
+                                        .font(.system(size: 14, weight: .medium))
+                                    Text("Show a pulsing glow around nodes while AI is processing")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.secondary)
+                                }
+                            }
+                            .toggleStyle(.switch)
+                        }
+                        .padding()
+                        .background(Color.secondary.opacity(0.05))
+                        .cornerRadius(12)
+                    }
+                    
                     // Sign out button
                     Button {
                         showingSignOutAlert = true

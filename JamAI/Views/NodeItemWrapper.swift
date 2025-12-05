@@ -11,6 +11,7 @@ struct NodeItemWrapper: View {
     @Binding var node: Node
     let isSelected: Bool
     let isGenerating: Bool
+    let hasError: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -94,6 +95,7 @@ struct NodeItemWrapper: View {
                     node: $node,
                     isSelected: isSelected,
                     isGenerating: isGenerating,
+                    hasError: hasError,
                     projectTeamMembers: projectTeamMembers,
                     searchHighlight: searchHighlight,
                     onTap: onTap,

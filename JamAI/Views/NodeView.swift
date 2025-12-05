@@ -13,6 +13,7 @@ struct NodeView: View {
     @Binding var node: Node
     let isSelected: Bool
     let isGenerating: Bool
+    let hasError: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -85,6 +86,11 @@ struct NodeView: View {
     @StateObject private var roleManager = RoleManager.shared
     @StateObject private var dataService = FirebaseDataService.shared
     @StateObject private var recordingService = AudioRecordingService()
+    
+    // User preference for thinking glow effect (defaults to enabled)
+    private var thinkingGlowEnabled: Bool {
+        UserDefaults.standard.object(forKey: Config.thinkingGlowEnabledKey) as? Bool ?? true
+    }
     
     var body: some View {
         // Special handling for image nodes - no chrome, just the image
@@ -430,6 +436,16 @@ struct NodeView: View {
             )
             .background(cardBackground)
             .cornerRadius(Node.cornerRadius)
+            // Thinking glow effect - rendered behind the node
+            .background(
+                ThinkingGlowView(
+                    width: isResizing ? draggedWidth : node.width,
+                    height: isResizing ? draggedHeight : node.height,
+                    cornerRadius: Node.cornerRadius,
+                    isActive: isGenerating && thinkingGlowEnabled,
+                    hasError: hasError && thinkingGlowEnabled
+                )
+            )
             .shadow(
                 color: shadowColor,
                 radius: Node.shadowRadius,

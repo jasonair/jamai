@@ -63,4 +63,7 @@ enum Config {
     static let maxRetries = 3
     static let initialBackoffDelay: TimeInterval = 1.0
     static let maxBackoffDelay: TimeInterval = 32.0
+    
+    // Visual Effects
+    static let thinkingGlowEnabledKey = "thinkingGlowEnabled"
 }
