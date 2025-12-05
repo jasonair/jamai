@@ -942,6 +942,8 @@ struct CanvasView: View {
             // Mark master node as orchestrating immediately for visual feedback
             viewModel.orchestratingNodeIds.insert(nodeId)
             
+            var createdDelegateIds: [UUID] = []
+            
             do {
                 // Step 1: Analyze and propose roles
                 var session = try await OrchestratorService.shared.analyzeAndPropose(
@@ -957,12 +959,17 @@ struct CanvasView: View {
                         session: &session,
                         viewModel: viewModel
                     )
+                    createdDelegateIds = session.delegateNodeIds
                 }
             } catch {
                 print("❌ Jam Squad error: \(error)")
                 viewModel.errorMessage = "Jam Squad failed: \(error.localizedDescription)"
-                // Clear orchestrating state on error
-                viewModel.orchestratingNodeIds.remove(nodeId)
+            }
+            
+            // Always clear orchestrating state for all involved nodes
+            viewModel.orchestratingNodeIds.remove(nodeId)
+            for delegateId in createdDelegateIds {
+                viewModel.orchestratingNodeIds.remove(delegateId)
             }
         }
     }

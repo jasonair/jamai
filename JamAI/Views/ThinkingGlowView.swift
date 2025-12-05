@@ -15,15 +15,20 @@ struct ThinkingGlowView: View {
     let cornerRadius: CGFloat
     let isActive: Bool
     let hasError: Bool
+    let customColor: Color? // Optional custom color (e.g., from team member)
     
     // Animation state
     @State private var glowOpacity: Double = 0
     @State private var glowScale: CGFloat = 1.0
     @State private var animationId: UUID = UUID() // Used to cancel pending animations
     
-    // Glow colors - subtle but noticeable
-    private let thinkingColor = Color(red: 0.5, green: 0.75, blue: 1.0) // Soft blue
+    // Default glow colors
+    private let defaultThinkingColor = Color(red: 0.5, green: 0.75, blue: 1.0) // Soft blue
     private let errorColor = Color(red: 0.95, green: 0.3, blue: 0.3) // Soft red
+    
+    private var thinkingColor: Color {
+        customColor ?? defaultThinkingColor
+    }
     
     // Animation timing - 3 second breathing cycle
     private let breatheDuration: Double = 1.5 // Half cycle (fade in OR fade out)
@@ -155,7 +160,31 @@ struct ThinkingGlowView: View {
                 height: 300,
                 cornerRadius: 12,
                 isActive: true,
-                hasError: false
+                hasError: false,
+                customColor: nil
+            )
+            
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.white)
+                .frame(width: 400, height: 300)
+                .shadow(radius: 4)
+        }
+    }
+    .frame(width: 500, height: 400)
+}
+
+#Preview("Thinking Glow - Custom Color") {
+    ZStack {
+        Color.gray.opacity(0.2)
+        
+        ZStack {
+            ThinkingGlowView(
+                width: 400,
+                height: 300,
+                cornerRadius: 12,
+                isActive: true,
+                hasError: false,
+                customColor: .green
             )
             
             RoundedRectangle(cornerRadius: 12)
@@ -177,7 +206,8 @@ struct ThinkingGlowView: View {
                 height: 300,
                 cornerRadius: 12,
                 isActive: false,
-                hasError: true
+                hasError: true,
+                customColor: nil
             )
             
             RoundedRectangle(cornerRadius: 12)

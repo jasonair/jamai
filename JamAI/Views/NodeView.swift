@@ -85,6 +85,7 @@ struct NodeView: View {
     @State private var showDeleteConfirmation = false
     @State private var showJamSquadProposal = false
     @State private var orchestratorSession: OrchestratorSession?
+    @State private var currentScrollProxy: ScrollViewProxy?
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -95,6 +96,16 @@ struct NodeView: View {
     // User preference for thinking glow effect (defaults to enabled)
     private var thinkingGlowEnabled: Bool {
         UserDefaults.standard.object(forKey: Config.thinkingGlowEnabledKey) as? Bool ?? true
+    }
+    
+    // Team member color for thinking glow (nil = use default blue)
+    private var teamMemberGlowColor: Color? {
+        guard let teamMember = node.teamMember,
+              let role = roleManager.role(withId: teamMember.roleId),
+              let nodeColor = NodeColor.color(for: role.color) else {
+            return nil
+        }
+        return nodeColor.color
     }
     
     var body: some View {
@@ -123,40 +134,56 @@ struct NodeView: View {
                             if showChatSection {
                                 // When chat is visible, use ScrollView for conversation
                                 ScrollViewReader { proxy in
-                                    ScrollView {
-                                        VStack(alignment: .leading, spacing: 12) {
-                                            // Top padding to clear header and team member tray
-                                            Color.clear.frame(height: teamTrayPadding)
-                                            
-                                            // Show description as first message if it exists (legacy data)
-                                            if !node.description.isEmpty {
-                                                HStack {
-                                                    Spacer(minLength: 0)
-                                                    Text(node.description)
-                                                        .font(.system(size: 15, weight: .light))
-                                                        .foregroundColor(contentSecondaryTextColor)
-                                                        .frame(maxWidth: 700)
-                                                    Spacer(minLength: 0)
+                                    ZStack(alignment: .bottom) {
+                                        ScrollView {
+                                            VStack(alignment: .leading, spacing: 12) {
+                                                // Top anchor for scrolling to start
+                                                Color.clear
+                                                    .frame(height: 1)
+                                                    .id("scroll-top-anchor")
+                                                
+                                                // Top padding to clear header and team member tray
+                                                Color.clear.frame(height: teamTrayPadding)
+                                                
+                                                // Show description as first message if it exists (legacy data)
+                                                if !node.description.isEmpty {
+                                                    HStack {
+                                                        Spacer(minLength: 0)
+                                                        Text(node.description)
+                                                            .font(.system(size: 15, weight: .light))
+                                                            .foregroundColor(contentSecondaryTextColor)
+                                                            .frame(maxWidth: 700)
+                                                        Spacer(minLength: 0)
+                                                    }
                                                 }
+                                                
+                                                // Conversation thread - no width constraint, let MarkdownText handle it
+                                                conversationView
+                                                
+                                                // Bottom anchor for scrolling to end
+                                                Color.clear
+                                                    .frame(height: 1)
+                                                    .id("scroll-bottom-anchor")
                                             }
-                                            
-                                            // Conversation thread - no width constraint, let MarkdownText handle it
-                                            conversationView
-                                            
-                                            // Bottom anchor for scrolling to end
-                                            Color.clear
-                                                .frame(height: 1)
-                                                .id("scroll-bottom-anchor")
+                                            .padding(Node.padding)
                                         }
-                                        .padding(Node.padding)
+                                        .disabled(!isSelected)
+                                        
+                                        // Scroll navigation buttons (only show when selected and content visible)
+                                        if isSelected && isContentVisible && node.conversation.count > 2 {
+                                            scrollNavigationButtons(proxy: proxy)
+                                                .padding(.trailing, 20)
+                                                .padding(.bottom, 20)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                                        }
                                     }
-                                    .disabled(!isSelected)
                                     .opacity(isContentVisible ? 1 : 0)
                                     .onAppear {
                                         // Reset states and scroll to bottom
                                         isScrollReady = false
                                         isCoverFadingOut = false
                                         isContentVisible = false
+                                        currentScrollProxy = proxy
                                         scrollToBottomThenShow(proxy: proxy)
                                     }
                                     .onChange(of: node.conversation.count) { oldCount, newCount in
@@ -164,7 +191,24 @@ struct NodeView: View {
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                                 withAnimation {
                                                     if let last = node.conversation.last {
-                                                        proxy.scrollTo(last.id, anchor: .bottom)
+                                                        switch last.role {
+                                                        case .user:
+                                                            proxy.scrollTo(last.id, anchor: .bottom)
+                                                        case .assistant:
+                                                            proxy.scrollTo(last.id, anchor: .top)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .onChange(of: isGenerating) { oldValue, newValue in
+                                        if !newValue && oldValue {
+                                            // Generation finished: scroll to show the response
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                                withAnimation {
+                                                    if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                        proxy.scrollTo(lastAssistantId, anchor: .top)
                                                     }
                                                 }
                                             }
@@ -208,40 +252,56 @@ struct NodeView: View {
                         } else {
                             // For standard nodes: ScrollView with conversation
                             ScrollViewReader { proxy in
-                                ScrollView {
-                                    VStack(alignment: .leading, spacing: 12) {
-                                        // Top padding to clear header and team member tray
-                                        Color.clear.frame(height: teamTrayPadding)
-                                        
-                                        // Show description as first message if it exists (legacy data)
-                                        if !node.description.isEmpty {
-                                            HStack {
-                                                Spacer(minLength: 0)
-                                                Text(node.description)
-                                                    .font(.system(size: 15, weight: .light))
-                                                    .foregroundColor(contentSecondaryTextColor)
-                                                    .frame(maxWidth: 700)
-                                                Spacer(minLength: 0)
+                                ZStack(alignment: .bottom) {
+                                    ScrollView {
+                                        VStack(alignment: .leading, spacing: 12) {
+                                            // Top anchor for scrolling to start
+                                            Color.clear
+                                                .frame(height: 1)
+                                                .id("scroll-top-anchor")
+                                            
+                                            // Top padding to clear header and team member tray
+                                            Color.clear.frame(height: teamTrayPadding)
+                                            
+                                            // Show description as first message if it exists (legacy data)
+                                            if !node.description.isEmpty {
+                                                HStack {
+                                                    Spacer(minLength: 0)
+                                                    Text(node.description)
+                                                        .font(.system(size: 15, weight: .light))
+                                                        .foregroundColor(contentSecondaryTextColor)
+                                                        .frame(maxWidth: 700)
+                                                    Spacer(minLength: 0)
+                                                }
                                             }
+                                            
+                                            // Conversation thread - no width constraint, let MarkdownText handle it
+                                            conversationView
+                                            
+                                            // Bottom anchor for scrolling to end
+                                            Color.clear
+                                                .frame(height: 1)
+                                                .id("scroll-bottom-anchor")
                                         }
-                                        
-                                        // Conversation thread - no width constraint, let MarkdownText handle it
-                                        conversationView
-                                        
-                                        // Bottom anchor for scrolling to end
-                                        Color.clear
-                                            .frame(height: 1)
-                                            .id("scroll-bottom-anchor")
+                                        .padding(Node.padding)
                                     }
-                                    .padding(Node.padding)
+                                    .disabled(!isSelected)
+                                    
+                                    // Scroll navigation buttons (only show when selected and content visible)
+                                    if isSelected && isContentVisible && node.conversation.count > 2 {
+                                        scrollNavigationButtons(proxy: proxy)
+                                            .padding(.trailing, 20)
+                                            .padding(.bottom, 20)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                                    }
                                 }
-                                .disabled(!isSelected)
                                 .opacity(isContentVisible ? 1 : 0)
                                 .onAppear {
                                     // Reset states and scroll to bottom
                                     isScrollReady = false
                                     isCoverFadingOut = false
                                     isContentVisible = false
+                                    currentScrollProxy = proxy
                                     scrollToBottomThenShow(proxy: proxy)
                                 }
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
@@ -251,18 +311,15 @@ struct NodeView: View {
                                                 if let last = node.conversation.last {
                                                     switch last.role {
                                                     case .user:
+                                                        // User message added: scroll to show it with bottom anchor
+                                                        // so the response will appear below in view
                                                         if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                            proxy.scrollTo(lastUserId, anchor: .top)
-                                                        } else {
-                                                            proxy.scrollTo(scrollViewID, anchor: .top)
+                                                            proxy.scrollTo(lastUserId, anchor: .bottom)
                                                         }
                                                     case .assistant:
-                                                        if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                            proxy.scrollTo(lastUserId, anchor: .top)
-                                                        } else if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                        // Assistant response complete: scroll to show the response
+                                                        if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
                                                             proxy.scrollTo(lastAssistantId, anchor: .top)
-                                                        } else {
-                                                            proxy.scrollTo(scrollViewID, anchor: .top)
                                                         }
                                                     }
                                                 }
@@ -272,13 +329,23 @@ struct NodeView: View {
                                 }
                                 .onChange(of: isGenerating) { oldValue, newValue in
                                     if newValue {
+                                        // Generation started: scroll to user message with bottom anchor
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                             withAnimation {
                                                 if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                    proxy.scrollTo(lastUserId, anchor: .top)
+                                                    proxy.scrollTo(lastUserId, anchor: .bottom)
                                                 } else if node.conversation.isEmpty && !node.response.isEmpty {
                                                     // Expansion streaming without a user bubble
                                                     proxy.scrollTo("legacy-assistant", anchor: .top)
+                                                }
+                                            }
+                                        }
+                                    } else if !newValue && oldValue {
+                                        // Generation finished: scroll to show the response
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                            withAnimation {
+                                                if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                    proxy.scrollTo(lastAssistantId, anchor: .top)
                                                 }
                                             }
                                         }
@@ -448,7 +515,8 @@ struct NodeView: View {
                     height: isResizing ? draggedHeight : node.height,
                     cornerRadius: Node.cornerRadius,
                     isActive: isGenerating && thinkingGlowEnabled,
-                    hasError: hasError && thinkingGlowEnabled
+                    hasError: hasError && thinkingGlowEnabled,
+                    customColor: teamMemberGlowColor
                 )
             )
             .shadow(
@@ -1706,6 +1774,44 @@ struct NodeView: View {
     }
     
     // MARK: - Actions
+    
+    /// Scroll navigation buttons for jumping to top/bottom of conversation
+    private func scrollNavigationButtons(proxy: ScrollViewProxy) -> some View {
+        HStack(spacing: 12) {
+            // Scroll to top button
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo("scroll-top-anchor", anchor: .top)
+                }
+            }) {
+                Image(systemName: "chevron.up.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(contentSecondaryTextColor.opacity(0.6))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Scroll to top")
+            
+            // Scroll to bottom button
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+                }
+            }) {
+                Image(systemName: "chevron.down.circle.fill")
+                    .font(.system(size: 22))
+                    .foregroundColor(contentSecondaryTextColor.opacity(0.6))
+            }
+            .buttonStyle(PlainButtonStyle())
+            .help("Scroll to bottom")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
+                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+        )
+    }
     
     private func scrollToBottomThenShow(proxy: ScrollViewProxy) {
         // Scroll multiple times while hidden to ensure scroll position is at the end

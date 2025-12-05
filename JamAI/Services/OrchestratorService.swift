@@ -21,10 +21,19 @@ final class OrchestratorService: ObservableObject {
     var isProcessing = false
     var errorMessage: String?
     
+    // MARK: - Safeguards
+    
+    /// Prevents recursive routing operations
+    private var isRoutingInProgress = false
+    
+    /// Maximum number of routing checks per minute (rate limiting)
+    private let maxRoutingChecksPerMinute = 10
+    private var routingCheckTimestamps: [Date] = []
+    
     // MARK: - Constants
     
     private let verticalGap: CGFloat = 100  // Gap between bottom of master and top of delegates
-    private let horizontalGap: CGFloat = 80  // Gap between delegate nodes
+    private let horizontalGap: CGFloat = 100  // Gap between delegate nodes (same as vertical)
     private let maxDelegates = 5  // Maximum number of delegate nodes
     
     private init() {}
@@ -46,11 +55,29 @@ final class OrchestratorService: ObservableObject {
     // MARK: - Step 1: Analyze and Propose Roles
     
     /// Analyze the user's prompt and propose expert roles
+    /// Includes credit check and prevents concurrent orchestrations
     func analyzeAndPropose(
         nodeId: UUID,
         prompt: String,
         viewModel: CanvasViewModel
     ) async throws -> OrchestratorSession {
+        // Safeguard: Prevent multiple concurrent orchestrations
+        guard !isProcessing else {
+            throw OrchestratorError.orchestrationInProgress
+        }
+        
+        // Safeguard: Check if node is already in an orchestration
+        guard !isNodeInActiveSession(nodeId) else {
+            throw OrchestratorError.nodeAlreadyOrchestrating
+        }
+        
+        // Safeguard: Check credits before starting (estimate ~15-20 credits for full orchestration)
+        if AIProviderManager.shared.activeProvider != .local {
+            guard CreditTracker.shared.canGenerateResponse() else {
+                throw OrchestratorError.insufficientCredits
+            }
+        }
+        
         guard let node = viewModel.nodes[nodeId] else {
             throw OrchestratorError.nodeNotFound
         }
@@ -221,10 +248,11 @@ final class OrchestratorService: ObservableObject {
             activeSessions[session.id] = session
             
             do {
-                // Send the tailored question to the delegate
+                // Send the tailored question to the delegate (skipRouting for delegates)
                 viewModel.generateResponse(
                     for: delegateId,
-                    prompt: proposedRole.tailoredQuestion
+                    prompt: proposedRole.tailoredQuestion,
+                    skipRouting: true
                 )
                 
                 // Wait for generation to complete
@@ -297,10 +325,14 @@ final class OrchestratorService: ObservableObject {
         
         let synthesisPrompt = synthesisContext.buildSynthesisPrompt()
         
-        // Generate synthesis in master node
+        // Ensure master is in orchestrating set for visual feedback during synthesis
+        viewModel.orchestratingNodeIds.insert(session.masterNodeId)
+        
+        // Generate synthesis in master node (skipRouting prevents routing check)
         viewModel.generateResponse(
             for: session.masterNodeId,
-            prompt: synthesisPrompt
+            prompt: synthesisPrompt,
+            skipRouting: true
         )
         
         // Wait for synthesis to complete
@@ -351,11 +383,24 @@ final class OrchestratorService: ObservableObject {
     }
     
     /// Check if a question from the master node should be routed to a specific delegate
+    /// Includes rate limiting to prevent excessive token usage
     func checkForExpertRouting(
         masterNodeId: UUID,
         prompt: String,
         viewModel: CanvasViewModel
     ) async throws -> ExpertRoutingResult {
+        // Rate limiting: Clean old timestamps and check rate
+        let oneMinuteAgo = Date().addingTimeInterval(-60)
+        routingCheckTimestamps = routingCheckTimestamps.filter { $0 > oneMinuteAgo }
+        
+        guard routingCheckTimestamps.count < maxRoutingChecksPerMinute else {
+            print("⚠️ Routing check rate limit reached (\(maxRoutingChecksPerMinute)/min), skipping")
+            return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
+        }
+        
+        // Record this check
+        routingCheckTimestamps.append(Date())
+        
         guard let masterNode = viewModel.nodes[masterNodeId],
               masterNode.orchestratorRole == .master else {
             return ExpertRoutingResult(shouldRoute: false, delegateNodeId: nil, delegateRoleName: nil, refinedQuestion: nil)
@@ -391,13 +436,23 @@ final class OrchestratorService: ObservableObject {
     }
     
     /// Route a question to a delegate, get response, and return it to master
+    /// Uses skipRouting: true to prevent recursive routing checks
     func routeToExpert(
         masterNodeId: UUID,
         delegateNodeId: UUID,
         question: String,
         viewModel: CanvasViewModel
     ) async throws {
-        guard let masterNode = viewModel.nodes[masterNodeId],
+        // Safeguard: Prevent routing if already routing
+        guard !isRoutingInProgress else {
+            print("⚠️ Routing already in progress, skipping")
+            return
+        }
+        
+        isRoutingInProgress = true
+        defer { isRoutingInProgress = false }
+        
+        guard let _ = viewModel.nodes[masterNodeId],
               let delegateNode = viewModel.nodes[delegateNodeId] else {
             throw OrchestratorError.nodeNotFound
         }
@@ -406,8 +461,8 @@ final class OrchestratorService: ObservableObject {
         viewModel.orchestratingNodeIds.insert(masterNodeId)
         viewModel.orchestratingNodeIds.insert(delegateNodeId)
         
-        // Send question to delegate
-        viewModel.generateResponse(for: delegateNodeId, prompt: question)
+        // Send question to delegate (skipRouting prevents recursion)
+        viewModel.generateResponse(for: delegateNodeId, prompt: question, skipRouting: true)
         
         // Wait for delegate response
         try await waitForGeneration(nodeId: delegateNodeId, viewModel: viewModel)
@@ -423,23 +478,36 @@ final class OrchestratorService: ObservableObject {
         // Clear delegate from orchestrating
         viewModel.orchestratingNodeIds.remove(delegateNodeId)
         
-        // Get delegate role name for attribution
+        // Get delegate role name and node title for attribution
         let roleName = delegateNode.teamMember.flatMap { RoleManager.shared.role(withId: $0.roleId)?.name } ?? "Expert"
+        let delegateTitle = delegateNode.title.isEmpty ? roleName : delegateNode.title
         
-        // Build synthesis prompt that attributes the response
+        // Truncate long responses to save tokens (keep first ~2000 chars)
+        let truncatedResponse: String
+        let responseIsTruncated: Bool
+        if delegateResponse.content.count > 2000 {
+            truncatedResponse = String(delegateResponse.content.prefix(2000)) + "..."
+            responseIsTruncated = true
+        } else {
+            truncatedResponse = delegateResponse.content
+            responseIsTruncated = false
+        }
+        
+        // Build synthesis prompt that attributes the response (concise to save tokens)
+        let truncationNote = responseIsTruncated 
+            ? "\n\n💡 *For the complete detailed response, check the \(delegateTitle) node directly.*"
+            : ""
+        
         let attributionPrompt = """
-        The \(roleName) specialist has provided the following expert response to your question:
+        The \(roleName) provided this response:
         
-        ---
-        **\(roleName)'s Response:**
-        \(delegateResponse.content)
-        ---
+        \(truncatedResponse)
         
-        Please present this expert insight to the user, adding any relevant context or follow-up suggestions. Attribute the response to the \(roleName).
+        Summarize the key points from the \(roleName), attributing the insights to them.\(truncationNote)
         """
         
-        // Generate attributed response in master node
-        viewModel.generateResponse(for: masterNodeId, prompt: attributionPrompt)
+        // Generate attributed response in master node (skipRouting prevents recursion)
+        viewModel.generateResponse(for: masterNodeId, prompt: attributionPrompt, skipRouting: true)
         
         // Wait for master synthesis
         try await waitForGeneration(nodeId: masterNodeId, viewModel: viewModel)
@@ -448,35 +516,16 @@ final class OrchestratorService: ObservableObject {
         viewModel.orchestratingNodeIds.remove(masterNodeId)
     }
     
-    /// Build prompt to check if a question should be routed to an expert
+    /// Build prompt to check if a question should be routed to an expert (concise to save tokens)
     private func buildRoutingCheckPrompt(userPrompt: String, delegates: [(UUID, String, String)]) -> String {
-        let delegateList = delegates.map { "- \($0.2) (roleId: \($0.1))" }.joined(separator: "\n")
+        let delegateList = delegates.map { "\($0.1): \($0.2)" }.joined(separator: ", ")
         
         return """
-        You are analyzing a follow-up question to determine if it should be routed to a specific expert.
+        Question: \(userPrompt)
+        Experts: \(delegateList)
         
-        ## User's Question
-        \(userPrompt)
-        
-        ## Available Experts (already consulted previously)
-        \(delegateList)
-        
-        ## Your Task
-        Determine if this question is specifically asking for one expert's perspective, or if it's a general question.
-        
-        Look for phrases like:
-        - "from a [role] perspective..."
-        - "what would the [role] say..."
-        - "ask the [role]..."
-        - Domain-specific questions that clearly belong to one expert
-        
-        Respond ONLY with valid JSON:
-        {
-          "shouldRoute": true/false,
-          "roleId": "the-role-id-to-route-to" or null,
-          "reason": "Brief explanation",
-          "refinedQuestion": "The question to ask the expert, rephrased if needed" or null
-        }
+        Should this route to one expert? Look for "from X perspective", "ask the X", or domain-specific questions.
+        JSON only: {"shouldRoute":bool,"roleId":"id-or-null","refinedQuestion":"question-or-null"}
         """
     }
     
@@ -644,14 +693,15 @@ final class OrchestratorService: ObservableObject {
     }
     
     /// Calculate positions for delegate nodes in org-chart layout
+    /// Ensures middle delegate is centered under master node
     private func calculateDelegatePositions(
         masterNode: Node,
         delegateCount: Int
     ) -> [CGPoint] {
         guard delegateCount > 0 else { return [] }
         
-        // Default delegate node width (will be created with this width)
-        let delegateWidth: CGFloat = 440
+        // Default delegate node width (same as master for visual consistency)
+        let delegateWidth: CGFloat = masterNode.width
         
         // Calculate vertical position: below master node with gap
         let verticalPosition = masterNode.y + masterNode.height + verticalGap
@@ -660,13 +710,22 @@ final class OrchestratorService: ObservableObject {
         let totalSpacing = delegateWidth + horizontalGap
         
         // Center the delegates horizontally under master
-        let totalWidth = CGFloat(delegateCount - 1) * totalSpacing
+        // For odd count: middle node aligns with master center
+        // For even count: gap between middle two nodes aligns with master center
         let masterCenterX = masterNode.x + (masterNode.width / 2)
-        let startX = masterCenterX - (totalWidth / 2) - (delegateWidth / 2)
+        
+        // Total width from center of first delegate to center of last delegate
+        let totalWidth = CGFloat(delegateCount - 1) * totalSpacing
+        
+        // Start X is the center of the first (leftmost) delegate
+        let firstDelegateCenterX = masterCenterX - (totalWidth / 2)
         
         return (0..<delegateCount).map { index in
-            CGPoint(
-                x: startX + (CGFloat(index) * totalSpacing),
+            let delegateCenterX = firstDelegateCenterX + (CGFloat(index) * totalSpacing)
+            // Convert center X to top-left X (node position)
+            let delegateX = delegateCenterX - (delegateWidth / 2)
+            return CGPoint(
+                x: delegateX,
                 y: verticalPosition
             )
         }
@@ -717,13 +776,16 @@ final class OrchestratorService: ObservableObject {
     
     /// Wait for AI generation to complete for a node
     private func waitForGeneration(nodeId: UUID, viewModel: CanvasViewModel) async throws {
-        // Poll until generation is complete (max 60 seconds)
-        let maxWait: TimeInterval = 60
-        let pollInterval: TimeInterval = 0.5
+        // Poll until generation is complete (max 90 seconds for longer responses)
+        let maxWait: TimeInterval = 90
+        let pollInterval: TimeInterval = 0.2  // Faster polling for more responsive UI
         var elapsed: TimeInterval = 0
         
         while elapsed < maxWait {
+            // Check if generation is complete (generatingNodeId cleared or changed)
             if viewModel.generatingNodeId != nodeId {
+                // Small delay to ensure UI has updated
+                try await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
                 return // Generation complete
             }
             try await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
@@ -744,6 +806,9 @@ enum OrchestratorError: LocalizedError {
     case delegatesNotComplete
     case generationTimeout
     case parsingFailed
+    case orchestrationInProgress
+    case nodeAlreadyOrchestrating
+    case insufficientCredits
     
     var errorDescription: String? {
         switch self {
@@ -761,6 +826,12 @@ enum OrchestratorError: LocalizedError {
             return "AI generation timed out"
         case .parsingFailed:
             return "Failed to parse AI response"
+        case .orchestrationInProgress:
+            return "An orchestration is already in progress"
+        case .nodeAlreadyOrchestrating:
+            return "This node is already part of an orchestration"
+        case .insufficientCredits:
+            return "Insufficient credits for team orchestration"
         }
     }
 }

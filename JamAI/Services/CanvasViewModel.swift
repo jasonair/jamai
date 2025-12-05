@@ -594,7 +594,7 @@ class CanvasViewModel: ObservableObject {
                 node.setTeamMember(member)
             }
         }
-        node.personality = .generalist
+        node.personality = .skeptic
         
         // Set up ancestry, context, and inherit visual styling from parent when present
         if let parentId = parentId, let parent = self.nodes[parentId] {
@@ -1113,6 +1113,8 @@ class CanvasViewModel: ObservableObject {
                     onComplete: { [weak self] result in
                         Task { @MainActor in
                             self?.generatingNodeId = nil
+                            // Also clear from orchestrating set if present (cleanup for edge cases)
+                            self?.orchestratingNodeIds.remove(nodeId)
                             
                             switch result {
                             case .success(let fullResponse):
@@ -1474,8 +1476,14 @@ class CanvasViewModel: ObservableObject {
     
     // MARK: - AI Generation
     
-    func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false) {
-        guard var node = nodes[nodeId] else { return }
+    /// Flag to prevent recursive routing checks
+    private var isRoutingInProgress = false
+    
+    /// Minimum prompt length to consider for expert routing (saves tokens on simple questions)
+    private let minPromptLengthForRouting = 20
+    
+    func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false, skipRouting: Bool = false) {
+        guard let node = nodes[nodeId] else { return }
         
         if AIProviderManager.shared.activeProvider != .local {
             guard CreditTracker.shared.canGenerateResponse() else {
@@ -1485,8 +1493,22 @@ class CanvasViewModel: ObservableObject {
         }
         
         // Check if this is a master orchestrator node that should route to an expert
-        if node.orchestratorRole == .master, imageData == nil {
+        // Safeguards:
+        // 1. skipRouting flag prevents recursion when called from routeToExpert
+        // 2. isRoutingInProgress prevents concurrent routing operations
+        // 3. Minimum prompt length check saves tokens on simple questions
+        // 4. No routing for image prompts
+        let shouldCheckRouting = node.orchestratorRole == .master 
+            && !skipRouting 
+            && !isRoutingInProgress
+            && imageData == nil
+            && prompt.count >= minPromptLengthForRouting
+        
+        if shouldCheckRouting {
+            isRoutingInProgress = true
             Task { @MainActor in
+                defer { self.isRoutingInProgress = false }
+                
                 do {
                     let routingResult = try await OrchestratorService.shared.checkForExpertRouting(
                         masterNodeId: nodeId,
@@ -1587,6 +1609,8 @@ class CanvasViewModel: ObservableObject {
                     onComplete: { [weak self] result in
                         Task { @MainActor in
                             self?.generatingNodeId = nil
+                            // Also clear from orchestrating set if present (cleanup for edge cases)
+                            self?.orchestratingNodeIds.remove(nodeId)
                             
                             switch result {
                             case .success(let fullResponse):
@@ -1748,6 +1772,8 @@ class CanvasViewModel: ObservableObject {
                 onComplete: { [weak self] result in
                     Task { @MainActor in
                         self?.generatingNodeId = nil
+                        // Also clear from orchestrating set if present (cleanup for edge cases)
+                        self?.orchestratingNodeIds.remove(nodeId)
                         
                         switch result {
                         case .success(let fullResponse):
