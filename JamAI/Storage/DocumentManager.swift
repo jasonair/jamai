@@ -69,6 +69,10 @@ class DocumentManager {
         guard FileManager.default.fileExists(atPath: dbURL.path) else {
             throw DocumentError.databaseNotFound
         }
+        
+        // Create a backup before opening (for recovery in case of corruption)
+        BackupService.shared.createBackupOnOpen(projectURL: bundleURL)
+        
         let database = try adapter.openWritableDatabase(at: bundleURL)
         let metadataURL = bundleURL.appendingPathComponent("metadata.json")
         var loadedProject: Project?

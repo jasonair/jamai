@@ -72,6 +72,9 @@ class CanvasViewModel: ObservableObject {
     let dbActor: DatabaseActor
     let undoManager: CanvasUndoManager
     
+    // Project URL for backup service
+    var projectURL: URL?
+    
     private var cancellables = Set<AnyCancellable>()
     private var autosaveTimer: Timer?
     
@@ -2309,6 +2312,11 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
     func save() {
         // Flush any pending debounced writes first
         flushPendingWrites()
+        
+        // Create periodic backup if needed (every 5 minutes)
+        if let url = projectURL {
+            BackupService.shared.createPeriodicBackupIfNeeded(projectURL: url)
+        }
         
         // Update project's canvas state before saving
         project.canvasOffsetX = offset.width

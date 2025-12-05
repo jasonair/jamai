@@ -227,6 +227,19 @@ struct JamAIApp: App {
                     isLoadingUserAccount = false
                 }
             }
+            .sheet(isPresented: $appState.showingBackupList) {
+                if let projectURL = appState.currentFileURL {
+                    BackupListView(
+                        projectURL: projectURL,
+                        onRestore: {
+                            appState.handleBackupRestored()
+                        },
+                        onDismiss: {
+                            appState.showingBackupList = false
+                        }
+                    )
+                }
+            }
         }
         .commands {
             MainAppCommands(appState: appState)
@@ -242,6 +255,14 @@ struct JamAIApp: App {
                 }
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(appState.viewModel == nil)
+                
+                Divider()
+                
+                Button("Restore from Backup...") {
+                    appState.showBackupList()
+                }
+                .disabled(appState.currentFileURL == nil)
+                
                 // Close items
                 Divider()
                 Button("Close Project") { appState.closeProject() }
@@ -354,6 +375,7 @@ class AppState: ObservableObject {
     @Published var tabs: [ProjectTab] = []
     @Published var activeTabId: UUID?
     @Published var recentProjects: [URL] = []
+    @Published var showingBackupList = false
     
     // App-level appearance mode (persisted in UserDefaults)
     @Published var appearanceMode: AppearanceMode {
@@ -614,6 +636,27 @@ class AppState: ObservableObject {
         }
     }
     
+    func showBackupList() {
+        guard currentFileURL != nil else { return }
+        showingBackupList = true
+    }
+    
+    /// Called after a backup is restored - closes and reopens the project to reload data
+    func handleBackupRestored() {
+        guard let url = currentFileURL,
+              let tabId = activeTabId else { return }
+        
+        showingBackupList = false
+        
+        // Close the current tab (without saving - we just restored)
+        if let tabIndex = tabs.firstIndex(where: { $0.id == tabId }) {
+            performTabCleanup(id: tabId, tabIndex: tabIndex, tab: tabs[tabIndex])
+        }
+        
+        // Reopen the project to load the restored data
+        openProjectInNewTab(url: url)
+    }
+    
     func openProjectInNewTab(url: URL, isTemporary: Bool = false) {
         // Normalize to the .jam directory URL we will operate on
         let normalizedURL = (url.pathExtension == Config.jamFileExtension) ? url : url.appendingPathExtension(Config.jamFileExtension)
@@ -632,6 +675,7 @@ class AppState: ObservableObject {
             
             let (project, database) = try DocumentManager.shared.openProject(from: normalizedURL)
             let viewModel = CanvasViewModel(project: project, database: database)
+            viewModel.projectURL = normalizedURL  // Set for backup service
             
             let newTab = ProjectTab(
                 projectURL: normalizedURL,

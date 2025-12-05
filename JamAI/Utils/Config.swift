@@ -57,7 +57,7 @@ enum Config {
     
     // Auto-save
     static let autoSaveInterval: TimeInterval = 30
-    static let maxAutosaveBackups = 3
+    static let maxAutosaveBackups = 10  // Keep last 10 backups for recovery
     
     // Retry policy
     static let maxRetries = 3
