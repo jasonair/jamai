@@ -139,6 +139,11 @@ struct CanvasView: View {
                 contextMenuLocation = nil
                 return .handled
             }
+            // Deselect any selected node
+            if viewModel.selectedNodeId != nil {
+                viewModel.selectedNodeId = nil
+                return .handled
+            }
             return .ignored
         }
     }

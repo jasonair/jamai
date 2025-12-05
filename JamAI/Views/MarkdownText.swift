@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 // NOTE: NSParagraphStyle Sendable warnings in this file are expected and safe to ignore
 // Apple's AppKit hasn't adopted Sendable yet, but usage here is synchronous on main thread
@@ -38,6 +39,7 @@ struct MarkdownText: View {
     var accessoryTintColor: Color? = nil
     
     @State private var showCopiedToast = false
+    @State private var showSavedToast = false
     @State private var cachedBlocks: [MarkdownBlock] = []
     @State private var parseTask: Task<Void, Never>?
     @Environment(\.isZooming) private var isZooming
@@ -78,11 +80,12 @@ struct MarkdownText: View {
                 .fixedSize(horizontal: false, vertical: true)
             }
             
-            // Copy button at the end - centered within text content
+            // Copy and Save buttons at the end - centered within text content
             if let onCopy = onCopy {
                 HStack {
                     Spacer(minLength: 0)
                     HStack(spacing: 6) {
+                        // Copy button
                         Button(action: {
                             onCopy(text)
                             // Show toast
@@ -104,6 +107,27 @@ struct MarkdownText: View {
                         
                         if showCopiedToast {
                             Text("Copied!")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.green)
+                                .transition(.opacity.combined(with: .scale))
+                        }
+                        
+                        // Save button
+                        Button(action: {
+                            saveResponseAsFile()
+                        }) {
+                            Image(systemName: showSavedToast ? "checkmark.circle.fill" : "square.and.arrow.down")
+                                .font(.system(size: 13))
+                                .foregroundColor(showSavedToast ? .green : (accessoryTintColor ?? .secondary))
+                        }
+                        .buttonStyle(.plain)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.08))
+                        .cornerRadius(6)
+                        .help(showSavedToast ? "Saved!" : "Save as file")
+                        
+                        if showSavedToast {
+                            Text("Saved!")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.green)
                                 .transition(.opacity.combined(with: .scale))
@@ -143,6 +167,32 @@ struct MarkdownText: View {
         .onDisappear {
             // Cancel parse task when view disappears
             parseTask?.cancel()
+        }
+    }
+    
+    // MARK: - Save Response as File
+    
+    private func saveResponseAsFile() {
+        let savePanel = NSSavePanel()
+        savePanel.title = "Save Response"
+        savePanel.nameFieldStringValue = "response.txt"
+        savePanel.allowedContentTypes = [.plainText]
+        savePanel.canCreateDirectories = true
+        
+        savePanel.begin { result in
+            if result == .OK, let url = savePanel.url {
+                do {
+                    try text.write(to: url, atomically: true, encoding: .utf8)
+                    DispatchQueue.main.async {
+                        showSavedToast = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                            showSavedToast = false
+                        }
+                    }
+                } catch {
+                    print("Failed to save file: \(error)")
+                }
+            }
         }
     }
 }

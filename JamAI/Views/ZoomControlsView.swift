@@ -49,16 +49,16 @@ struct ZoomControlsView: View {
             Divider()
                 .frame(width: 1, height: 20)
             
-            // Search
-            ZoomButton(icon: "magnifyingglass", action: onSearch, tooltip: "Search Conversations (⌘F)")
-            
-            Divider()
-                .frame(width: 1, height: 20)
-            
             // Creation tools
             ZoomButton(icon: "plus.circle", action: onCreateChat, tooltip: "New Chat")
             ZoomButton(icon: "doc.text", action: onCreateNote, tooltip: "New Note")
             ZoomButton(icon: "textformat.size", action: onCreateTitle, tooltip: "New Title")
+            
+            Divider()
+                .frame(width: 1, height: 20)
+            
+            // Search (at the right end)
+            ZoomButton(icon: "magnifyingglass", action: onSearch, tooltip: "Search Conversations (⌘F)")
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
