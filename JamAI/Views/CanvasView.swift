@@ -133,6 +133,14 @@ struct CanvasView: View {
             canvasWithInteractions(geometry: geometry)
         }
         .canvasKeyboardHandlers(viewModel)
+        .onKeyPress(.escape) {
+            // Dismiss context menu if visible
+            if contextMenuLocation != nil {
+                contextMenuLocation = nil
+                return .handled
+            }
+            return .ignored
+        }
     }
     
     @ViewBuilder

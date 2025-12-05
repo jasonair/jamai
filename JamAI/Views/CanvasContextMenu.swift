@@ -10,13 +10,13 @@ struct CanvasContextMenu: View {
     var body: some View {
         HStack(spacing: 8) {
             contextButton(
-                systemImage: "bubble.left.and.bubble.right",
+                systemImage: "plus.circle",
                 action: onCreateChat
             )
             .help("New Chat Here")
             
             contextButton(
-                systemImage: "note.text",
+                systemImage: "doc.text",
                 action: onCreateNote
             )
             .help("New Note Here")

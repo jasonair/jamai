@@ -203,12 +203,26 @@ struct NodeView: View {
                                         }
                                     }
                                     .onChange(of: isGenerating) { oldValue, newValue in
-                                        if !newValue && oldValue {
-                                            // Generation finished: scroll to show the response
+                                        if newValue {
+                                            // Generation started: scroll to processing message so user can see it
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                                                withAnimation {
+                                                    proxy.scrollTo("processing-message", anchor: .bottom)
+                                                }
+                                            }
+                                            // Scroll again after a short delay to ensure the view has laid out
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                                withAnimation {
+                                                    proxy.scrollTo("processing-message", anchor: .bottom)
+                                                }
+                                            }
+                                        } else if !newValue && oldValue {
+                                            // Generation finished: scroll to show user's prompt at top with response below
                                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                                 withAnimation {
-                                                    if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                                        proxy.scrollTo(lastAssistantId, anchor: .top)
+                                                    // Find the last user message to show at top
+                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                        proxy.scrollTo(lastUserId, anchor: .top)
                                                     }
                                                 }
                                             }
@@ -329,23 +343,25 @@ struct NodeView: View {
                                 }
                                 .onChange(of: isGenerating) { oldValue, newValue in
                                     if newValue {
-                                        // Generation started: scroll to user message with bottom anchor
+                                        // Generation started: scroll to processing message so user can see it
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                                             withAnimation {
-                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                    proxy.scrollTo(lastUserId, anchor: .bottom)
-                                                } else if node.conversation.isEmpty && !node.response.isEmpty {
-                                                    // Expansion streaming without a user bubble
-                                                    proxy.scrollTo("legacy-assistant", anchor: .top)
-                                                }
+                                                proxy.scrollTo("processing-message", anchor: .bottom)
+                                            }
+                                        }
+                                        // Scroll again after a short delay to ensure the view has laid out
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                            withAnimation {
+                                                proxy.scrollTo("processing-message", anchor: .bottom)
                                             }
                                         }
                                     } else if !newValue && oldValue {
-                                        // Generation finished: scroll to show the response
+                                        // Generation finished: scroll to show user's prompt at top with response below
                                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                                             withAnimation {
-                                                if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
-                                                    proxy.scrollTo(lastAssistantId, anchor: .top)
+                                                // Find the last user message to show at top
+                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
+                                                    proxy.scrollTo(lastUserId, anchor: .top)
                                                 }
                                             }
                                         }
@@ -1167,6 +1183,7 @@ struct NodeView: View {
             // Show processing message when AI is generating
             if isGenerating {
                 processingMessageView
+                    .id("processing-message")
             }
         }
     }
@@ -1542,24 +1559,22 @@ struct NodeView: View {
                         
                         // Team mode toggle (multi-agent orchestration)
                         if node.type == .standard && onJamSquad != nil {
-                            Button(action: {
-                                teamModeEnabled.toggle()
-                            }) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: teamModeEnabled ? "checkmark.square.fill" : "square")
-                                        .font(.system(size: 14))
-                                    Text("Team")
-                                        .font(.system(size: 11, weight: .medium))
+                            HStack(spacing: 8) {
+                                Button(action: {
+                                    teamModeEnabled.toggle()
+                                }) {
+                                    Image(systemName: teamModeEnabled ? "checkmark.circle.fill" : "circle")
+                                        .font(.system(size: 22))
+                                        .foregroundColor(teamModeEnabled ? .accentColor : contentSecondaryTextColor)
                                 }
-                                .foregroundColor(teamModeEnabled ? .accentColor : contentSecondaryTextColor)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(teamModeEnabled ? Color.accentColor.opacity(0.15) : Color.clear)
-                                .cornerRadius(8)
+                                .buttonStyle(PlainButtonStyle())
+                                .help(teamModeEnabled ? "Team mode enabled - send will assemble expert panel" : "Enable team mode")
+                                .disabled(isGenerating)
+                                
+                                Text("Team Mode")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundColor(teamModeEnabled ? .accentColor : contentSecondaryTextColor)
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .help(teamModeEnabled ? "Team mode enabled - send will assemble expert panel" : "Enable team mode")
-                            .disabled(isGenerating)
                         }
                         
                         // Web search toggle button (temporarily disabled in UI)
