@@ -164,6 +164,7 @@ struct NodeCreationEvent: Codable, Identifiable {
         case expand = "expand"
         case childNode = "child_node"
         case note = "note"
+        case duplicate = "duplicate"
     }
     
     init(

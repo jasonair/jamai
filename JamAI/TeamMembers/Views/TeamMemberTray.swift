@@ -38,6 +38,13 @@ struct TeamMemberTray: View {
                 }
             }
             .buttonStyle(PlainButtonStyle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
             .help("Edit Team Member")
             
             Spacer()
@@ -60,6 +67,13 @@ struct TeamMemberTray: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
+            .onHover { hovering in
+                if hovering {
+                    NSCursor.pointingHand.push()
+                } else {
+                    NSCursor.pop()
+                }
+            }
             .help("Change AI personality for this node")
             .popover(
                 isPresented: $isPersonalityPickerPresented,

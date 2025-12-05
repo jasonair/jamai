@@ -181,6 +181,8 @@ class AnalyticsService {
             await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalNotesCreated")
         case .childNode, .expand:
             await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalChildNodesCreated")
+        case .duplicate:
+            await FirebaseDataService.shared.incrementUserMetadata(userId: userId, field: "totalNodesCreated")
         }
 
     }

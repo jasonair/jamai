@@ -776,6 +776,7 @@ struct CanvasView: View {
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
             onDelete: { handleDeleteNode(node.id) },
             onCreateChild: { handleCreateChildNode(node.id) },
+            onDuplicate: { viewModel.duplicateNode(node.id) },
             onColorChange: { colorId in handleColorChange(colorId, for: node.id) },
             onExpandSelection: { selectedText in handleExpandSelection(selectedText, for: node.id) },
             onMakeNote: { selectedText in handleMakeNote(selectedText, for: node.id) },

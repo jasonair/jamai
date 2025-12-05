@@ -19,6 +19,7 @@ struct NodeItemWrapper: View {
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
     let onCreateChild: () -> Void
+    let onDuplicate: () -> Void
     let onColorChange: (String) -> Void
     let onExpandSelection: (String) -> Void
     let onMakeNote: (String) -> Void
@@ -101,6 +102,7 @@ struct NodeItemWrapper: View {
                     onDescriptionEdit: onDescriptionEdit,
                     onDelete: onDelete,
                     onCreateChild: onCreateChild,
+                    onDuplicate: onDuplicate,
                     onColorChange: onColorChange,
                     onExpandSelection: onExpandSelection,
                     onMakeNote: onMakeNote,

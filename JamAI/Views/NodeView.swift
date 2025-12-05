@@ -21,6 +21,7 @@ struct NodeView: View {
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
     let onCreateChild: () -> Void
+    let onDuplicate: () -> Void
     let onColorChange: (String) -> Void
     let onExpandSelection: (String) -> Void
     let onMakeNote: (String) -> Void
@@ -473,6 +474,62 @@ struct NodeView: View {
                     onJamWithThis: onJamWithThis
                 )
             )
+            // Delete confirmation overlay - centered on node
+            .overlay(
+                Group {
+                    if showDeleteConfirmation {
+                        ZStack {
+                            // Semi-transparent background
+                            Color.black.opacity(0.4)
+                                .cornerRadius(Node.cornerRadius)
+                            
+                            // Confirmation dialog
+                            VStack(spacing: 12) {
+                                Text("Delete this node?")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(.primary)
+                                Text("This action cannot be undone.")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.secondary)
+                                
+                                HStack(spacing: 12) {
+                                    Button("Cancel") {
+                                        showDeleteConfirmation = false
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .onHover { hovering in
+                                        if hovering {
+                                            NSCursor.pointingHand.push()
+                                        } else {
+                                            NSCursor.pop()
+                                        }
+                                    }
+                                    
+                                    Button("Delete") {
+                                        showDeleteConfirmation = false
+                                        onDelete()
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .tint(.red)
+                                    .onHover { hovering in
+                                        if hovering {
+                                            NSCursor.pointingHand.push()
+                                        } else {
+                                            NSCursor.pop()
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(nsColor: .windowBackgroundColor))
+                                    .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
+                            )
+                        }
+                    }
+                }
+            )
             
             // Resize grip overlay - positioned absolutely in corner
             resizeGripOverlay
@@ -675,13 +732,16 @@ struct NodeView: View {
     
     // MARK: - Subviews
     
+    @State private var showNodeMenu = false
+    
     private var headerView: some View {
         HStack {
-            // Drag handle icon
-            Image(systemName: node.type == .note ? "note.text" : "line.3.horizontal")
-                .foregroundColor(headerTextColor)
-                .font(.system(size: 16))
-                .help(node.type == .note ? "Note" : "Drag to move node")
+            // Node type icon (note icon for notes, no icon for standard nodes)
+            if node.type == .note {
+                Image(systemName: "note.text")
+                    .foregroundColor(headerTextColor)
+                    .font(.system(size: 16))
+            }
             
             // Color button
             Button(action: { showingColorPicker = true }) {
@@ -772,48 +832,6 @@ struct NodeView: View {
                 
                 // Header action buttons with fade animation
                 Group {
-                    // Delete button with confirmation
-                    Button(action: { showDeleteConfirmation = true }) {
-                        Image(systemName: "trash")
-                            .foregroundColor(headerTextColor)
-                            .font(.system(size: 16))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Delete Node")
-                    .popover(isPresented: $showDeleteConfirmation, arrowEdge: .bottom) {
-                        VStack(spacing: 12) {
-                            Text("Delete this node?")
-                                .font(.system(size: 13, weight: .medium))
-                            Text("This action cannot be undone.")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                            
-                            HStack(spacing: 12) {
-                                Button("Cancel") {
-                                    showDeleteConfirmation = false
-                                }
-                                .buttonStyle(.bordered)
-                                
-                                Button("Delete") {
-                                    showDeleteConfirmation = false
-                                    onDelete()
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .tint(.red)
-                            }
-                        }
-                        .padding(12)
-                    }
-                    
-                    // Create child node button
-                    Button(action: onCreateChild) {
-                        Image(systemName: "plus.square.on.square")
-                            .foregroundColor(headerTextColor)
-                            .font(.system(size: 16))
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .help("Create Child Node")
-                    
                     // Add Team Member button (only show if no team member exists)
                     if shouldShowTeamMemberTray && node.teamMember == nil {
                         Button(action: { 
@@ -875,6 +893,41 @@ struct NodeView: View {
                         .buttonStyle(PlainButtonStyle())
                         .help(showChatSection ? "Hide chat" : "Jam with this note")
                     }
+                    
+                    // Node menu dropdown (only when selected)
+                    Menu {
+                        Button(action: onCreateChild) {
+                            Label("Fork", systemImage: "arrow.branch")
+                        }
+                        
+                        Button(action: onDuplicate) {
+                            Label("Duplicate", systemImage: "plus.square.on.square")
+                        }
+                        
+                        Divider()
+                        
+                        Button(role: .destructive, action: { showDeleteConfirmation = true }) {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: 16, weight: .medium))
+                            .rotationEffect(.degrees(90))
+                    }
+                    .foregroundStyle(headerTextColor)
+                    .tint(headerTextColor)
+                    .buttonStyle(PlainButtonStyle())
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .fixedSize()
+                    .onHover { hovering in
+                        if hovering {
+                            NSCursor.pointingHand.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .help("Node options")
                     
                     // Toggle size button (maximize/minimize)
                     Button(action: onMaximizeAndCenter) {

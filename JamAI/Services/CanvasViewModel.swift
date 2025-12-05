@@ -629,6 +629,84 @@ class CanvasViewModel: ObservableObject {
 
         return node.id
     }
+    
+    // MARK: - Node Duplication
+    func duplicateNode(_ nodeId: UUID) {
+        guard let original = nodes[nodeId] else { return }
+        
+        // Place duplicate to the right of original with 50px gap between them
+        let gap: CGFloat = 50
+        let newX = original.x + original.width + gap
+        
+        // Create a new node with a new ID but copy most properties
+        let duplicate = Node(
+            id: UUID(),
+            projectId: original.projectId,
+            parentId: original.parentId,
+            x: newX,
+            y: original.y,
+            width: original.width,
+            height: original.height,
+            title: original.title.isEmpty ? "" : "\(original.title) (Copy)",
+            titleSource: original.titleSource,
+            description: original.description,
+            descriptionSource: original.descriptionSource,
+            conversationJSON: original.conversationJSON,
+            prompt: original.prompt,
+            response: original.response,
+            ancestryJSON: original.ancestryJSON,
+            summary: original.summary,
+            systemPromptSnapshot: original.systemPromptSnapshot,
+            teamMemberJSON: original.teamMemberJSON,
+            personalityRawValue: original.personalityRawValue,
+            isExpanded: original.isExpanded,
+            isFrozenContext: original.isFrozenContext,
+            color: original.color,
+            type: original.type,
+            fontSize: original.fontSize,
+            isBold: original.isBold,
+            fontFamily: original.fontFamily,
+            shapeKind: original.shapeKind,
+            imageData: original.imageData,
+            embeddingJSON: original.embeddingJSON, // Copy embeddings from original
+            embeddingUpdatedAt: original.embeddingUpdatedAt,
+            displayOrder: nil,
+            createdAt: Date(),
+            updatedAt: Date()
+        )
+        
+        nodes[duplicate.id] = duplicate
+        bringToFront([duplicate.id])
+        selectedNodeId = duplicate.id
+        undoManager.record(.createNode(duplicate))
+        
+        // Force positions refresh
+        positionsVersion += 1
+        
+        let dbActor = self.dbActor
+        Task { [weak self, dbActor, duplicate] in
+            do {
+                try await dbActor.saveNode(duplicate)
+                
+                // Track node creation analytics
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    await AnalyticsService.shared.trackNodeCreation(
+                        userId: userId,
+                        projectId: duplicate.projectId,
+                        nodeId: duplicate.id,
+                        nodeType: duplicate.type.rawValue,
+                        creationMethod: .duplicate,
+                        parentNodeId: duplicate.parentId,
+                        teamMemberRoleId: duplicate.teamMember?.roleId
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    self?.errorMessage = "Failed to save duplicated node: \(error.localizedDescription)"
+                }
+            }
+        }
+    }
 
     // MARK: - Annotation Creation
     func createTextLabel(at position: CGPoint) {
