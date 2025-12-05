@@ -32,21 +32,21 @@ struct ThinkingGlowView: View {
         ZStack {
             // Outer glow layer - subtle halo
             RoundedRectangle(cornerRadius: cornerRadius + 8)
-                .fill(glowColor.opacity(0.2 * glowOpacity))
+                .fill(glowColor.opacity(0.15 * glowOpacity))
                 .frame(width: width + 20, height: height + 20)
                 .blur(radius: 10)
                 .scaleEffect(glowScale)
             
             // Middle glow layer
             RoundedRectangle(cornerRadius: cornerRadius + 4)
-                .fill(glowColor.opacity(0.3 * glowOpacity))
+                .fill(glowColor.opacity(0.22 * glowOpacity))
                 .frame(width: width + 12, height: height + 12)
                 .blur(radius: 6)
                 .scaleEffect(glowScale)
             
             // Inner glow layer - tighter edge glow
             RoundedRectangle(cornerRadius: cornerRadius + 2)
-                .fill(glowColor.opacity(0.4 * glowOpacity))
+                .fill(glowColor.opacity(0.3 * glowOpacity))
                 .frame(width: width + 6, height: height + 6)
                 .blur(radius: 4)
                 .scaleEffect(glowScale)

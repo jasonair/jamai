@@ -18,9 +18,17 @@ class CanvasViewModel: ObservableObject {
     @Published var project: Project
     @Published var nodes: [UUID: Node] = [:]
     @Published var edges: [UUID: Edge] = [:]
-    @Published var selectedNodeId: UUID?
+    @Published var selectedNodeId: UUID? {
+        didSet {
+            // Clear unread indicator when node is selected
+            if let nodeId = selectedNodeId {
+                nodesWithUnreadResponse.remove(nodeId)
+            }
+        }
+    }
     @Published var generatingNodeId: UUID?
     @Published var errorNodeId: UUID? // Node that encountered an error during generation
+    @Published var nodesWithUnreadResponse: Set<UUID> = [] // Nodes with new AI responses not yet viewed
     @Published var errorMessage: String?
     
     // Canvas state
@@ -1119,6 +1127,11 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
+                                // Mark as unread if node is not currently selected
+                                if self?.selectedNodeId != nodeId {
+                                    self?.nodesWithUnreadResponse.insert(nodeId)
+                                }
+                                
                                 // Track credit usage and analytics (backend handles actual deduction)
                                 if AIProviderManager.shared.activeProvider != .local {
                                     await CreditTracker.shared.trackGeneration(
@@ -1532,6 +1545,11 @@ class CanvasViewModel: ObservableObject {
                                     }
                                 }
                                 
+                                // Mark as unread if node is not currently selected
+                                if self?.selectedNodeId != nodeId {
+                                    self?.nodesWithUnreadResponse.insert(nodeId)
+                                }
+                                
                                 // Track credit usage and analytics (backend handles actual deduction)
                                 if AIProviderManager.shared.activeProvider != .local {
                                     await CreditTracker.shared.trackGeneration(
@@ -1685,6 +1703,11 @@ class CanvasViewModel: ObservableObject {
                                 Task { [dbActor, finalNode] in
                                     try? await dbActor.saveNode(finalNode)
                                 }
+                            }
+                            
+                            // Mark as unread if node is not currently selected
+                            if self?.selectedNodeId != nodeId {
+                                self?.nodesWithUnreadResponse.insert(nodeId)
                             }
                             
                             if AIProviderManager.shared.activeProvider != .local {

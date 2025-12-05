@@ -12,6 +12,7 @@ struct NodeItemWrapper: View {
     let isSelected: Bool
     let isGenerating: Bool
     let hasError: Bool
+    let hasUnreadResponse: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -96,6 +97,7 @@ struct NodeItemWrapper: View {
                     isSelected: isSelected,
                     isGenerating: isGenerating,
                     hasError: hasError,
+                    hasUnreadResponse: hasUnreadResponse,
                     projectTeamMembers: projectTeamMembers,
                     searchHighlight: searchHighlight,
                     onTap: onTap,

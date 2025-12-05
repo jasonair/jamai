@@ -750,6 +750,7 @@ struct CanvasView: View {
             isSelected: isSelected,
             isGenerating: viewModel.generatingNodeId == node.id,
             hasError: viewModel.errorNodeId == node.id,
+            hasUnreadResponse: viewModel.nodesWithUnreadResponse.contains(node.id),
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
             searchHighlight: viewModel.searchHighlight?.nodeId == node.id ? viewModel.searchHighlight : nil,
             onTap: { 

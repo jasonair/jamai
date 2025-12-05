@@ -14,6 +14,7 @@ struct NodeView: View {
     let isSelected: Bool
     let isGenerating: Bool
     let hasError: Bool
+    let hasUnreadResponse: Bool
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -456,6 +457,20 @@ struct NodeView: View {
                 RoundedRectangle(cornerRadius: Node.cornerRadius)
                     .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
             )
+            // Unread response indicator - small blue dot in top-right corner
+            .overlay(alignment: .topTrailing) {
+                if hasUnreadResponse && !isSelected {
+                    Circle()
+                        .fill(Color.blue)
+                        .frame(width: 12, height: 12)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2)
+                        )
+                        .offset(x: 4, y: -4)
+                        .transition(.scale.combined(with: .opacity))
+                }
+            }
             // Connection points for manual wiring
             .overlay(
                 ConnectionPointsOverlayInline(
