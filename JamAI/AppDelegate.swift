@@ -49,4 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return event
         }
     }
+    
+    // NOTE: applicationWillTerminate removed - it was causing data corruption.
+    // Edge persistence is now handled by immediate saves in completeWiring().
 }

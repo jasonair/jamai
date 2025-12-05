@@ -395,7 +395,15 @@ class CanvasViewModel: ObservableObject {
         
         edges[edge.id] = edge
         undoManager.record(.createEdge(edge))
-        scheduleDebouncedWrite(edgeId: edge.id)
+        
+        // Save edge IMMEDIATELY (not debounced) to prevent loss on quick quit
+        let dbActor = self.dbActor
+        Task { [dbActor, edge] in
+            try? await dbActor.saveEdge(edge)
+            if Config.enableVerboseLogging {
+                print("🔌 Edge saved to database: \(edge.id)")
+            }
+        }
         
         // Force edge refresh
         positionsVersion += 1
