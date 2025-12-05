@@ -106,6 +106,56 @@ struct JamAIApp: App {
                     // Show welcome view for signed-in users
                     WelcomeView(appState: appState)
                         .frame(width: 600, height: 400)
+                } else if appState.activeTabId == nil {
+                    // Show welcome view with tab bar when user clicks Home
+                    ZStack {
+                        // Center the welcome view in the window
+                        WelcomeView(appState: appState)
+                            .frame(width: 600, height: 400)
+                        
+                        // Tab bar overlay so user can navigate back to open projects
+                        VStack(spacing: 0) {
+                            HStack(spacing: 8) {
+                                // Home button (highlighted when on home)
+                                Button {
+                                    // Already on home
+                                } label: {
+                                    Image(systemName: "house.fill")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(.accentColor)
+                                        .frame(width: 28, height: 28)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 6)
+                                                .fill(Color(nsColor: .controlBackgroundColor))
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .help("Home")
+                                
+                                TabBarView(
+                                    tabs: appState.tabs,
+                                    activeTabId: appState.activeTabId,
+                                    onTabSelect: { tabId in
+                                        appState.selectTab(tabId)
+                                    },
+                                    onTabClose: { tabId in
+                                        appState.closeTab(tabId)
+                                    }
+                                )
+                                
+                                Spacer()
+                            }
+                            .padding(.leading, 8)
+                            .frame(height: 36)
+                            .background(Color(nsColor: .windowBackgroundColor))
+                            
+                            Divider()
+                            
+                            Spacer()
+                        }
+                        .allowsHitTesting(true)
+                    }
+                    .frame(minWidth: 1200, minHeight: 800)
                 } else {
                 ZStack {
                     // Active project canvas (bottom layer)
@@ -117,6 +167,22 @@ struct JamAIApp: App {
                     // Tab bar overlay (top layer with high z-index)
                     VStack(spacing: 0) {
                         HStack(spacing: 8) {
+                            // Home button - navigate back to intro page
+                            Button {
+                                appState.goHome()
+                            } label: {
+                                Image(systemName: "house.fill")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(.secondary)
+                                    .frame(width: 28, height: 28)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 6)
+                                            .fill(Color(nsColor: .controlBackgroundColor))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .help("Go to Home")
+                            
                             TabBarView(
                                 tabs: appState.tabs,
                                 activeTabId: appState.activeTabId,
@@ -151,6 +217,7 @@ struct JamAIApp: App {
                                 .padding(.trailing, 8)
                             }
                         }
+                        .padding(.leading, 8)
                         .frame(height: 36)
                         .background(Color(nsColor: .windowBackgroundColor))
                         
@@ -634,6 +701,12 @@ class AppState: ObservableObject {
         if let activeId = activeTabId {
             closeTab(activeId)
         }
+    }
+    
+    /// Navigate to home/intro page by deselecting the active tab
+    /// Keeps tabs open but shows the welcome view
+    func goHome() {
+        activeTabId = nil
     }
     
     func showBackupList() {
