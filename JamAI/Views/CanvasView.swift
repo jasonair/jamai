@@ -22,6 +22,7 @@ extension FocusedValues {
 struct CanvasView: View {
     @ObservedObject var viewModel: CanvasViewModel
     var onCommandClose: (() -> Void)? = nil
+    var onShowSettings: (() -> Void)? = nil
     
     @ObservedObject private var modalCoordinator = ModalCoordinator.shared
     
@@ -1010,12 +1011,29 @@ struct CanvasView: View {
     }
     
     private func handleUseLocalModel() {
-        // Switch to local model provider
-        AIProviderManager.shared.setProvider(.local)
-        // Clear the credit error since local model doesn't use credits
-        viewModel.creditErrorNodeId = nil
-        viewModel.creditCheckResult = nil
-        viewModel.errorMessage = nil
+        let manager = AIProviderManager.shared
+        
+        // Check if local model is ready to use
+        let isLocalReady = manager.licenseAccepted && 
+                          manager.activeModelName != nil &&
+                          manager.healthStatus == .ready
+        
+        if isLocalReady {
+            // Local model is ready, switch to it
+            manager.setProvider(.local)
+            // Clear the credit error since local model doesn't use credits
+            viewModel.creditErrorNodeId = nil
+            viewModel.creditCheckResult = nil
+            viewModel.errorMessage = nil
+        } else {
+            // Local model not ready, open settings to configure it
+            // Clear the credit error first
+            viewModel.creditErrorNodeId = nil
+            viewModel.creditCheckResult = nil
+            viewModel.errorMessage = nil
+            // Open settings modal
+            onShowSettings?()
+        }
     }
     
     private func handleDismissCreditError() {

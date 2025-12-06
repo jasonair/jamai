@@ -160,7 +160,11 @@ struct JamAIApp: App {
                 ZStack {
                     // Active project canvas (bottom layer)
                     if let viewModel = appState.viewModel {
-                        CanvasView(viewModel: viewModel, onCommandClose: { appState.closeProject() })
+                        CanvasView(
+                            viewModel: viewModel,
+                            onCommandClose: { appState.closeProject() },
+                            onShowSettings: { appState.showSettings() }
+                        )
                             .id(appState.activeTabId) // Force refresh when tab changes
                     }
                     
