@@ -32,6 +32,10 @@ class CanvasViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var orchestratingNodeIds: Set<UUID> = [] // Nodes involved in active orchestration
     
+    // Credit error state - published so NodeView can show inline message
+    @Published var creditErrorNodeId: UUID? // Node where credit error occurred
+    @Published var creditCheckResult: CreditCheckResult? // Last credit check result for UI display
+    
     // Canvas state
     @Published var offset: CGSize = .zero
     @Published var zoom: CGFloat = Config.defaultZoom
@@ -1050,11 +1054,22 @@ class CanvasViewModel: ObservableObject {
     private func generateExpandedResponse(for nodeId: UUID, prompt: String, selectedText: String) {
         guard let node = nodes[nodeId] else { return }
         
+        // Check credits for cloud providers
         if AIProviderManager.shared.activeProvider != .local {
-            guard CreditTracker.shared.canGenerateResponse() else {
-                errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+            let result = CreditTracker.shared.checkCredits()
+            if !result.allowed {
+                // Set credit error state for this node so UI can show inline message
+                creditErrorNodeId = nodeId
+                creditCheckResult = result
+                errorMessage = result.userMessage
                 return
             }
+        }
+        
+        // Clear any previous credit error for this node
+        if creditErrorNodeId == nodeId {
+            creditErrorNodeId = nil
+            creditCheckResult = nil
         }
         
         generatingNodeId = nodeId
@@ -1485,11 +1500,22 @@ class CanvasViewModel: ObservableObject {
     func generateResponse(for nodeId: UUID, prompt: String, imageData: Data? = nil, imageMimeType: String? = nil, webSearchEnabled: Bool = false, skipRouting: Bool = false) {
         guard let node = nodes[nodeId] else { return }
         
+        // Check credits for cloud providers
         if AIProviderManager.shared.activeProvider != .local {
-            guard CreditTracker.shared.canGenerateResponse() else {
-                errorMessage = CreditTracker.shared.getRemainingCreditsMessage() ?? "Unable to generate response"
+            let result = CreditTracker.shared.checkCredits()
+            if !result.allowed {
+                // Set credit error state for this node so UI can show inline message
+                creditErrorNodeId = nodeId
+                creditCheckResult = result
+                errorMessage = result.userMessage
                 return
             }
+        }
+        
+        // Clear any previous credit error for this node
+        if creditErrorNodeId == nodeId {
+            creditErrorNodeId = nil
+            creditCheckResult = nil
         }
         
         // Check if this is a master orchestrator node that should route to an expert

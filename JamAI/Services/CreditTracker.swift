@@ -6,35 +6,91 @@
 //
 
 import Foundation
+import Combine
 import FirebaseAuth
+
+/// Reason why credit check failed or succeeded
+enum CreditCheckReason: Equatable {
+    case allowed
+    case outOfCredits
+    case accountInactive
+    case trialExpired
+    case devMode  // No account loaded, allowing generation
+}
+
+/// Result of a credit check with structured information
+struct CreditCheckResult {
+    let allowed: Bool
+    let reason: CreditCheckReason
+    let remainingCredits: Int
+    
+    /// User-facing message for the credit status
+    var userMessage: String {
+        switch reason {
+        case .allowed:
+            return "\(remainingCredits) credits remaining"
+        case .outOfCredits:
+            return "You've run out of cloud prompt credits for this month. Switch to the local model for free, or upgrade your plan to get more credits."
+        case .accountInactive:
+            return "Your account is inactive. Please contact support."
+        case .trialExpired:
+            return "Your trial has expired. Upgrade your plan to continue using cloud models."
+        case .devMode:
+            return "Development mode - credits not tracked"
+        }
+    }
+    
+    /// Whether the user should be prompted to upgrade
+    var shouldPromptUpgrade: Bool {
+        switch reason {
+        case .outOfCredits, .trialExpired:
+            return true
+        default:
+            return false
+        }
+    }
+}
 
 /// Credit tracker for AI operations
 @MainActor
-class CreditTracker {
+class CreditTracker: ObservableObject {
     
     static let shared = CreditTracker()
     
+    /// Published property to notify views when credits run out
+    @Published var lastCreditCheckResult: CreditCheckResult?
+    
     private init() {}
     
-    /// Check if user has enough credits for AI generation
-    func canGenerateResponse() -> Bool {
+    /// Check if user has enough credits for AI generation (structured result)
+    func checkCredits() -> CreditCheckResult {
         // If no user account is loaded, allow generation (development mode / Firebase not configured)
         guard let account = FirebaseDataService.shared.userAccount else {
             print("⚠️ CreditTracker: No user account, allowing generation (dev mode)")
-            return true
+            return CreditCheckResult(allowed: true, reason: .devMode, remainingCredits: 0)
         }
         
         // Check if account is active
         guard account.isActive else {
-            return false
+            return CreditCheckResult(allowed: false, reason: .accountInactive, remainingCredits: account.credits)
         }
         
         // Check trial expiration
         if account.isTrialExpired {
-            return false
+            return CreditCheckResult(allowed: false, reason: .trialExpired, remainingCredits: account.credits)
         }
         
-        return account.hasCredits
+        // Check credits
+        if !account.hasCredits {
+            return CreditCheckResult(allowed: false, reason: .outOfCredits, remainingCredits: 0)
+        }
+        
+        return CreditCheckResult(allowed: true, reason: .allowed, remainingCredits: account.credits)
+    }
+    
+    /// Check if user has enough credits for AI generation (legacy bool version)
+    func canGenerateResponse() -> Bool {
+        return checkCredits().allowed
     }
     
     /// Estimate tokens from text (rough approximation: 1 token ≈ 4 characters)

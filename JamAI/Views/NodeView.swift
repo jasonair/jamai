@@ -15,6 +15,8 @@ struct NodeView: View {
     let isGenerating: Bool
     let hasError: Bool
     let hasUnreadResponse: Bool
+    let hasCreditError: Bool
+    let creditCheckResult: CreditCheckResult?
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -36,6 +38,9 @@ struct NodeView: View {
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     let onJamSquad: ((String) -> Void)?  // Callback for Jam Squad orchestration
+    var onUpgradePlan: (() -> Void) = {}
+    var onUseLocalModel: (() -> Void) = {}
+    var onDismissCreditError: (() -> Void) = {}
     
     // Wiring props
     var isWiring: Bool = false
@@ -1184,6 +1189,23 @@ struct NodeView: View {
             if isGenerating {
                 processingMessageView
                     .id("processing-message")
+            }
+            
+            // Show out of credits message when credit error occurs
+            if hasCreditError, let result = creditCheckResult {
+                HStack {
+                    Spacer(minLength: 0)
+                    OutOfCreditsMessageView(
+                        creditCheckResult: result,
+                        onUpgradePlan: onUpgradePlan,
+                        onUseLocalModel: onUseLocalModel,
+                        onDismiss: onDismissCreditError
+                    )
+                    .frame(maxWidth: 700)
+                    Spacer(minLength: 0)
+                }
+                .id("credit-error-message")
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
     }

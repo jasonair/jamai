@@ -13,6 +13,8 @@ struct NodeItemWrapper: View {
     let isGenerating: Bool
     let hasError: Bool
     let hasUnreadResponse: Bool
+    let hasCreditError: Bool
+    let creditCheckResult: CreditCheckResult?
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
     let searchHighlight: NodeSearchHighlight?
     let onTap: () -> Void
@@ -36,6 +38,9 @@ struct NodeItemWrapper: View {
     let onMaximizeAndCenter: () -> Void
     let onTeamMemberChange: (TeamMember?) -> Void
     let onJamSquad: ((String) -> Void)?
+    let onUpgradePlan: () -> Void
+    let onUseLocalModel: () -> Void
+    let onDismissCreditError: () -> Void
     
     // Wiring callbacks
     let isWiring: Bool
@@ -99,6 +104,8 @@ struct NodeItemWrapper: View {
                     isGenerating: isGenerating,
                     hasError: hasError,
                     hasUnreadResponse: hasUnreadResponse,
+                    hasCreditError: hasCreditError,
+                    creditCheckResult: creditCheckResult,
                     projectTeamMembers: projectTeamMembers,
                     searchHighlight: searchHighlight,
                     onTap: onTap,
@@ -125,6 +132,9 @@ struct NodeItemWrapper: View {
                     onMaximizeAndCenter: onMaximizeAndCenter,
                     onTeamMemberChange: onTeamMemberChange,
                     onJamSquad: onJamSquad,
+                    onUpgradePlan: onUpgradePlan,
+                    onUseLocalModel: onUseLocalModel,
+                    onDismissCreditError: onDismissCreditError,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,

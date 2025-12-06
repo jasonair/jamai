@@ -776,6 +776,8 @@ struct CanvasView: View {
             isGenerating: viewModel.generatingNodeId == node.id || viewModel.orchestratingNodeIds.contains(node.id),
             hasError: viewModel.errorNodeId == node.id,
             hasUnreadResponse: viewModel.nodesWithUnreadResponse.contains(node.id),
+            hasCreditError: viewModel.creditErrorNodeId == node.id,
+            creditCheckResult: viewModel.creditErrorNodeId == node.id ? viewModel.creditCheckResult : nil,
             projectTeamMembers: viewModel.getProjectTeamMembers(excludingNodeId: node.id),
             searchHighlight: viewModel.searchHighlight?.nodeId == node.id ? viewModel.searchHighlight : nil,
             onTap: { 
@@ -818,6 +820,9 @@ struct CanvasView: View {
             onMaximizeAndCenter: { handleMaximizeAndCenter(for: node.id) },
             onTeamMemberChange: { member in handleTeamMemberChange(member, for: node.id) },
             onJamSquad: { prompt in handleJamSquad(prompt, for: node.id) },
+            onUpgradePlan: { handleUpgradePlan() },
+            onUseLocalModel: { handleUseLocalModel() },
+            onDismissCreditError: { handleDismissCreditError() },
             isWiring: viewModel.isWiring,
             wireSourceNodeId: viewModel.wireSourceNodeId,
             onClickToStartWiring: { nodeId, side in
@@ -997,6 +1002,27 @@ struct CanvasView: View {
                 viewModel.orchestratingNodeIds.remove(delegateId)
             }
         }
+    }
+    
+    private func handleUpgradePlan() {
+        // Open the user settings modal to show plan options
+        modalCoordinator.showUserSettingsModal()
+    }
+    
+    private func handleUseLocalModel() {
+        // Switch to local model provider
+        AIProviderManager.shared.setProvider(.local)
+        // Clear the credit error since local model doesn't use credits
+        viewModel.creditErrorNodeId = nil
+        viewModel.creditCheckResult = nil
+        viewModel.errorMessage = nil
+    }
+    
+    private func handleDismissCreditError() {
+        // Clear the credit error state
+        viewModel.creditErrorNodeId = nil
+        viewModel.creditCheckResult = nil
+        viewModel.errorMessage = nil
     }
     
     // Frames for nodes in world coordinates (before pan/zoom)
