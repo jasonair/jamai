@@ -88,6 +88,20 @@ struct EventBlockingContainer<Content: View>: NSViewRepresentable {
 
 // MARK: - Outline Scroll View (NSScrollView wrapper to capture scroll events)
 
+/// Custom NSScrollView subclass that properly forwards hit testing to its document view
+private class ClickableScrollView: NSScrollView {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Convert point to document view coordinates and check if it hits content
+        if let documentView = self.documentView {
+            let docPoint = convert(point, to: documentView)
+            if let hitView = documentView.hitTest(docPoint) {
+                return hitView
+            }
+        }
+        return super.hitTest(point)
+    }
+}
+
 /// Custom scroll view that properly captures scroll events and prevents them from
 /// propagating to the canvas behind the outline pane.
 struct OutlineScrollView<Content: View>: NSViewRepresentable {
@@ -98,7 +112,7 @@ struct OutlineScrollView<Content: View>: NSViewRepresentable {
     }
     
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSScrollView()
+        let scrollView = ClickableScrollView()
         scrollView.hasVerticalScroller = true
         scrollView.hasHorizontalScroller = false
         scrollView.autohidesScrollers = true
@@ -141,6 +155,17 @@ struct OutlineScrollView<Content: View>: NSViewRepresentable {
 /// Flipped NSView for proper top-to-bottom content layout in scroll view
 private class FlippedView: NSView {
     override var isFlipped: Bool { true }
+    
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        // Forward hit testing to subviews (the NSHostingView)
+        for subview in subviews.reversed() {
+            let subviewPoint = convert(point, to: subview)
+            if let hitView = subview.hitTest(subviewPoint) {
+                return hitView
+            }
+        }
+        return super.hitTest(point)
+    }
 }
 
 struct OutlineView: View {
@@ -421,9 +446,12 @@ private struct OutlineItemView: View {
             .background(itemBackground)
             .cornerRadius(6)
             .contentShape(Rectangle())
-            .onTapGesture {
-                onNavigate(outlineNode.id)
-            }
+            .simultaneousGesture(
+                TapGesture()
+                    .onEnded { _ in
+                        onNavigate(outlineNode.id)
+                    }
+            )
             .onHover { hovering in
                 hoveredNodeId = hovering ? outlineNode.id : nil
             }
