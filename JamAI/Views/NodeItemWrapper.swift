@@ -156,7 +156,8 @@ struct NodeItemWrapper: View {
             y: node.y + displayHeight / 2
         )
         .offset(resizeCompensation)
-        .gesture(
+        // Use highPriorityGesture to ensure node drag takes precedence over canvas pan
+        .highPriorityGesture(
             DragGesture(minimumDistance: 5, coordinateSpace: .global)
                 .onChanged { value in
                     // Don't move node if we're wiring or resizing

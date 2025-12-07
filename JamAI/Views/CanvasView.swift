@@ -330,6 +330,10 @@ struct CanvasView: View {
                                 return
                             }
                         }
+                        // Block if drag started on a node - let node handle it
+                        if viewModel.topmostNodeAtPoint(screenPoint: value.startLocation, viewportSize: geometry.size) != nil {
+                            return
+                        }
                         // Store the initial offset when drag starts (only once per gesture)
                         if gestureState == nil {
                             gestureState = viewModel.offset
@@ -352,6 +356,10 @@ struct CanvasView: View {
                             if outlineRect.contains(value.startLocation) {
                                 return
                             }
+                        }
+                        // Block if drag started on a node - let node handle it
+                        if viewModel.topmostNodeAtPoint(screenPoint: value.startLocation, viewportSize: geometry.size) != nil {
+                            return
                         }
                         
                         if draggedNodeId == nil && !isResizingActive {
