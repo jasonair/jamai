@@ -351,6 +351,80 @@ class CanvasViewModel: ObservableObject {
         objectWillChange.send()
     }
     
+    /// Check if a node is the topmost node at a given screen position
+    /// Used for z-order-aware hit testing to prevent click-through to lower nodes
+    func isTopmostNodeAtPoint(_ nodeId: UUID, screenPoint: CGPoint, viewportSize: CGSize) -> Bool {
+        guard let targetNode = nodes[nodeId] else { 
+            #if DEBUG
+            print("[Z-Order] Node \(nodeId) not found")
+            #endif
+            return true // Allow tap if node not found (shouldn't happen)
+        }
+        
+        // Convert screen point to canvas coordinates
+        let canvasX = (screenPoint.x - offset.width) / zoom
+        let canvasY = (screenPoint.y - offset.height) / zoom
+        let canvasPoint = CGPoint(x: canvasX, y: canvasY)
+        
+        #if DEBUG
+        print("[Z-Order] Screen: \(screenPoint), Canvas: \(canvasPoint), Offset: \(offset), Zoom: \(zoom)")
+        print("[Z-Order] Target node '\(targetNode.title)' at (\(targetNode.x), \(targetNode.y)) size (\(targetNode.width)x\(targetNode.height))")
+        #endif
+        
+        // Find all nodes that contain this canvas point
+        let nodesAtPoint = nodes.values.filter { node in
+            let frame = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+            return frame.contains(canvasPoint)
+        }
+        
+        #if DEBUG
+        print("[Z-Order] Nodes at point: \(nodesAtPoint.map { $0.title })")
+        #endif
+        
+        // If no overlapping nodes found, allow the tap (TapThroughOverlay already confirmed bounds)
+        // This handles coordinate conversion edge cases
+        if nodesAtPoint.isEmpty {
+            #if DEBUG
+            print("[Z-Order] No nodes at canvas point - allowing tap (trusting TapThroughOverlay bounds check)")
+            #endif
+            return true
+        }
+        
+        // If only this node is at the point, allow tap
+        if nodesAtPoint.count == 1 && nodesAtPoint.first?.id == nodeId {
+            return true
+        }
+        
+        // Multiple nodes overlap - find the one with highest z-index
+        let topmostNode = nodesAtPoint.max { zIndex(for: $0.id) < zIndex(for: $1.id) }
+        
+        let isTopmost = topmostNode?.id == nodeId
+        #if DEBUG
+        if !isTopmost {
+            print("[Z-Order] BLOCKED - topmost is '\(topmostNode?.title ?? "nil")' with z=\(zIndex(for: topmostNode?.id ?? UUID())), this node z=\(zIndex(for: nodeId))")
+        }
+        #endif
+        
+        return isTopmost
+    }
+    
+    /// Get the topmost node ID at a given screen position
+    func topmostNodeAtPoint(screenPoint: CGPoint, viewportSize: CGSize) -> UUID? {
+        // Convert screen point to canvas coordinates
+        let canvasX = (screenPoint.x - offset.width) / zoom
+        let canvasY = (screenPoint.y - offset.height) / zoom
+        let canvasPoint = CGPoint(x: canvasX, y: canvasY)
+        
+        // Find all nodes that contain this point
+        let nodesAtPoint = nodes.values.filter { node in
+            let frame = CGRect(x: node.x, y: node.y, width: node.width, height: node.height)
+            return frame.contains(canvasPoint)
+        }
+        
+        // Return the node with highest z-index
+        return nodesAtPoint.max { zIndex(for: $0.id) < zIndex(for: $1.id) }?.id
+    }
+    
     // MARK: - Manual Wiring
     
     /// Start a wiring operation from a connection point

@@ -42,6 +42,9 @@ struct NodeView: View {
     var onUseLocalModel: (() -> Void) = {}
     var onDismissCreditError: (() -> Void) = {}
     
+    /// Z-order check callback - returns true if this node should process the tap at the given window point
+    var shouldProcessTap: ((NSPoint) -> Bool)? = nil
+    
     // Wiring props
     var isWiring: Bool = false
     var wireSourceNodeId: UUID? = nil
@@ -520,7 +523,11 @@ struct NodeView: View {
                 }
                 .clipped()
                 .overlay(
-                    TapThroughOverlay(onTap: onTap, isNodeSelected: isSelected)
+                    TapThroughOverlay(
+                        onTap: onTap,
+                        isNodeSelected: isSelected,
+                        shouldProcessTap: shouldProcessTap
+                    )
                 )
             }
             .frame(

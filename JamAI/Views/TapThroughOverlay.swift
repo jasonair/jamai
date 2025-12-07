@@ -12,11 +12,20 @@ struct TapThroughOverlay: NSViewRepresentable {
     let onTap: () -> Void
     let shouldFocusOnTap: Bool
     let isNodeSelected: Bool
+    /// Closure to check if this node should process the tap (z-order check)
+    /// Returns true if this is the topmost node at the click point
+    let shouldProcessTap: ((NSPoint) -> Bool)?
     
-    init(onTap: @escaping () -> Void, shouldFocusOnTap: Bool = true, isNodeSelected: Bool = true) {
+    init(
+        onTap: @escaping () -> Void,
+        shouldFocusOnTap: Bool = true,
+        isNodeSelected: Bool = true,
+        shouldProcessTap: ((NSPoint) -> Bool)? = nil
+    ) {
         self.onTap = onTap
         self.shouldFocusOnTap = shouldFocusOnTap
         self.isNodeSelected = isNodeSelected
+        self.shouldProcessTap = shouldProcessTap
     }
     
     func makeNSView(context: Context) -> TapThroughView {
@@ -24,6 +33,7 @@ struct TapThroughOverlay: NSViewRepresentable {
         view.onTap = onTap
         view.shouldFocusOnTap = shouldFocusOnTap
         view.isNodeSelected = isNodeSelected
+        view.shouldProcessTap = shouldProcessTap
         return view
     }
     
@@ -31,6 +41,7 @@ struct TapThroughOverlay: NSViewRepresentable {
         nsView.onTap = onTap
         nsView.shouldFocusOnTap = shouldFocusOnTap
         nsView.isNodeSelected = isNodeSelected
+        nsView.shouldProcessTap = shouldProcessTap
     }
 }
 
@@ -38,6 +49,8 @@ final class TapThroughView: NSView {
     var onTap: (() -> Void)?
     var shouldFocusOnTap: Bool = true
     var isNodeSelected: Bool = true
+    /// Closure to check if this node should process the tap (z-order check)
+    var shouldProcessTap: ((NSPoint) -> Bool)?
     private var clickMonitor: Any?
     private var scrollMonitor: Any?
     private var scrollView: NSScrollView?
@@ -117,6 +130,20 @@ final class TapThroughView: NSView {
                             // The click hit a different view - don't process this tap
                             return event
                         }
+                    }
+                }
+                
+                // Z-ORDER CHECK: Before triggering tap, verify this is the topmost node
+                // at the click point. This prevents clicks from tunneling through to
+                // nodes that are visually behind the topmost node.
+                if let shouldProcess = self.shouldProcessTap {
+                    // Convert window coordinates to screen-like coordinates for the check
+                    // The callback expects coordinates relative to the canvas view
+                    if !shouldProcess(locationInWindow) {
+                        #if DEBUG
+                        print("[TapThroughView] Blocked - not topmost node at click point")
+                        #endif
+                        return event
                     }
                 }
                 

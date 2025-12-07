@@ -824,6 +824,12 @@ struct CanvasView: View {
             onUpgradePlan: { handleUpgradePlan() },
             onUseLocalModel: { handleUseLocalModel() },
             onDismissCreditError: { handleDismissCreditError() },
+            shouldProcessTap: { windowPoint in
+                // Convert window coordinates (bottom-left origin) to screen coordinates (top-left origin)
+                // that the viewModel can use for z-order hit testing
+                let screenPoint = CGPoint(x: windowPoint.x, y: viewModel.viewportSize.height - windowPoint.y)
+                return viewModel.isTopmostNodeAtPoint(node.id, screenPoint: screenPoint, viewportSize: viewModel.viewportSize)
+            },
             isWiring: viewModel.isWiring,
             wireSourceNodeId: viewModel.wireSourceNodeId,
             onClickToStartWiring: { nodeId, side in

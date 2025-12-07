@@ -42,6 +42,9 @@ struct NodeItemWrapper: View {
     let onUseLocalModel: () -> Void
     let onDismissCreditError: () -> Void
     
+    /// Z-order check callback - returns true if this node should process the tap at the given window point
+    var shouldProcessTap: ((NSPoint) -> Bool)? = nil
+    
     // Wiring callbacks
     let isWiring: Bool
     let wireSourceNodeId: UUID?
@@ -135,6 +138,7 @@ struct NodeItemWrapper: View {
                     onUpgradePlan: onUpgradePlan,
                     onUseLocalModel: onUseLocalModel,
                     onDismissCreditError: onDismissCreditError,
+                    shouldProcessTap: shouldProcessTap,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,
