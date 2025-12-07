@@ -1575,10 +1575,17 @@ class CanvasViewModel: ObservableObject {
     
     /// Toggle a node in the multi-select set
     func toggleNodeInSelection(_ nodeId: UUID) {
+        objectWillChange.send()  // Force UI update
         if selectedNodeIds.contains(nodeId) {
             selectedNodeIds.remove(nodeId)
+            #if DEBUG
+            print("[MultiSelect] Removed node from selection, now \(selectedNodeIds.count) nodes")
+            #endif
         } else {
             selectedNodeIds.insert(nodeId)
+            #if DEBUG
+            print("[MultiSelect] Added node to selection, now \(selectedNodeIds.count) nodes")
+            #endif
         }
     }
     
@@ -1594,6 +1601,12 @@ class CanvasViewModel: ObservableObject {
     
     /// Clear all multi-selections
     func clearMultiSelection() {
+        #if DEBUG
+        if !selectedNodeIds.isEmpty {
+            print("[MultiSelect] CLEARING selection! Had \(selectedNodeIds.count) nodes")
+            Thread.callStackSymbols.prefix(10).forEach { print("  \($0)") }
+        }
+        #endif
         selectedNodeIds.removeAll()
     }
     

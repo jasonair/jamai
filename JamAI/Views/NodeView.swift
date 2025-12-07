@@ -596,6 +596,13 @@ struct NodeView: View {
             .onTapGesture {
                 // Block node selection if modal is open
                 guard !modalCoordinator.isModalPresented else { return }
+                // Check shift state at tap time - use current NSEvent state
+                // TapThroughOverlay may have already set this, but update to current state
+                let shiftHeld = NSEvent.modifierFlags.contains(.shift)
+                TapThroughView.lastTapWasShiftClick = shiftHeld
+                #if DEBUG
+                print("[NodeView] onTapGesture - shift held: \(shiftHeld)")
+                #endif
                 onTap()
             }
             .overlay(
@@ -745,7 +752,11 @@ struct NodeView: View {
                             Rectangle()
                                 .stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: isSelected ? 2 : 0)
                         )
-                        .onTapGesture { onTap() }
+                        .onTapGesture {
+                            // Set shift state for the tap handler (SwiftUI tap bypasses TapThroughOverlay)
+                            TapThroughView.lastTapWasShiftClick = NSEvent.modifierFlags.contains(.shift)
+                            onTap()
+                        }
                         .drawingGroup(opaque: false, colorMode: .nonLinear)
                 } else {
                     // Fallback if image data is missing

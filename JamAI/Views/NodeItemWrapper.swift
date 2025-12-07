@@ -152,6 +152,13 @@ struct NodeItemWrapper: View {
                 )
             }
         }
+        // Multi-selection indicator - MUST be before .position() to render at node location
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(isMultiSelected ? Color.blue : Color.clear, lineWidth: isMultiSelected ? 3 : 0)
+                .shadow(color: isMultiSelected ? Color.blue.opacity(0.5) : Color.clear, radius: isMultiSelected ? 4 : 0)
+                .allowsHitTesting(false)
+        )
         .position(
             x: node.x + displayWidth / 2,
             y: node.y + displayHeight / 2
@@ -175,17 +182,6 @@ struct NodeItemWrapper: View {
         )
         // Invisible tagging view so AppKit hit-testing can recognize node areas
         .overlay(NodeHitTag().allowsHitTesting(false))
-        // Multi-selection indicator
-        .overlay(
-            Group {
-                if isMultiSelected {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.accentColor, lineWidth: 3)
-                        .padding(-4)
-                }
-            }
-            .allowsHitTesting(false)
-        )
     }
 
     // Invisible NSView to tag node view hierarchy for hit-testing

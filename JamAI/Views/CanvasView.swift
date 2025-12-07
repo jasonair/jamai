@@ -564,7 +564,8 @@ struct CanvasView: View {
             // Nodes - only renders visible nodes (viewport culling with 40% margin)
             WorldLayerView(
                 nodes: visibleNodes,
-                nodeViewBuilder: { node in AnyView(nodeItemView(node)) }
+                nodeViewBuilder: { node in AnyView(nodeItemView(node)) },
+                selectedNodeIds: viewModel.selectedNodeIds
             )
             .environment(\.isZooming, viewModel.isZooming)  // Pass zoom state for layout stability
             .environment(\.isPanning, viewModel.isPanning)  // Pass pan state for layout stability
@@ -833,14 +834,29 @@ struct CanvasView: View {
                     return
                 }
 
-                // Check shift state at the moment of click using NSEvent
-                // This is more reliable than the modifier tracker for tap handling
-                let isShiftHeld = NSEvent.modifierFlags.contains(.shift) || viewModel.isShiftPressed
+                // Check shift state from TapThroughView which captures it at mouseDown time
+                // This is the most reliable way to detect shift-click
+                let isShiftHeld = TapThroughView.lastTapWasShiftClick
+                
+                #if DEBUG
+                print("[MultiSelect] Tap on node: \(node.title), shift held: \(isShiftHeld), current selection count: \(viewModel.selectedNodeIds.count)")
+                #endif
                 
                 // Handle shift-click for multi-selection
                 if isShiftHeld {
+                    // If there's a single selected node, add it to multi-selection first
+                    if let currentSelectedId = viewModel.selectedNodeId,
+                       !viewModel.selectedNodeIds.contains(currentSelectedId) {
+                        viewModel.addNodeToSelection(currentSelectedId)
+                        #if DEBUG
+                        print("[MultiSelect] Added current single-selected node to multi-selection")
+                        #endif
+                    }
                     // Toggle this node in the multi-selection
                     viewModel.toggleNodeInSelection(node.id)
+                    #if DEBUG
+                    print("[MultiSelect] After toggle, selection: \(viewModel.selectedNodeIds.count) nodes")
+                    #endif
                     // Don't navigate or expand when shift-clicking
                     return
                 }

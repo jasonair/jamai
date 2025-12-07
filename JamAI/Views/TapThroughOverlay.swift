@@ -73,6 +73,10 @@ final class TapThroughView: NSView {
     /// Callback to update shift state in CanvasViewModel before tap fires
     var onModifiersAtClick: ((Bool) -> Void)?
     
+    /// Static property to store if the last tap had shift held - accessible from anywhere
+    /// This is set just before onTap is called, so handlers can check this value
+    static var lastTapWasShiftClick: Bool = false
+    
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupMonitors()
@@ -150,6 +154,10 @@ final class TapThroughView: NSView {
                 self.pendingClickInSelf = true
                 self.pendingClickModifiers = event.modifierFlags
                 
+                #if DEBUG
+                print("[TapThroughView] mouseDown captured, shift: \(event.modifierFlags.contains(.shift))")
+                #endif
+                
                 // Activate scroll capturing immediately (this is fine on mouseDown)
                 if self.shouldFocusOnTap {
                     if let prev = TapThroughView.activeInstance, prev !== self {
@@ -199,12 +207,16 @@ final class TapThroughView: NSView {
             }
             
             // It was a tap (click and release without significant movement)
+            let wasShiftHeld = self.pendingClickModifiers.contains(.shift)
             #if DEBUG
-            print("[TapThroughView] Triggering tap callback, shift: \(self.pendingClickModifiers.contains(.shift))")
+            print("[TapThroughView] Triggering tap callback, shift: \(wasShiftHeld)")
             #endif
             
-            // Update shift state before firing tap so the handler can use it
-            self.onModifiersAtClick?(self.pendingClickModifiers.contains(.shift))
+            // Set static property so any tap handler can read the shift state
+            TapThroughView.lastTapWasShiftClick = wasShiftHeld
+            
+            // Also call the optional callback
+            self.onModifiersAtClick?(wasShiftHeld)
             
             self.onTap?()
             

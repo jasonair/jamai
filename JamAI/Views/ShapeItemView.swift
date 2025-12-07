@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct ShapeItemView: View {
     @Binding var node: Node
@@ -14,7 +15,11 @@ struct ShapeItemView: View {
                     shape.stroke(isSelected ? Color.accentColor : Color.clear, lineWidth: 2)
                 )
                 .frame(width: node.width, height: node.height)
-                .onTapGesture { onTap() }
+                .onTapGesture {
+                    // Set shift state for the tap handler
+                    TapThroughView.lastTapWasShiftClick = NSEvent.modifierFlags.contains(.shift)
+                    onTap()
+                }
             Button(action: onDelete) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(.secondary)

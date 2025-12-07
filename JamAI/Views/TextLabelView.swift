@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import AppKit
 
 struct TextLabelView: View {
     @Binding var node: Node
@@ -124,6 +125,8 @@ struct TextLabelView: View {
         }
         .onTapGesture { 
             if !isEditing {
+                // Set shift state for the tap handler
+                TapThroughView.lastTapWasShiftClick = NSEvent.modifierFlags.contains(.shift)
                 onTap() 
             }
         }
