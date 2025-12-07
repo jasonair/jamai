@@ -77,6 +77,10 @@ final class TapThroughView: NSView {
     /// This is set just before onTap is called, so handlers can check this value
     static var lastTapWasShiftClick: Bool = false
     
+    /// Static flag to indicate TapThroughView already handled this tap cycle
+    /// NodeView's onTapGesture should check this to avoid double-handling
+    static var didHandleTap: Bool = false
+    
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
         setupMonitors()
@@ -195,10 +199,18 @@ final class TapThroughView: NSView {
             // Set static property so any tap handler can read the shift state
             TapThroughView.lastTapWasShiftClick = wasShiftHeld
             
+            // Mark that we're handling this tap - NodeView's onTapGesture should check this
+            TapThroughView.didHandleTap = true
+            
             // Also call the optional callback
             self.onModifiersAtClick?(wasShiftHeld)
             
             self.onTap?()
+            
+            // Reset the flag after a brief delay (to allow other gesture handlers to check it)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                TapThroughView.didHandleTap = false
+            }
             
             return event
         }

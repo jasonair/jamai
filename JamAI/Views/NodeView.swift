@@ -598,11 +598,22 @@ struct NodeView: View {
             .onTapGesture {
                 // Block node selection if modal is open
                 guard !modalCoordinator.isModalPresented else { return }
+                
+                // Check if TapThroughView already handled this tap (for content area clicks)
+                // If so, skip to avoid double-handling which causes toggle issues
+                if TapThroughView.didHandleTap {
+                    #if DEBUG
+                    print("[NodeView] onTapGesture - skipping, TapThroughView already handled")
+                    #endif
+                    return
+                }
+                
+                // This fires for header clicks (which TapThroughView doesn't cover)
                 // Capture shift state at tap time
                 let shiftHeld = NSEvent.modifierFlags.contains(.shift)
                 TapThroughView.lastTapWasShiftClick = shiftHeld
                 #if DEBUG
-                print("[NodeView] onTapGesture - shift held: \(shiftHeld)")
+                print("[NodeView] onTapGesture (header) - shift held: \(shiftHeld)")
                 #endif
                 onTap()
             }
