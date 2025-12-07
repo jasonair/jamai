@@ -603,40 +603,45 @@ struct CanvasView: View {
                 .transition(.scale.combined(with: .opacity))
             }
             
-            // Outline
-            VStack(alignment: .leading) {
-                Spacer().frame(height: 56)  // Space for tab bar (36) + padding (20)
-                HStack(alignment: .top, spacing: 0) {
-                    if showOutline {
+            // Outline - positioned in top-left
+            if showOutline {
+                // Full outline view - spacers must not block hits
+                VStack(alignment: .leading) {
+                    Spacer().frame(height: 56)  // Space for tab bar (36) + padding (20)
+                        .allowsHitTesting(false)
+                    HStack(alignment: .top, spacing: 0) {
                         OutlineView(viewModel: viewModel, viewportSize: geometry.size, isCollapsed: $showOutline)
                             .padding(.leading, 20)
-                    } else {
-                        // Collapsed state - show expand button
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                showOutline = true
-                            }
-                        }) {
-                            VStack(spacing: 6) {
-                                Image(systemName: "sidebar.left")
-                                    .font(.system(size: 14))
-                                Text("Outline")
-                                    .font(.caption2)
-                            }
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 12)
-                            .background(Color(nsColor: .controlBackgroundColor))
-                            .cornerRadius(8)
-                            .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .padding(.leading, 20)
-                        .help("Show Outline")
+                        Spacer()
+                            .allowsHitTesting(false)
                     }
                     Spacer()
+                        .allowsHitTesting(false)
                 }
-                Spacer()
+            } else {
+                // Collapsed state - just the small expand button, positioned absolutely
+                // No spacers or containers that could block clicks
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.25)) {
+                        showOutline = true
+                    }
+                }) {
+                    VStack(spacing: 6) {
+                        Image(systemName: "sidebar.left")
+                            .font(.system(size: 14))
+                        Text("Outline")
+                            .font(.caption2)
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 12)
+                    .background(Color(nsColor: .controlBackgroundColor))
+                    .cornerRadius(8)
+                    .shadow(color: Color.black.opacity(0.1), radius: 2, y: 1)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .help("Show Outline")
+                .position(x: 50, y: 80)  // Position directly instead of using spacers
             }
             
             // Modal blocking layer - prevents scroll/interaction leakage when dialogs are open

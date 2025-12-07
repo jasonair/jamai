@@ -593,11 +593,12 @@ struct NodeView: View {
             .onHover { hovering in
                 isHovered = hovering
             }
+            // Make entire node area (including header) tappable
+            .contentShape(Rectangle())
             .onTapGesture {
                 // Block node selection if modal is open
                 guard !modalCoordinator.isModalPresented else { return }
-                // Check shift state at tap time - use current NSEvent state
-                // TapThroughOverlay may have already set this, but update to current state
+                // Capture shift state at tap time
                 let shiftHeld = NSEvent.modifierFlags.contains(.shift)
                 TapThroughView.lastTapWasShiftClick = shiftHeld
                 #if DEBUG

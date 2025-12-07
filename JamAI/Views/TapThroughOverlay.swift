@@ -104,36 +104,16 @@ final class TapThroughView: NSView {
             let locationInSelf = self.convert(locationInWindow, from: nil)
             
             if self.bounds.contains(locationInSelf) {
-                // Before recording, check if there's a higher-z view (like outline pane)
+                // Use hitTest to check if there's a higher-z view at the click point
+                // This properly handles UI elements like outline, zoom controls, etc.
                 if let window = self.window,
                    let contentView = window.contentView {
-                    let contentHeight = contentView.frame.height
-                    let flippedY = contentHeight - locationInWindow.y
-                    
-                    // Check outline pane area
-                    if locationInWindow.x >= 20 && locationInWindow.x <= 300 && flippedY >= 56 {
-                        self.pendingClickInSelf = false
-                        return event
-                    }
-                    
-                    // Check zoom controls area
-                    let centerX = contentView.frame.width / 2
-                    if flippedY >= 60 && flippedY <= 100 && abs(locationInWindow.x - centerX) < 150 {
-                        self.pendingClickInSelf = false
-                        return event
-                    }
-                    
-                    // Check background toggle area
-                    if flippedY >= contentHeight - 80 && locationInWindow.x >= contentView.frame.width - 200 {
-                        self.pendingClickInSelf = false
-                        return event
-                    }
-                    
-                    // Fallback hitTest check
                     let locationInContent = contentView.convert(locationInWindow, from: nil)
                     if let hitView = contentView.hitTest(locationInContent) {
+                        // Check if the hit view is this TapThroughView or a descendant/ancestor
                         let isHitViewRelatedToSelf = (hitView === self) || hitView.isDescendant(of: self) || self.isDescendant(of: hitView)
                         if !isHitViewRelatedToSelf {
+                            // Another view is on top at this location - don't capture this click
                             self.pendingClickInSelf = false
                             return event
                         }
