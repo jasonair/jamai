@@ -63,6 +63,15 @@ class CanvasViewModel: ObservableObject {
     @Published var wireEndPoint: CGPoint? // Mouse position during drag (in canvas coordinates)
     @Published var hoveredNodeId: UUID? // Node currently hovered for connection point visibility
     
+    // Multi-select state
+    @Published var selectedNodeIds: Set<UUID> = []  // Multiple selected nodes (shift-click)
+    @Published var isShiftPressed: Bool = false  // Track shift key state
+    
+    // Snap-to-align state
+    @Published var snapGuides: [SnapGuide] = []  // Active snap guide lines to display
+    @Published var isSnapEnabled: Bool = Config.snapEnabled  // Can be toggled by user
+    @Published var isControlPressed: Bool = false  // Control key temporarily disables snapping
+    
     // Forward undo manager state for UI binding
     @Published var canUndo: Bool = false
     @Published var canRedo: Bool = false
@@ -1541,6 +1550,67 @@ class CanvasViewModel: ObservableObject {
         
         // Debounce database write during drag
         scheduleDebouncedWrite(nodeId: nodeId)
+    }
+    
+    /// Move multiple nodes by a delta (for multi-select drag)
+    func moveNodes(_ nodeIds: Set<UUID>, delta: CGSize) {
+        objectWillChange.send()
+        
+        for nodeId in nodeIds {
+            guard var node = nodes[nodeId] else { continue }
+            let oldPosition = CGPoint(x: node.x, y: node.y)
+            node.x += delta.width
+            node.y += delta.height
+            node.updatedAt = Date()
+            nodes[nodeId] = node
+            
+            undoManager.coalesceIfNeeded(.moveNode(id: nodeId, oldPosition: oldPosition, newPosition: CGPoint(x: node.x, y: node.y)))
+            scheduleDebouncedWrite(nodeId: nodeId)
+        }
+        
+        positionsVersion &+= 1
+    }
+    
+    // MARK: - Multi-Select
+    
+    /// Toggle a node in the multi-select set
+    func toggleNodeInSelection(_ nodeId: UUID) {
+        if selectedNodeIds.contains(nodeId) {
+            selectedNodeIds.remove(nodeId)
+        } else {
+            selectedNodeIds.insert(nodeId)
+        }
+    }
+    
+    /// Add a node to the multi-select set
+    func addNodeToSelection(_ nodeId: UUID) {
+        selectedNodeIds.insert(nodeId)
+    }
+    
+    /// Remove a node from the multi-select set
+    func removeNodeFromSelection(_ nodeId: UUID) {
+        selectedNodeIds.remove(nodeId)
+    }
+    
+    /// Clear all multi-selections
+    func clearMultiSelection() {
+        selectedNodeIds.removeAll()
+    }
+    
+    /// Check if a node is in the multi-select set
+    func isNodeInMultiSelection(_ nodeId: UUID) -> Bool {
+        return selectedNodeIds.contains(nodeId)
+    }
+    
+    /// Select all nodes
+    func selectAllNodes() {
+        selectedNodeIds = Set(nodes.keys)
+        selectedNodeId = nil  // Clear single selection
+    }
+    
+    /// Clear snap guides
+    func clearSnapGuides() {
+        snapGuides.removeAll()
     }
     
     /// Get all team members from nodes in the current project, excluding a specific node

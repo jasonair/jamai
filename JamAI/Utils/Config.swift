@@ -66,4 +66,9 @@ enum Config {
     
     // Visual Effects
     static let thinkingGlowEnabledKey = "thinkingGlowEnabled"
+    
+    // Snap-to-align
+    static let snapEnabled: Bool = true  // Enable snap-to-align by default
+    static let snapThreshold: CGFloat = 10.0  // Distance in canvas units to trigger snap
+    static let snapGuideColor = "snapGuide"  // Color for snap guide lines
 }

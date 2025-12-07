@@ -15,17 +15,21 @@ struct TapThroughOverlay: NSViewRepresentable {
     /// Closure to check if this node should process the tap (z-order check)
     /// Returns true if this is the topmost node at the click point
     let shouldProcessTap: ((NSPoint) -> Bool)?
+    /// Callback to update shift state before tap fires (true if shift was held at click time)
+    let onModifiersAtClick: ((Bool) -> Void)?
     
     init(
         onTap: @escaping () -> Void,
         shouldFocusOnTap: Bool = true,
         isNodeSelected: Bool = true,
-        shouldProcessTap: ((NSPoint) -> Bool)? = nil
+        shouldProcessTap: ((NSPoint) -> Bool)? = nil,
+        onModifiersAtClick: ((Bool) -> Void)? = nil
     ) {
         self.onTap = onTap
         self.shouldFocusOnTap = shouldFocusOnTap
         self.isNodeSelected = isNodeSelected
         self.shouldProcessTap = shouldProcessTap
+        self.onModifiersAtClick = onModifiersAtClick
     }
     
     func makeNSView(context: Context) -> TapThroughView {
@@ -34,6 +38,7 @@ struct TapThroughOverlay: NSViewRepresentable {
         view.shouldFocusOnTap = shouldFocusOnTap
         view.isNodeSelected = isNodeSelected
         view.shouldProcessTap = shouldProcessTap
+        view.onModifiersAtClick = onModifiersAtClick
         return view
     }
     
@@ -42,6 +47,7 @@ struct TapThroughOverlay: NSViewRepresentable {
         nsView.shouldFocusOnTap = shouldFocusOnTap
         nsView.isNodeSelected = isNodeSelected
         nsView.shouldProcessTap = shouldProcessTap
+        nsView.onModifiersAtClick = onModifiersAtClick
     }
 }
 
@@ -52,10 +58,20 @@ final class TapThroughView: NSView {
     /// Closure to check if this node should process the tap (z-order check)
     var shouldProcessTap: ((NSPoint) -> Bool)?
     private var clickMonitor: Any?
+    private var mouseUpMonitor: Any?
     private var scrollMonitor: Any?
     private var scrollView: NSScrollView?
     private var isActive: Bool = false
     private static weak var activeInstance: TapThroughView?
+    
+    // Track mouseDown to distinguish tap from drag
+    private var pendingClickLocation: NSPoint?
+    private var pendingClickInSelf: Bool = false
+    private var pendingClickModifiers: NSEvent.ModifierFlags = []
+    private let dragThreshold: CGFloat = 5.0  // Match SwiftUI drag gesture minimumDistance
+    
+    /// Callback to update shift state in CanvasViewModel before tap fires
+    var onModifiersAtClick: ((Bool) -> Void)?
     
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -68,13 +84,14 @@ final class TapThroughView: NSView {
     }
     
     private func setupMonitors() {
-        // Monitor for clicks to activate scrolling
+        // Monitor for mouseDown - just record location, don't trigger tap yet
+        // This allows distinguishing between tap (click and release) and drag (click and move)
         clickMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { [weak self] event in
             guard let self = self else { return event }
             
             // If a native modal is open, never activate or change focus state.
-            // Let the modal window own all interactions.
             if ModalCoordinator.shared.isModalPresented {
+                self.pendingClickInSelf = false
                 return event
             }
             
@@ -83,90 +100,114 @@ final class TapThroughView: NSView {
             let locationInSelf = self.convert(locationInWindow, from: nil)
             
             if self.bounds.contains(locationInSelf) {
-                // Before triggering tap, check if there's a higher-z view (like outline pane)
-                // that should receive this click instead.
+                // Before recording, check if there's a higher-z view (like outline pane)
                 if let window = self.window,
                    let contentView = window.contentView {
-                    // Use the content view's frame height for coordinate conversion
                     let contentHeight = contentView.frame.height
-                    // Convert window coordinates (origin at bottom-left) to flipped coordinates (origin at top-left)
                     let flippedY = contentHeight - locationInWindow.y
                     
-                    // Direct coordinate check for outline pane area
-                    // Outline pane: x=20 to 300, y=56 (from top) to bottom
-                    // This is a reliable fallback since hitTest may not work correctly with SwiftUI hosting views
-                    #if DEBUG
-                    print("[TapThroughView] Click at window: (\(locationInWindow.x), \(locationInWindow.y)), flippedY: \(flippedY), contentHeight: \(contentHeight)")
-                    #endif
+                    // Check outline pane area
                     if locationInWindow.x >= 20 && locationInWindow.x <= 300 && flippedY >= 56 {
-                        // Click is in the outline pane area - don't process this tap
-                        #if DEBUG
-                        print("[TapThroughView] Blocked - in outline pane area")
-                        #endif
+                        self.pendingClickInSelf = false
                         return event
                     }
                     
-                    // Also check zoom controls area (top center) and background toggle (bottom right)
-                    // Zoom controls: roughly centered, y < 100 from top
+                    // Check zoom controls area
                     let centerX = contentView.frame.width / 2
                     if flippedY >= 60 && flippedY <= 100 && abs(locationInWindow.x - centerX) < 150 {
-                        // Click is in zoom controls area
+                        self.pendingClickInSelf = false
                         return event
                     }
                     
-                    // Background toggle: bottom right corner
+                    // Check background toggle area
                     if flippedY >= contentHeight - 80 && locationInWindow.x >= contentView.frame.width - 200 {
-                        // Click is in background toggle area
+                        self.pendingClickInSelf = false
                         return event
                     }
                     
-                    // Fallback: use hitTest to check for other overlays
+                    // Fallback hitTest check
                     let locationInContent = contentView.convert(locationInWindow, from: nil)
                     if let hitView = contentView.hitTest(locationInContent) {
-                        // Check if the hit view is NOT related to this TapThroughView
                         let isHitViewRelatedToSelf = (hitView === self) || hitView.isDescendant(of: self) || self.isDescendant(of: hitView)
-                        
                         if !isHitViewRelatedToSelf {
-                            // The click hit a different view - don't process this tap
+                            self.pendingClickInSelf = false
                             return event
                         }
                     }
                 }
                 
-                // Z-ORDER CHECK: Before triggering tap, verify this is the topmost node
-                // at the click point. This prevents clicks from tunneling through to
-                // nodes that are visually behind the topmost node.
+                // Z-ORDER CHECK
                 if let shouldProcess = self.shouldProcessTap {
-                    // Convert window coordinates to screen-like coordinates for the check
-                    // The callback expects coordinates relative to the canvas view
                     if !shouldProcess(locationInWindow) {
-                        #if DEBUG
-                        print("[TapThroughView] Blocked - not topmost node at click point")
-                        #endif
+                        self.pendingClickInSelf = false
                         return event
                     }
                 }
                 
-                // Trigger the tap callback
-                self.onTap?()
+                // Record the mouseDown location and modifiers - don't trigger tap yet
+                // We'll check on mouseUp if it was a tap or drag
+                self.pendingClickLocation = locationInWindow
+                self.pendingClickInSelf = true
+                self.pendingClickModifiers = event.modifierFlags
                 
-                // Activate scroll capturing and ensure scroll view is found
+                // Activate scroll capturing immediately (this is fine on mouseDown)
                 if self.shouldFocusOnTap {
-                    // Deactivate previous active instance to avoid multiple interceptors
                     if let prev = TapThroughView.activeInstance, prev !== self {
                         prev.isActive = false
                     }
                     TapThroughView.activeInstance = self
                     self.isActive = true
-                    // Find scroll view immediately on click
                     if self.scrollView == nil { self.scrollView = self.findScrollView() }
                 }
+            } else {
+                self.pendingClickInSelf = false
             }
-            // Note: Removed "click outside" deactivation to prevent stampede effect
-            // when multiple TapThroughView instances exist. Each click inside a view
-            // will naturally activate only that instance.
             
-            // Always return the event to allow text selection and other interactions
+            return event
+        }
+        
+        // Monitor for mouseUp - only trigger tap if mouse didn't move much (not a drag)
+        mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseUp) { [weak self] event in
+            guard let self = self else { return event }
+            
+            // Only process if we had a pending click in our bounds
+            guard self.pendingClickInSelf,
+                  let startLocation = self.pendingClickLocation else {
+                return event
+            }
+            
+            // Clear the pending state
+            self.pendingClickInSelf = false
+            self.pendingClickLocation = nil
+            
+            // If a modal opened during the click, don't process
+            if ModalCoordinator.shared.isModalPresented {
+                return event
+            }
+            
+            // Check if mouse moved significantly (drag vs tap)
+            let locationInWindow = event.locationInWindow
+            let dx = abs(locationInWindow.x - startLocation.x)
+            let dy = abs(locationInWindow.y - startLocation.y)
+            
+            // If movement exceeds threshold, it was a drag - don't trigger tap
+            if dx > self.dragThreshold || dy > self.dragThreshold {
+                #if DEBUG
+                print("[TapThroughView] Not triggering tap - was a drag (dx: \(dx), dy: \(dy))")
+                #endif
+                return event
+            }
+            
+            // It was a tap (click and release without significant movement)
+            #if DEBUG
+            print("[TapThroughView] Triggering tap callback, shift: \(self.pendingClickModifiers.contains(.shift))")
+            #endif
+            
+            // Update shift state before firing tap so the handler can use it
+            self.onModifiersAtClick?(self.pendingClickModifiers.contains(.shift))
+            
+            self.onTap?()
+            
             return event
         }
         
@@ -269,6 +310,10 @@ final class TapThroughView: NSView {
             NSEvent.removeMonitor(monitor)
             clickMonitor = nil
         }
+        if let monitor = mouseUpMonitor {
+            NSEvent.removeMonitor(monitor)
+            mouseUpMonitor = nil
+        }
         if let monitor = scrollMonitor {
             NSEvent.removeMonitor(monitor)
             scrollMonitor = nil
@@ -276,6 +321,8 @@ final class TapThroughView: NSView {
         if TapThroughView.activeInstance === self {
             TapThroughView.activeInstance = nil
         }
+        pendingClickInSelf = false
+        pendingClickLocation = nil
     }
     
     override func hitTest(_ point: NSPoint) -> NSView? {

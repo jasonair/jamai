@@ -36,6 +36,10 @@ struct CanvasView: View {
     @State private var showOutline: Bool = false
     @State private var viewportSize: CGSize = .zero
     
+    // Multi-select drag state - stores initial positions of all selected nodes
+    @State private var multiSelectDragStartPositions: [UUID: CGPoint] = [:]
+    @State private var lastDragTranslation: CGSize = .zero
+    
     // Local zoom state for smooth gesture tracking
     @State private var isZooming: Bool = false
     @State private var gestureZoom: CGFloat = 1.0
@@ -127,6 +131,20 @@ struct CanvasView: View {
         canvasContent
             .focusedValue(\.canvasViewModel, viewModel)
             .environmentObject(modalCoordinator)
+            .background(
+                // Track modifier keys (Shift for multi-select, Control for snap bypass)
+                ModifierKeyTracker(
+                    isShiftPressed: Binding(
+                        get: { viewModel.isShiftPressed },
+                        set: { viewModel.isShiftPressed = $0 }
+                    ),
+                    isControlPressed: Binding(
+                        get: { viewModel.isControlPressed },
+                        set: { viewModel.isControlPressed = $0 }
+                    )
+                )
+                .frame(width: 0, height: 0)
+            )
     }
     
     private var canvasContent: some View {
@@ -309,6 +327,7 @@ struct CanvasView: View {
                     viewModel.selectedTool = .select
                 case .select:
                     viewModel.selectedNodeId = nil
+                    viewModel.clearMultiSelection()  // Clear shift-click selections
                 }
             }
             .simultaneousGesture(
@@ -528,6 +547,18 @@ struct CanvasView: View {
                 .scaleEffect(currentZoom, anchor: .topLeading)
                 .offset(currentOffset)
                 .allowsHitTesting(false)
+            }
+            
+            // Snap alignment guides during drag
+            if !viewModel.snapGuides.isEmpty {
+                SnapGuideLayer(
+                    guides: viewModel.snapGuides,
+                    zoom: currentZoom,
+                    offset: currentOffset
+                )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+                .zIndex(1_000_000_050)  // Above nodes but below context menu
             }
             
             // Nodes - only renders visible nodes (viewport culling with 40% margin)
@@ -778,10 +809,12 @@ struct CanvasView: View {
     @ViewBuilder
     private func nodeItemView(_ node: Node) -> some View {
         let isSelected = viewModel.selectedNodeId == node.id
+        let isMultiSelected = viewModel.selectedNodeIds.contains(node.id)
 
         NodeItemWrapper(
             node: binding(for: node.id),
             isSelected: isSelected,
+            isMultiSelected: isMultiSelected,
             isGenerating: viewModel.generatingNodeId == node.id || viewModel.orchestratingNodeIds.contains(node.id),
             hasError: viewModel.errorNodeId == node.id,
             hasUnreadResponse: viewModel.nodesWithUnreadResponse.contains(node.id),
@@ -800,6 +833,20 @@ struct CanvasView: View {
                     return
                 }
 
+                // Check shift state at the moment of click using NSEvent
+                // This is more reliable than the modifier tracker for tap handling
+                let isShiftHeld = NSEvent.modifierFlags.contains(.shift) || viewModel.isShiftPressed
+                
+                // Handle shift-click for multi-selection
+                if isShiftHeld {
+                    // Toggle this node in the multi-selection
+                    viewModel.toggleNodeInSelection(node.id)
+                    // Don't navigate or expand when shift-clicking
+                    return
+                }
+                
+                // Regular click - clear multi-selection and handle normally
+                viewModel.clearMultiSelection()
                 viewModel.bringToFront([node.id])
                 
                 // If clicking an unselected node, navigate to center it on canvas
@@ -821,7 +868,7 @@ struct CanvasView: View {
             onJamWithThis: { selectedText in handleJamWithThis(selectedText, for: node.id) },
             onExpandNote: { handleExpandNote(for: node.id) },
             onDragChanged: { value in handleNodeDrag(node.id, value: value) },
-            onDragEnded: { draggedNodeId = nil },
+            onDragEnded: { handleNodeDragEnded() },
             onHeightChange: { height in handleHeightChange(height, for: node.id) },
             onWidthChange: { width in handleWidthChange(width, for: node.id) },
             onResizeActiveChanged: { active in isResizingActive = active },
@@ -868,9 +915,25 @@ struct CanvasView: View {
             return
         }
 
+        // Determine which nodes are being dragged
+        let isMultiDrag = viewModel.selectedNodeIds.contains(nodeId) && viewModel.selectedNodeIds.count > 1
+        let nodesToDrag: Set<UUID> = isMultiDrag ? viewModel.selectedNodeIds : [nodeId]
+        
+        // Initialize drag on first movement
         if draggedNodeId == nil {
             draggedNodeId = nodeId
-            viewModel.bringToFront([nodeId])
+            viewModel.bringToFront(Array(nodesToDrag))
+            lastDragTranslation = .zero
+            
+            // Store initial positions for all nodes being dragged
+            multiSelectDragStartPositions.removeAll()
+            for id in nodesToDrag {
+                if let node = viewModel.nodes[id] {
+                    multiSelectDragStartPositions[id] = CGPoint(x: node.x, y: node.y)
+                }
+            }
+            
+            // Also store for the primary dragged node
             if let node = viewModel.nodes[nodeId] {
                 dragStartPosition = CGPoint(x: node.x, y: node.y)
             }
@@ -881,13 +944,62 @@ struct CanvasView: View {
                 width: value.translation.width / viewModel.zoom,
                 height: value.translation.height / viewModel.zoom
             )
-            let newPosition = CGPoint(
+            
+            // Calculate proposed position for the primary node
+            var newPosition = CGPoint(
                 x: dragStartPosition.x + worldDelta.width,
                 y: dragStartPosition.y + worldDelta.height
             )
-            // Update position optimistically - UI updates immediately, DB write is debounced
-            viewModel.moveNode(nodeId, to: newPosition)
+            
+            // Apply snap-to-align (unless Control is pressed)
+            if viewModel.isSnapEnabled && !viewModel.isControlPressed {
+                if let primaryNode = viewModel.nodes[nodeId] {
+                    let snapResult = SnapGuideService.shared.calculateSnap(
+                        draggedNodeId: nodeId,
+                        proposedPosition: newPosition,
+                        draggedNodeSize: CGSize(width: primaryNode.width, height: primaryNode.height),
+                        allNodes: viewModel.nodes,
+                        selectedNodeIds: nodesToDrag,
+                        threshold: Config.snapThreshold
+                    )
+                    newPosition = snapResult.snappedPosition
+                    viewModel.snapGuides = snapResult.guides
+                }
+            } else {
+                viewModel.clearSnapGuides()
+            }
+            
+            if isMultiDrag {
+                // Calculate the delta from the primary node's movement
+                let snapDelta = CGSize(
+                    width: newPosition.x - dragStartPosition.x,
+                    height: newPosition.y - dragStartPosition.y
+                )
+                
+                // Move all selected nodes by applying the delta to their start positions
+                for id in nodesToDrag {
+                    if let startPos = multiSelectDragStartPositions[id] {
+                        let nodeNewPos = CGPoint(
+                            x: startPos.x + snapDelta.width,
+                            y: startPos.y + snapDelta.height
+                        )
+                        viewModel.moveNode(id, to: nodeNewPos)
+                    }
+                }
+            } else {
+                // Single node drag
+                viewModel.moveNode(nodeId, to: newPosition)
+            }
+            
+            lastDragTranslation = CGSize(width: worldDelta.width, height: worldDelta.height)
         }
+    }
+    
+    private func handleNodeDragEnded() {
+        draggedNodeId = nil
+        multiSelectDragStartPositions.removeAll()
+        lastDragTranslation = .zero
+        viewModel.clearSnapGuides()
     }
     
     private func handlePromptSubmit(_ prompt: String, imageData: Data?, imageMimeType: String?, webSearchEnabled: Bool, for nodeId: UUID) {

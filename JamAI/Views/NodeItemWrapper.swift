@@ -10,6 +10,7 @@ import SwiftUI
 struct NodeItemWrapper: View {
     @Binding var node: Node
     let isSelected: Bool
+    let isMultiSelected: Bool  // Part of multi-select group (shift-click selection)
     let isGenerating: Bool
     let hasError: Bool
     let hasUnreadResponse: Bool
@@ -156,8 +157,9 @@ struct NodeItemWrapper: View {
             y: node.y + displayHeight / 2
         )
         .offset(resizeCompensation)
-        // Use highPriorityGesture to ensure node drag takes precedence over canvas pan
-        .highPriorityGesture(
+        // Use regular gesture (not highPriority) so that child gestures like resize grip
+        // can take precedence. This still takes precedence over canvas pan gestures.
+        .gesture(
             DragGesture(minimumDistance: 5, coordinateSpace: .global)
                 .onChanged { value in
                     // Don't move node if we're wiring or resizing
@@ -173,6 +175,17 @@ struct NodeItemWrapper: View {
         )
         // Invisible tagging view so AppKit hit-testing can recognize node areas
         .overlay(NodeHitTag().allowsHitTesting(false))
+        // Multi-selection indicator
+        .overlay(
+            Group {
+                if isMultiSelected {
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentColor, lineWidth: 3)
+                        .padding(-4)
+                }
+            }
+            .allowsHitTesting(false)
+        )
     }
 
     // Invisible NSView to tag node view hierarchy for hit-testing
