@@ -17,11 +17,12 @@ final class HapticFeedbackService {
     private init() {}
     
     /// Trigger alignment haptic feedback (for snap-to-guide)
-    /// This produces a subtle "click" when objects align, similar to Figma/Illustrator
+    /// Uses .generic pattern for stronger feedback than .alignment
     func playAlignmentFeedback() {
         print("🔔 HapticFeedbackService: Playing alignment feedback")
+        // Use .generic for stronger feedback (more noticeable than .alignment)
         NSHapticFeedbackManager.defaultPerformer.perform(
-            .alignment,
+            .generic,
             performanceTime: .now
         )
     }
