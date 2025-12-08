@@ -580,8 +580,6 @@ struct NodeView: View {
             .onHover { hovering in
                 isHovered = hovering
             }
-            // Make entire node area (including header) tappable
-            .contentShape(Rectangle())
             .onTapGesture {
                 // Block node selection if modal is open
                 guard !modalCoordinator.isModalPresented else { return }
