@@ -238,13 +238,13 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         }
     }
     
-    /// Per-node personality with a default of .generalist when unset or unknown
+    /// Per-node personality with a default of .balanced when unset or unknown
     var personality: Personality {
         get {
             if let raw = personalityRawValue, let value = Personality(rawValue: raw) {
                 return value
             }
-            return .generalist
+            return .balanced
         }
         set {
             personalityRawValue = newValue.rawValue

@@ -12,14 +12,16 @@ struct TeamMemberModal: View {
     @StateObject private var dataService = FirebaseDataService.shared
     
     let existingMember: TeamMember?
+    let existingPersonality: Personality?
     let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)] // Team members already in project
-    let onSave: (TeamMember) -> Void
+    let onSave: (TeamMember, Personality) -> Void
     let onRemove: (() -> Void)?
     let onDismiss: () -> Void
     
     @State private var searchQuery = ""
     @State private var selectedCategory: RoleCategory?
     @State private var selectedRole: Role?
+    @State private var selectedPersonality: Personality = .balanced
     
     @FocusState private var isSearchFocused: Bool
     
@@ -168,6 +170,36 @@ struct TeamMemberModal: View {
             
             Divider()
             
+            // Personality Selection
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Thinking Style")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.secondary)
+                
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Personality.allCases, id: \.self) { personality in
+                            PersonalityChip(
+                                personality: personality,
+                                isSelected: selectedPersonality == personality,
+                                action: { selectedPersonality = personality }
+                            )
+                        }
+                    }
+                }
+                .frame(height: 36)
+                
+                // Description of selected personality
+                Text(selectedPersonality.shortDescription)
+                    .font(.system(size: 12))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 2)
+            }
+            .padding()
+            .background(Color.secondary.opacity(0.05))
+            
+            Divider()
+            
             // Action buttons
             HStack {
                 if existingMember != nil, let onRemove = onRemove {
@@ -211,6 +243,9 @@ struct TeamMemberModal: View {
             if let member = existingMember {
                 selectedRole = roleManager.role(withId: member.roleId)
             }
+            if let personality = existingPersonality {
+                selectedPersonality = personality
+            }
             
             // Focus search on appear
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -228,8 +263,33 @@ struct TeamMemberModal: View {
             knowledgePackIds: nil
         )
         
-        onSave(member)
+        onSave(member, selectedPersonality)
         onDismiss()
+    }
+}
+
+// MARK: - Personality Chip
+
+struct PersonalityChip: View {
+    let personality: Personality
+    let isSelected: Bool
+    let action: () -> Void
+    
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10))
+                Text(personality.displayName)
+                    .font(.system(size: 12))
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.accentColor : Color.secondary.opacity(0.15))
+            .foregroundColor(isSelected ? .white : .primary)
+            .cornerRadius(16)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

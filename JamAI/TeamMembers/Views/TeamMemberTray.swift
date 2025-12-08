@@ -15,107 +15,54 @@ struct TeamMemberTray: View {
     let onPersonalityChange: (Personality) -> Void
     
     @Environment(\.colorScheme) var colorScheme
-    @State private var isPersonalityPickerPresented = false
     
     var body: some View {
-        HStack(spacing: 12) {
-            // Clickable role icon and name - launches edit modal
-            Button(action: onSettings) {
-                HStack(spacing: 8) {
-                    // Role icon
-                    if let role = role {
-                        Image(systemName: role.icon)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(trayTextColor)
-                    }
-                    
-                    // Team member role name
-                    if let role = role {
-                        Text(teamMember.displayName(with: role))
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(trayTextColor.opacity(0.95))
-                    }
+        // Entire tray is clickable to open settings
+        Button(action: onSettings) {
+            HStack(spacing: 12) {
+                // Role icon
+                if let role = role {
+                    Image(systemName: role.icon)
+                        .font(.system(size: 16, weight: .medium))
+                        .foregroundColor(trayTextColor)
                 }
-            }
-            .buttonStyle(PlainButtonStyle())
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
+                
+                // Team member role name
+                if let role = role {
+                    Text(teamMember.displayName(with: role))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(trayTextColor.opacity(0.95))
                 }
-            }
-            .help("Edit Team Member")
-            
-            Spacer()
-            
-            // Personality dropdown (custom popover for full color control)
-            Button(action: {
-                isPersonalityPickerPresented.toggle()
-            }) {
+                
+                Spacer()
+                
+                // Personality badge (non-interactive, just shows current)
                 HStack(spacing: 4) {
                     Image(systemName: "sparkles")
                     Text(personality.displayName)
                 }
                 .font(.system(size: 11))
-                .foregroundColor(trayTextColor)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(trayTextColor.opacity(0.15))
-                )
+                .foregroundColor(trayTextColor.opacity(0.8))
+                
+                // Gear icon for settings
+                Image(systemName: "gearshape.fill")
+                    .font(.system(size: 14))
+                    .foregroundColor(trayTextColor.opacity(0.8))
             }
-            .buttonStyle(PlainButtonStyle())
-            .onHover { hovering in
-                if hovering {
-                    NSCursor.pointingHand.push()
-                } else {
-                    NSCursor.pop()
-                }
-            }
-            .help("Change AI personality for this node")
-            .popover(
-                isPresented: $isPersonalityPickerPresented,
-                attachmentAnchor: .rect(.bounds),
-                arrowEdge: .bottom
-            ) {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Personality.allCases, id: \.self) { option in
-                        Button(action: {
-                            onPersonalityChange(option)
-                            isPersonalityPickerPresented = false
-                        }) {
-                            HStack {
-                                if option == personality {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .foregroundColor(trayTextColor)
-                                } else {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 11, weight: .medium))
-                                        .opacity(0)
-                                }
-                                Text(option.displayName)
-                                    .font(.system(size: 11))
-                                    .foregroundColor(trayTextColor)
-                            }
-                            .padding(.vertical, 4)
-                            .padding(.horizontal, 6)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(8)
-                .background(
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(trayBaseColor.opacity(0.95))
-                )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(trayBackground)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 10)
-        .background(trayBackground)
+        .help("Edit Team Member Settings")
     }
     
     private var trayBaseColor: Color {

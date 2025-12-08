@@ -447,9 +447,11 @@ struct NodeView: View {
                                         // Show modal - sheet detection will handle scroll
                                         modalCoordinator.showTeamMemberModal(
                                             existingMember: node.teamMember,
+                                            existingPersonality: node.personality,
                                             projectTeamMembers: projectTeamMembers,
-                                            onSave: { newMember in
+                                            onSave: { newMember, newPersonality in
                                             onTeamMemberChange(newMember)
+                                            node.personality = newPersonality
                                             
                                             // Track analytics for team member addition/change
                                             if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {
@@ -987,9 +989,11 @@ struct NodeView: View {
                             // Show modal - sheet detection will handle scroll
                             modalCoordinator.showTeamMemberModal(
                                 existingMember: nil,
+                                existingPersonality: node.personality,
                                 projectTeamMembers: projectTeamMembers,
-                                onSave: { newMember in
+                                onSave: { newMember, newPersonality in
                                     onTeamMemberChange(newMember)
+                                    node.personality = newPersonality
                                     
                                     // Track analytics for team member addition
                                     if let role = roleManager.role(withId: newMember.roleId), let userId = dataService.userAccount?.id {

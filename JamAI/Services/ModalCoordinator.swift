@@ -25,8 +25,9 @@ class ModalCoordinator: ObservableObject {
     
     func showTeamMemberModal(
         existingMember: TeamMember?,
+        existingPersonality: Personality?,
         projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)],
-        onSave: @escaping (TeamMember) -> Void,
+        onSave: @escaping (TeamMember, Personality) -> Void,
         onRemove: (() -> Void)?
     ) {
         
@@ -36,6 +37,7 @@ class ModalCoordinator: ObservableObject {
         // Create and show new modal window
         let modalWindow = TeamMemberModalWindow(
             existingMember: existingMember,
+            existingPersonality: existingPersonality,
             projectTeamMembers: projectTeamMembers,
             onSave: onSave,
             onRemove: onRemove,

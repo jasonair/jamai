@@ -1402,6 +1402,73 @@ private class NonPropagatingScrollView: NSScrollView {
     }
 }
 
+/// Custom NSTextView that shows pointer cursor when hovering over links
+@available(macOS 12.0, *)
+private class LinkAwareTextView: NSTextView {
+    private var linkTrackingArea: NSTrackingArea?
+    
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        
+        // Remove existing tracking area
+        if let existing = linkTrackingArea {
+            removeTrackingArea(existing)
+        }
+        
+        // Add new tracking area for mouse movement
+        let trackingArea = NSTrackingArea(
+            rect: bounds,
+            options: [.activeInKeyWindow, .mouseMoved, .mouseEnteredAndExited, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(trackingArea)
+        linkTrackingArea = trackingArea
+    }
+    
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        
+        // Check if we're over a link
+        if isPointOverLink(point) {
+            NSCursor.pointingHand.set()
+        } else {
+            NSCursor.iBeam.set()
+        }
+        
+        super.mouseMoved(with: event)
+    }
+    
+    override func mouseExited(with event: NSEvent) {
+        NSCursor.arrow.set()
+        super.mouseExited(with: event)
+    }
+    
+    private func isPointOverLink(_ point: NSPoint) -> Bool {
+        guard let textStorage = textStorage,
+              let layoutManager = layoutManager,
+              let textContainer = textContainer else { return false }
+        
+        // Convert point to text container coordinates
+        var textPoint = point
+        textPoint.x -= textContainerOrigin.x
+        textPoint.y -= textContainerOrigin.y
+        
+        // Get the character index at this point
+        let charIndex = layoutManager.characterIndex(
+            for: textPoint,
+            in: textContainer,
+            fractionOfDistanceBetweenInsertionPoints: nil
+        )
+        
+        guard charIndex < textStorage.length else { return false }
+        
+        // Check if there's a link attribute at this index
+        let attributes = textStorage.attributes(at: charIndex, effectiveRange: nil)
+        return attributes[.link] != nil
+    }
+}
+
 @available(macOS 12.0, *)
 private struct NSTextViewWrapper: NSViewRepresentable {
     let attributedString: NSAttributedString
@@ -1429,7 +1496,7 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         // canvas is zoomed or panned.
         scrollView.wantsLayer = true
         
-        let textView = NSTextView()
+        let textView = LinkAwareTextView()
         textView.isEditable = false
         textView.isSelectable = true
         textView.drawsBackground = false

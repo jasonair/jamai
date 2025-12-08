@@ -81,19 +81,22 @@ final class ScrollRoutingContentView: NSView {
 class TeamMemberModalWindow: NSObject, NSWindowDelegate {
     private var window: NSPanel?
     private let existingMember: TeamMember?
+    private let existingPersonality: Personality?
     private let projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)]
-    private let onSave: (TeamMember) -> Void
+    private let onSave: (TeamMember, Personality) -> Void
     private let onRemove: (() -> Void)?
     private let onDismissCallback: (() -> Void)?
     
     init(
         existingMember: TeamMember?,
+        existingPersonality: Personality?,
         projectTeamMembers: [(nodeName: String, teamMember: TeamMember, role: Role?)],
-        onSave: @escaping (TeamMember) -> Void,
+        onSave: @escaping (TeamMember, Personality) -> Void,
         onRemove: (() -> Void)?,
         onDismiss: (() -> Void)? = nil
     ) {
         self.existingMember = existingMember
+        self.existingPersonality = existingPersonality
         self.projectTeamMembers = projectTeamMembers
         self.onSave = onSave
         self.onRemove = onRemove
@@ -106,9 +109,10 @@ class TeamMemberModalWindow: NSObject, NSWindowDelegate {
         // Create the SwiftUI content view
         let contentView = TeamMemberModal(
             existingMember: existingMember,
+            existingPersonality: existingPersonality,
             projectTeamMembers: projectTeamMembers,
-            onSave: { [weak self] member in
-                self?.onSave(member)
+            onSave: { [weak self] member, personality in
+                self?.onSave(member, personality)
                 self?.close()
             },
             onRemove: onRemove != nil ? { [weak self] in
