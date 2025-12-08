@@ -1294,12 +1294,20 @@ struct NodeView: View {
                                         )
                                 }
                                 
-                                // Show text content
+                                // Show text content with clickable links
                                 if !displayText.isEmpty {
-                                    Text(displayText)
+                                    Text(displayText.withDetectedLinks())
                                         .font(.system(size: 15, weight: .light))
                                         .foregroundColor(contentPrimaryTextColor)
                                         .textSelection(.enabled)
+                                        .environment(\.openURL, OpenURLAction { url in
+                                            if ExternalLinkService.shared.isExternalURL(url) {
+                                                ExternalLinkService.shared.openWithConfirmation(url: url)
+                                            } else {
+                                                NSWorkspace.shared.open(url)
+                                            }
+                                            return .handled
+                                        })
                                 }
                                 
                                 if isLongMessage, let messageId = messageId {

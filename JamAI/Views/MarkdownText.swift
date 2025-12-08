@@ -209,7 +209,7 @@ private struct FormattedTextView: View {
         if #available(macOS 12.0, *) {
             let formatted = formatText(content)
             let nsAttributed = convertToNSAttributedString(formatted, colorScheme: colorScheme, textColorOverride: textColorOverride)
-            NSTextViewWrapper(attributedString: nsAttributed, isZooming: isZooming)
+            NSTextViewWrapper(attributedString: nsAttributed, isZooming: isZooming, textColorOverride: textColorOverride, isDarkMode: colorScheme == .dark)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         } else {
@@ -294,6 +294,16 @@ private struct FormattedTextView: View {
             let runAttrString = NSMutableAttributedString(string: runText)
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
+            
+            // Check if this run has a link (markdown links like [text](url))
+            if let link = run.link {
+                runAttrString.addAttribute(.link, value: link, range: NSRange(location: 0, length: runLength))
+                // Style the link - bold + underline, using same color as text (already set above)
+                let boldFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
+                runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
+                runAttrString.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: NSRange(location: 0, length: runLength))
+                runAttrString.addAttribute(.font, value: boldFont, range: NSRange(location: 0, length: runLength))
+            }
             
             // Add background color and padding for inline code
             if isCode {
@@ -401,6 +411,9 @@ private struct FormattedTextView: View {
             
             location += length + 1 // account for newline
         }
+        
+        // Detect and add link attributes for clickable URLs
+        ExternalLinkService.shared.addLinkAttributes(to: nsAttrString, textColor: textColor)
         
         return nsAttrString
     }
@@ -1393,6 +1406,19 @@ private class NonPropagatingScrollView: NSScrollView {
 private struct NSTextViewWrapper: NSViewRepresentable {
     let attributedString: NSAttributedString
     let isZooming: Bool
+    let textColorOverride: Color?
+    let isDarkMode: Bool
+    
+    /// Get the link color - uses textColorOverride if provided, otherwise falls back to black/white
+    private func getLinkColor() -> NSColor {
+        if let override = textColorOverride,
+           let cgColor = override.cgColor,
+           let nsColor = NSColor(cgColor: cgColor) {
+            return nsColor
+        }
+        // Fallback to high contrast based on color scheme
+        return isDarkMode ? .white : .black
+    }
     
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NonPropagatingScrollView()
@@ -1420,6 +1446,18 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         textView.allowsUndo = false
         textView.autoresizingMask = [.width]
         
+        // Enable clickable links with confirmation dialog
+        textView.isAutomaticLinkDetectionEnabled = false // We detect links ourselves
+        textView.delegate = LinkClickDelegate.shared
+        
+        // Override default blue link color - use same color as text with bold + underline
+        let linkColor = getLinkColor()
+        textView.linkTextAttributes = [
+            .foregroundColor: linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .font: NSFont.systemFont(ofSize: 15, weight: .semibold)
+        ]
+        
         scrollView.documentView = textView
         scrollView.hasVerticalScroller = false
         scrollView.hasHorizontalScroller = false
@@ -1437,6 +1475,14 @@ private struct NSTextViewWrapper: NSViewRepresentable {
             return 700
         }()
         textView.textContainer?.size = CGSize(width: width, height: CGFloat.greatestFiniteMagnitude)
+        
+        // Update link color when color scheme or text color changes
+        let linkColor = getLinkColor()
+        textView.linkTextAttributes = [
+            .foregroundColor: linkColor,
+            .underlineStyle: NSUnderlineStyle.single.rawValue,
+            .font: NSFont.systemFont(ofSize: 15, weight: .semibold)
+        ]
         
         if textView.attributedString() != attributedString {
             textView.textStorage?.setAttributedString(attributedString)
