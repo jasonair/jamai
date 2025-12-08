@@ -52,7 +52,7 @@ class SnapGuideService {
         draggedNodeSize: CGSize,
         allNodes: [UUID: Node],
         selectedNodeIds: Set<UUID>,
-        threshold: CGFloat = Config.snapThreshold
+        threshold: CGFloat = 10.0  // Default matches Config.snapThreshold
     ) -> SnapResult {
         var guides: [SnapGuide] = []
         var snappedX = proposedPosition.x
@@ -210,7 +210,7 @@ class SnapGuideService {
         primaryNodeSize: CGSize,
         allNodes: [UUID: Node],
         selectedNodeIds: Set<UUID>,
-        threshold: CGFloat = Config.snapThreshold
+        threshold: CGFloat = 10.0  // Default matches Config.snapThreshold
     ) -> SnapResult {
         // Use the same logic but exclude all selected nodes from snap targets
         return calculateSnap(

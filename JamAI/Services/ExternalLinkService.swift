@@ -66,8 +66,6 @@ final class ExternalLinkService {
     
     /// Show confirmation dialog and open URL if user confirms
     func openWithConfirmation(url: URL, from sourceView: NSView? = nil) {
-        // Extract domain for display
-        let domain = url.host ?? url.absoluteString
         let displayURL = url.absoluteString
         
         // Create confirmation alert

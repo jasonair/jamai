@@ -658,6 +658,41 @@ class CanvasViewModel: ObservableObject {
             _ = self.createNodeImmediate(at: position, parentId: parentId, inheritContext: inheritContext)
         }
     }
+    
+    /// Creates a new node at the specified position and navigates to center it in viewport
+    /// Used by right-click context menu to create node at cursor then focus on it
+    func createNodeAndNavigate(at position: CGPoint, viewportSize: CGSize) {
+        Task(priority: .userInitiated) { @MainActor in
+            let nodeId = self.createNodeImmediate(at: position)
+            // Navigate to center the new node in viewport
+            self.navigateToNode(nodeId, viewportSize: viewportSize)
+        }
+    }
+    
+    /// Creates a new node centered in the viewport and navigates to it
+    /// Used by the toolbar + button to create a node in the visible center
+    func createNodeCenteredInViewport(viewportSize: CGSize, leftObstruction: CGFloat = 0) {
+        Task(priority: .userInitiated) { @MainActor in
+            // Calculate visible center accounting for left panel obstruction
+            let visibleWidth = viewportSize.width - leftObstruction
+            let screenCenterX = leftObstruction + (visibleWidth / 2)
+            let screenCenterY = viewportSize.height / 2
+            
+            // Convert to canvas coordinates
+            let canvasCenterX = (screenCenterX - self.offset.width) / self.zoom
+            let canvasCenterY = (screenCenterY - self.offset.height) / self.zoom
+            
+            // Adjust for node size so the node CENTER lands at the visible center
+            let nodeTopLeftX = canvasCenterX - Node.nodeWidth / 2
+            let nodeTopLeftY = canvasCenterY - Node.expandedHeight / 2
+            
+            let position = CGPoint(x: nodeTopLeftX, y: nodeTopLeftY)
+            let nodeId = self.createNodeImmediate(at: position)
+            
+            // Navigate to center the new node in viewport
+            self.navigateToNode(nodeId, viewportSize: viewportSize)
+        }
+    }
 
     @discardableResult
     private func createNodeImmediate(at position: CGPoint, parentId: UUID? = nil, inheritContext: Bool = false) -> UUID {
@@ -681,7 +716,7 @@ class CanvasViewModel: ObservableObject {
                 node.setTeamMember(member)
             }
         }
-        node.personality = .skeptic
+        node.personality = .balanced
         
         // Set up ancestry, context, and inherit visual styling from parent when present
         if let parentId = parentId, let parent = self.nodes[parentId] {

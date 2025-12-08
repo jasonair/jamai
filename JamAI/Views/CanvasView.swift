@@ -40,6 +40,10 @@ struct CanvasView: View {
     @State private var multiSelectDragStartPositions: [UUID: CGPoint] = [:]
     @State private var lastDragTranslation: CGSize = .zero
     
+    // Snap haptic feedback state - track previous snap state to detect transitions
+    @State private var wasSnappedX: Bool = false
+    @State private var wasSnappedY: Bool = false
+    
     // Local zoom state for smooth gesture tracking
     @State private var isZooming: Bool = false
     @State private var gestureZoom: CGFloat = 1.0
@@ -582,9 +586,9 @@ struct CanvasView: View {
                 CanvasContextMenu(
                     onCreateChat: {
                         let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
-                        // Dismiss menu first, then create node
+                        // Dismiss menu first, then create node and navigate to it
                         contextMenuLocation = nil
-                        viewModel.createNode(at: canvasPos)
+                        viewModel.createNodeAndNavigate(at: canvasPos, viewportSize: viewportSize)
                     },
                     onCreateNote: {
                         let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
@@ -705,8 +709,9 @@ struct CanvasView: View {
                         onZoomFit: { viewModel.zoomToFit() },
                         onSearch: { viewModel.showSearchModal() },
                         onCreateChat: {
-                            let centerPos = viewportCenterInCanvas()
-                            viewModel.createNode(at: centerPos)
+                            // Outline occupies ~280pt width when visible
+                            let leftObstruction: CGFloat = showOutline ? 280 : 0
+                            viewModel.createNodeCenteredInViewport(viewportSize: viewportSize, leftObstruction: leftObstruction)
                         },
                         onCreateNote: {
                             let centerPos = viewportCenterInCanvas()
@@ -986,9 +991,27 @@ struct CanvasView: View {
                     )
                     newPosition = snapResult.snappedPosition
                     viewModel.snapGuides = snapResult.guides
+                    
+                    // Trigger haptic feedback on snap transitions (not-snapped → snapped)
+                    let newSnapX = snapResult.didSnapX
+                    let newSnapY = snapResult.didSnapY
+                    
+                    // Debug: log snap state
+                    if newSnapX || newSnapY {
+                        print("📐 Snap detected: X=\(newSnapX) Y=\(newSnapY), wasX=\(wasSnappedX) wasY=\(wasSnappedY)")
+                    }
+                    
+                    if (newSnapX && !wasSnappedX) || (newSnapY && !wasSnappedY) {
+                        print("🎯 Snap TRANSITION detected - triggering haptic")
+                        HapticFeedbackService.shared.playAlignmentFeedback()
+                    }
+                    wasSnappedX = newSnapX
+                    wasSnappedY = newSnapY
                 }
             } else {
                 viewModel.clearSnapGuides()
+                wasSnappedX = false
+                wasSnappedY = false
             }
             
             if isMultiDrag {
@@ -1022,6 +1045,8 @@ struct CanvasView: View {
         multiSelectDragStartPositions.removeAll()
         lastDragTranslation = .zero
         viewModel.clearSnapGuides()
+        wasSnappedX = false
+        wasSnappedY = false
     }
     
     private func handlePromptSubmit(_ prompt: String, imageData: Data?, imageMimeType: String?, webSearchEnabled: Bool, for nodeId: UUID) {
