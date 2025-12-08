@@ -130,12 +130,16 @@ struct NodeView: View {
                 // Header - fixed at top
                 headerView
                 
-                Divider()
+                // Header divider - adaptive color based on node background brightness
+                Rectangle()
+                    .fill(headerDividerColor)
+                    .frame(height: 1)
                 
                 // Content with fixed input at bottom
                 ZStack {
                 VStack(spacing: 0) {
-                    if isSelected || showExpandedContent {
+                    // Notes always show content; other nodes require selection
+                    if node.type == .note || isSelected || showExpandedContent {
                         // Content area - different layout for notes vs standard nodes
                         // Use flexible frame to account for team member tray height
                         Group {
@@ -244,25 +248,14 @@ struct NodeView: View {
                             } else {
                                 // When chat is hidden, show note content
                                 // Single TextEditor handles both reading and editing
+                                // Notes are always visible - no animation needed
                                 noteDescriptionView
                                     .padding(Node.padding)
-                                    .opacity(isContentVisible ? 1 : 0)
                                     .onAppear {
-                                        // No scrolling needed for notes, but still sequence animations
+                                        // Notes are always visible - set states immediately
                                         isScrollReady = true
-                                        isCoverFadingOut = false
-                                        isContentVisible = false
-                                        
-                                        // Fade out cover first, then fade in note content
-                                        withAnimation(.easeOut(duration: 0.2)) {
-                                            isCoverFadingOut = true
-                                        }
-                                        
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-                                            withAnimation(.easeIn(duration: 0.2)) {
-                                                isContentVisible = true
-                                            }
-                                        }
+                                        isCoverFadingOut = true
+                                        isContentVisible = true
                                     }
                             }
                         } else {
@@ -390,7 +383,8 @@ struct NodeView: View {
                 }
                 
                 // Cover view - shown when not selected OR when selected but content not visible yet
-                if !isSelected || !isContentVisible || isClosing {
+                // Notes never show cover view - they always display content
+                if node.type != .note && (!isSelected || !isContentVisible || isClosing) {
                     ZStack {
                         // Background stays solid
                         contentBackground
@@ -433,7 +427,7 @@ struct NodeView: View {
                     }
                 }
                 }
-                .frame(height: (isResizing ? draggedHeight : node.height) - headerHeight)
+                .frame(height: (isResizing ? draggedHeight : node.height) - noteAdjustedHeaderHeight)
                 .background(contentBackground)
                 .overlay(alignment: .top) {
                     // Team Member Tray - slides down from top as overlay
@@ -860,6 +854,11 @@ struct NodeView: View {
         return 60
     }
     
+    /// Header height adjusted for notes (notes now have header too)
+    private var noteAdjustedHeaderHeight: CGFloat {
+        headerHeight
+    }
+    
     private var teamTrayPadding: CGFloat {
         // Padding at top of content to clear team member tray when present
         // Team tray is ~40px height (20px vertical padding + ~20px content)
@@ -930,44 +929,46 @@ struct NodeView: View {
                 }
             }
             
-            if isSelected || showExpandedContent {
-                // Title and icons with fade animation
-                Group {
-                    // Title
-                    if isEditingTitle {
-                        TextField("Title", text: $editedTitle, onCommit: {
-                            onTitleEdit(editedTitle)
-                            isEditingTitle = false
-                        })
-                        .textFieldStyle(PlainTextFieldStyle())
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(headerTextColor)
-                        .focused($isTitleFocused)
-                    } else {
-                        HStack(spacing: 8) {
-                            Text(node.title.isEmpty ? "Untitled" : node.title)
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                                .onTapGesture {
-                                    // Block if modal is open
-                                    if modalCoordinator.isModalPresented { return }
-                                    editedTitle = node.title
-                                    isEditingTitle = true
-                                    isTitleFocused = true
+            if isSelected || showExpandedContent || node.type == .note {
+                // Title and icons with fade animation (hide title for notes)
+                if node.type != .note {
+                    Group {
+                        // Title
+                        if isEditingTitle {
+                            TextField("Title", text: $editedTitle, onCommit: {
+                                onTitleEdit(editedTitle)
+                                isEditingTitle = false
+                            })
+                            .textFieldStyle(PlainTextFieldStyle())
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(headerTextColor)
+                            .focused($isTitleFocused)
+                        } else {
+                            HStack(spacing: 8) {
+                                Text(node.title.isEmpty ? "Untitled" : node.title)
+                                    .font(.system(size: 15, weight: .semibold))
+                                    .foregroundColor(node.title.isEmpty ? headerTextColor.opacity(0.6) : headerTextColor)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                    .onTapGesture {
+                                        // Block if modal is open
+                                        if modalCoordinator.isModalPresented { return }
+                                        editedTitle = node.title
+                                        isEditingTitle = true
+                                        isTitleFocused = true
+                                    }
+                                
+                                if isGenerating {
+                                    ProgressView()
+                                        .scaleEffect(0.6)
+                                        .frame(width: 16, height: 16)
                                 }
-                            
-                            if isGenerating {
-                                ProgressView()
-                                    .scaleEffect(0.6)
-                                    .frame(width: 16, height: 16)
                             }
                         }
                     }
+                    .opacity(isContentVisible ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.2), value: isContentVisible)
                 }
-                .opacity(isContentVisible ? 1 : 0)
-                .animation(.easeInOut(duration: 0.2), value: isContentVisible)
                 
                 Spacer()
                 
@@ -1017,25 +1018,7 @@ struct NodeView: View {
                         .help("Add Team Member")
                     }
                     
-                    // JAM button (for notes only)
-                    if node.type == .note {
-                        Button(action: {
-                            showChatSection.toggle()
-                            if showChatSection {
-                                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                    isPromptFocused = true
-                                }
-                            }
-                        }) {
-                            Image(systemName: "bubble.left.fill")
-                                .foregroundColor(headerTextColor)
-                                .font(.system(size: 16))
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .help(showChatSection ? "Hide chat" : "Jam with this note")
-                    }
-                    
-                    // Node menu dropdown (only when selected)
+                    // Node menu dropdown
                     Menu {
                         Button(action: onCreateChild) {
                             Label("Fork", systemImage: "arrow.branch")
@@ -1081,7 +1064,8 @@ struct NodeView: View {
                     .buttonStyle(PlainButtonStyle())
                     .help(node.width >= (node.type == .note ? Node.maxNoteWidth : Node.maxWidth) && node.height >= Node.maxHeight ? "Minimize" : "Maximize")
                 }
-                .opacity(isContentVisible ? 1 : 0)
+                // Notes always show buttons; other nodes fade in with content
+                .opacity(node.type == .note ? 1 : (isContentVisible ? 1 : 0))
                 .animation(.easeInOut(duration: 0.2), value: isContentVisible)
             } else {
                 Spacer()
@@ -1100,26 +1084,43 @@ struct NodeView: View {
     }
     
     private var noteDescriptionView: some View {
-        // Simple TextEditor that handles both reading and editing
+        // Notes: Always use TextEditor for consistent layout (no text jumping)
+        // When not selected, overlay a transparent hit-test blocker to allow dragging
         ZStack(alignment: .topLeading) {
             // Placeholder when empty
-            if editedDescription.isEmpty {
+            if (isSelected ? editedDescription : node.description).isEmpty {
                 Text("Click to start typing...")
                     .font(.system(size: 15, weight: .light))
                     .foregroundColor(contentSecondaryTextColor.opacity(0.5))
-                    .padding(.top, 0)
+                    .padding(.top, 8)
                     .padding(.leading, 5)
                     .allowsHitTesting(false)
             }
             
-            // TextEditor - always present, scrolls naturally
-            // Uses local state to avoid update loops
-            TextEditor(text: $editedDescription)
+            // Always use TextEditor for consistent text rendering
+            TextEditor(text: isSelected ? $editedDescription : .constant(node.description))
                 .font(.system(size: 15, weight: .light))
                 .foregroundColor(contentSecondaryTextColor)
                 .scrollContentBackground(.hidden)
                 .background(Color.clear)
                 .focused($isDescFocused)
+                .disabled(!isSelected)  // Disable editing when not selected
+                .onKeyPress("a", phases: .down) { keyPress in
+                    // Enable Command+A to select all text within the note editor
+                    if keyPress.modifiers.contains(.command) && isSelected {
+                        NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+                        return .handled
+                    }
+                    return .ignored
+                }
+            
+            // When not selected, overlay transparent view to block TextEditor interaction
+            // This allows the drag gesture to work for repositioning
+            if !isSelected {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .allowsHitTesting(true)  // Capture clicks/drags when not selected
+            }
         }
         .onAppear {
             // Sync local state with node on appear
@@ -1127,9 +1128,29 @@ struct NodeView: View {
                 editedDescription = node.description
             }
         }
+        .onChange(of: node.description) { _, newValue in
+            // Sync when node description changes externally
+            if editedDescription != newValue {
+                editedDescription = newValue
+            }
+        }
+        .onChange(of: isSelected) { _, nowSelected in
+            if nowSelected {
+                // Entering selected state - sync local state
+                if editedDescription != node.description {
+                    editedDescription = node.description
+                }
+            } else {
+                // Leaving selected state - save and clear focus
+                if editedDescription != node.description {
+                    onDescriptionEdit(editedDescription)
+                }
+                isDescFocused = false
+            }
+        }
         .onChange(of: editedDescription) { _, newValue in
-            // Auto-save on type for FigJam/Miro-style notes
-            if newValue != node.description {
+            // Auto-save on type for FigJam/Miro-style notes (only when selected)
+            if isSelected && newValue != node.description {
                 onDescriptionEdit(newValue)
             }
         }
@@ -1734,6 +1755,19 @@ struct NodeView: View {
             return nodeColor.textColor(for: nodeColor.color)
         } else {
             return .primary
+        }
+    }
+    
+    /// Divider color for header - black for light node colors, white for dark node colors
+    private var headerDividerColor: Color {
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            // Use the text color logic - if text is dark, divider should be dark; if text is light, divider should be light
+            let textColor = nodeColor.textColor(for: nodeColor.color)
+            // textColor is either black or white based on background brightness
+            return textColor.opacity(0.3)
+        } else {
+            // Default node - use system divider color
+            return Color.primary.opacity(0.2)
         }
     }
     

@@ -525,7 +525,8 @@ struct CanvasView: View {
             // Use compositingGroup + drawingGroup for GPU acceleration without clipping
             EdgeLayer(
                 edges: visibleEdges,
-                frames: nodeFrames
+                frames: nodeFrames,
+                nodes: viewModel.nodes
             )
             .id(viewModel.positionsVersion)  // Force redraw when positions/edges update
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

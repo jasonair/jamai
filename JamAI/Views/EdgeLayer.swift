@@ -10,6 +10,7 @@ import SwiftUI
 struct EdgeLayer: View {
     let edges: [Edge]
     let frames: [UUID: CGRect]
+    let nodes: [UUID: Node]  // Node lookup for determining edge style
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -23,14 +24,29 @@ struct EdgeLayer: View {
                        let tFrame = frames[edge.targetId] {
                         let (start, end, isHorizontal) = bestPorts(from: sFrame, to: tFrame)
                         
-                        // All edges are dashed with animation (RAG context flow)
-                        AnimatedDashedEdgeView(
-                            from: start,
-                            to: end,
-                            horizontalPreferred: isHorizontal,
-                            strokeColor: strokeColor(for: edge),
-                            dashPhase: CGFloat(phase)
-                        )
+                        // Check if either connected node is a note - use solid wire for notes
+                        let sourceIsNote = nodes[edge.sourceId]?.type == .note
+                        let targetIsNote = nodes[edge.targetId]?.type == .note
+                        let useSolidWire = sourceIsNote || targetIsNote
+                        
+                        if useSolidWire {
+                            // Solid wire for note connections
+                            SolidEdgeView(
+                                from: start,
+                                to: end,
+                                horizontalPreferred: isHorizontal,
+                                strokeColor: strokeColor(for: edge)
+                            )
+                        } else {
+                            // Animated dashed wire for standard node connections (RAG context flow)
+                            AnimatedDashedEdgeView(
+                                from: start,
+                                to: end,
+                                horizontalPreferred: isHorizontal,
+                                strokeColor: strokeColor(for: edge),
+                                dashPhase: CGFloat(phase)
+                            )
+                        }
                     }
                 }
             }
@@ -86,6 +102,52 @@ struct EdgeLayer: View {
                 let end = CGPoint(x: tc.x, y: t.maxY + connectionPointOffset)
                 return (start, end, false)
             }
+        }
+    }
+}
+
+// MARK: - Solid Edge View (for note connections)
+
+struct SolidEdgeView: View {
+    let from: CGPoint
+    let to: CGPoint
+    let horizontalPreferred: Bool
+    let strokeColor: Color
+    
+    private let circleRadius: CGFloat = 8.0  // Match connection point radius
+    
+    var body: some View {
+        ZStack {
+            // Solid bezier curve (no animation, no dashes)
+            EdgeShape(from: from, to: to, horizontalPreferred: horizontalPreferred)
+                .stroke(
+                    strokeColor,
+                    style: StrokeStyle(
+                        lineWidth: 2.0,
+                        lineCap: .round,
+                        lineJoin: .round
+                    )
+                )
+            
+            // Full circle at source (start) point
+            Circle()
+                .fill(Color.white)
+                .frame(width: circleRadius * 2, height: circleRadius * 2)
+                .overlay(
+                    Circle()
+                        .stroke(strokeColor, lineWidth: 1.5)
+                )
+                .position(from)
+            
+            // Full circle at target (end) point
+            Circle()
+                .fill(Color.white)
+                .frame(width: circleRadius * 2, height: circleRadius * 2)
+                .overlay(
+                    Circle()
+                        .stroke(strokeColor, lineWidth: 1.5)
+                )
+                .position(to)
         }
     }
 }
