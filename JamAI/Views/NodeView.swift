@@ -94,6 +94,8 @@ struct NodeView: View {
     @State private var showJamSquadProposal = false
     @State private var orchestratorSession: OrchestratorSession?
     @State private var currentScrollProxy: ScrollViewProxy?
+    @State private var currentResponseIndex: Int = -1  // -1 = not set, tracks current response for navigation
+    @State private var isNavHovered: Bool = false
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -145,13 +147,8 @@ struct NodeView: View {
                                     ZStack(alignment: .bottom) {
                                         ScrollView {
                                             VStack(alignment: .leading, spacing: 12) {
-                                                // Top anchor for scrolling to start
-                                                Color.clear
-                                                    .frame(height: 1)
-                                                    .id("scroll-top-anchor")
-                                                
-                                                // Top padding to clear header and team member tray
-                                                Color.clear.frame(height: teamTrayPadding)
+                                                // Top anchor for scrolling - use id on first real content
+                                                EmptyView().id("scroll-top-anchor")
                                                 
                                                 // Show description as first message if it exists (legacy data)
                                                 if !node.description.isEmpty {
@@ -176,13 +173,10 @@ struct NodeView: View {
                                             .padding(Node.padding)
                                         }
                                         .disabled(!isSelected)
-                                        
-                                        // Scroll navigation buttons (only show when selected and content visible)
-                                        if isSelected && isContentVisible && node.conversation.count > 2 {
-                                            scrollNavigationButtons(proxy: proxy)
-                                                .padding(.trailing, 20)
-                                                .padding(.bottom, 20)
-                                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                                        // Use safeAreaInset to properly inset content below team bar
+                                        // This makes .top anchor work correctly for scroll navigation
+                                        .safeAreaInset(edge: .top, spacing: 0) {
+                                            Color.clear.frame(height: teamTrayPadding)
                                         }
                                     }
                                     .opacity(isContentVisible ? 1 : 0)
@@ -225,12 +219,12 @@ struct NodeView: View {
                                                 }
                                             }
                                         } else if !newValue && oldValue {
-                                            // Generation finished: scroll to show user's prompt at top with response below
-                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                                withAnimation {
-                                                    // Find the last user message to show at top
-                                                    if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                        proxy.scrollTo(lastUserId, anchor: .top)
+                                            // Generation finished: scroll to show response at top (shows "Jam" label)
+                                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                                withAnimation(.easeInOut(duration: 0.3)) {
+                                                    // Find the last assistant message to show at top
+                                                    if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                        proxy.scrollTo(lastAssistantId, anchor: .top)
                                                     }
                                                 }
                                             }
@@ -277,13 +271,8 @@ struct NodeView: View {
                                 ZStack(alignment: .bottom) {
                                     ScrollView {
                                         VStack(alignment: .leading, spacing: 12) {
-                                            // Top anchor for scrolling to start
-                                            Color.clear
-                                                .frame(height: 1)
-                                                .id("scroll-top-anchor")
-                                            
-                                            // Top padding to clear header and team member tray
-                                            Color.clear.frame(height: teamTrayPadding)
+                                            // Top anchor for scrolling - use EmptyView which takes no space
+                                            EmptyView().id("scroll-top-anchor")
                                             
                                             // Show description as first message if it exists (legacy data)
                                             if !node.description.isEmpty {
@@ -308,13 +297,10 @@ struct NodeView: View {
                                         .padding(Node.padding)
                                     }
                                     .disabled(!isSelected)
-                                    
-                                    // Scroll navigation buttons (only show when selected and content visible)
-                                    if isSelected && isContentVisible && node.conversation.count > 2 {
-                                        scrollNavigationButtons(proxy: proxy)
-                                            .padding(.trailing, 20)
-                                            .padding(.bottom, 20)
-                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+                                    // Use safeAreaInset to properly inset content below team bar
+                                    // This makes .top anchor work correctly for scroll navigation
+                                    .safeAreaInset(edge: .top, spacing: 0) {
+                                        Color.clear.frame(height: teamTrayPadding)
                                     }
                                 }
                                 .opacity(isContentVisible ? 1 : 0)
@@ -364,12 +350,13 @@ struct NodeView: View {
                                             }
                                         }
                                     } else if !newValue && oldValue {
-                                        // Generation finished: scroll to show user's prompt at top with response below
-                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                            withAnimation {
-                                                // Find the last user message to show at top
-                                                if let lastUserId = node.conversation.last(where: { $0.role == .user })?.id {
-                                                    proxy.scrollTo(lastUserId, anchor: .top)
+                                        // Generation finished: scroll to show user's prompt at top (like navigation)
+                                        // Use same anchor as navigation for consistent 15px gap below team bar
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                                            withAnimation(.easeInOut(duration: 0.3)) {
+                                                // Find the last assistant message to show at top (shows "Jam" label)
+                                                if let lastAssistantId = node.conversation.last(where: { $0.role == .assistant })?.id {
+                                                    proxy.scrollTo(lastAssistantId, anchor: .top)
                                                 }
                                             }
                                         }
@@ -877,9 +864,11 @@ struct NodeView: View {
     
     private var teamTrayPadding: CGFloat {
         // Padding at top of content to clear team member tray when present
-        // Team tray is ~44px height + divider
+        // Team tray is ~40px height (20px vertical padding + ~20px content)
+        // When scrolling to messages with anchor: .top, they align to top of visible area
+        // So this value = tray height + desired gap = 40 + 15 = 55px
         if shouldShowTeamMemberTray && node.teamMember != nil {
-            return 35
+            return 55 // 40px tray + 15px gap
         }
         return 0
     }
@@ -1590,6 +1579,12 @@ struct NodeView: View {
                 }
                 .background(Color.secondary.opacity(0.1))
                 .cornerRadius(8)
+                .overlay(
+                    // Add subtle border for visibility in dark mode
+                    // Use white border for dark node colors, black border for light node colors
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(inputBorderColor, lineWidth: 1)
+                )
                 .padding(.horizontal, 4)
                 .padding(.top, 4)
                 .padding(.bottom, 36) // Extra space between text and buttons
@@ -1663,8 +1658,13 @@ struct NodeView: View {
                     
                     Spacer()
                     
-                    // Right side buttons (mic + send)
+                    // Right side buttons (navigation + mic + send)
                     HStack(spacing: 8) {
+                        // Navigation buttons (only show when there are messages to navigate)
+                        if node.conversation.count > 2, let proxy = currentScrollProxy {
+                            inlineNavigationButtons(proxy: proxy)
+                        }
+                        
                         // Voice input button
                         Button(action: toggleVoiceRecording) {
                             Image(systemName: recordingService.isRecording ? "mic.fill" : "mic")
@@ -1675,13 +1675,19 @@ struct NodeView: View {
                         .help(recordingService.isRecording ? "Recording..." : "Voice input")
                         .disabled(isGenerating)
                         
-                        // Send button
+                        // Send button - uses team bar color if available
                         Button(action: {
                             submitPrompt()
                         }) {
-                            Image(systemName: "arrow.up.circle.fill")
-                                .font(.system(size: 22))
-                                .foregroundColor((promptText.isEmpty && selectedImage == nil) ? contentSecondaryTextColor : headerTextColor)
+                            Text("Send")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor((promptText.isEmpty && selectedImage == nil) ? contentSecondaryTextColor : navForegroundColor)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .fill((promptText.isEmpty && selectedImage == nil) ? Color.clear : navBackgroundColor)
+                                )
                         }
                         .buttonStyle(PlainButtonStyle())
                         .disabled(promptText.isEmpty && selectedImage == nil)
@@ -1792,9 +1798,30 @@ struct NodeView: View {
             : Color.black.opacity(0.15)
     }
     
+    /// Whether to use black for UI elements (resize grip, etc.) in dark mode with light node colors
+    private var shouldUseBlackForDarkModeContrast: Bool {
+        guard colorScheme == .dark else { return false }
+        // Check if node has a light color that needs black contrast
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            // Light colors have high luminance - use black for contrast
+            return nodeColor.isLightColor
+        }
+        return false
+    }
+    
+    /// Border color for input field - adapts to node color in dark mode
+    private var inputBorderColor: Color {
+        guard colorScheme == .dark else { return Color.clear }
+        // In dark mode: use white for dark nodes, black for light nodes
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            return nodeColor.isLightColor ? Color.black.opacity(0.3) : Color.white.opacity(0.3)
+        }
+        return Color.white.opacity(0.3) // Default dark mode (no color) uses white border
+    }
+    
     private var resizeGripOverlay: some View {
         // macOS-style resize grip - absolutely positioned in bottom right corner
-        ResizeGripView()
+        ResizeGripView(forceBlack: shouldUseBlackForDarkModeContrast)
             .frame(width: 16, height: 16)
             .padding(.trailing, 8)
             .padding(.bottom, 8)
@@ -1842,42 +1869,161 @@ struct NodeView: View {
     
     // MARK: - Actions
     
-    /// Scroll navigation buttons for jumping to top/bottom of conversation
-    private func scrollNavigationButtons(proxy: ScrollViewProxy) -> some View {
-        HStack(spacing: 12) {
-            // Scroll to top button
+    /// Get all user message IDs in order for prompt navigation
+    private var userMessageIds: [UUID] {
+        node.conversation.filter { $0.role == .user }.map { $0.id }
+    }
+    
+    /// Navigation background color - uses team bar color if available, otherwise accent color
+    private var navBackgroundColor: Color {
+        if let teamMember = node.teamMember,
+           let role = roleManager.role(withId: teamMember.roleId),
+           let nodeColor = NodeColor.color(for: role.color) {
+            return nodeColor.color
+        }
+        return Color.accentColor
+    }
+    
+    /// Navigation text/icon color - uses team bar text color if available
+    private var navForegroundColor: Color {
+        if let teamMember = node.teamMember,
+           let role = roleManager.role(withId: teamMember.roleId),
+           let nodeColor = NodeColor.color(for: role.color) {
+            return nodeColor.textColor(for: nodeColor.color)
+        }
+        return .white
+    }
+    
+    /// Inline navigation buttons for the input area
+    /// Compact design to fit alongside mic and send buttons
+    /// Single click: Jump to previous/next user prompt
+    /// Double click: Jump to start/end of conversation
+    private func inlineNavigationButtons(proxy: ScrollViewProxy) -> some View {
+        let promptIds = userMessageIds
+        
+        // Calculate background color based on team member
+        let bgColor: Color = {
+            if let teamMember = node.teamMember,
+               let role = roleManager.role(withId: teamMember.roleId),
+               let nodeColor = NodeColor.color(for: role.color) {
+                return nodeColor.color
+            }
+            return Color.accentColor
+        }()
+        
+        let fgColor: Color = {
+            if let teamMember = node.teamMember,
+               let role = roleManager.role(withId: teamMember.roleId),
+               let nodeColor = NodeColor.color(for: role.color) {
+                return nodeColor.textColor(for: nodeColor.color)
+            }
+            return .white
+        }()
+        
+        // Use fixed height to match Send button exactly
+        // Send button: font 13 + padding 6*2 ≈ 27px total height
+        return HStack(spacing: 16) {
+            // Up button - larger hit area
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo("scroll-top-anchor", anchor: .top)
-                }
+                navigateUp(proxy: proxy, promptIds: promptIds)
             }) {
-                Image(systemName: "chevron.up.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(contentSecondaryTextColor.opacity(0.6))
+                Image(systemName: "chevron.up")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(fgColor)
+                    .frame(width: 24, height: 16) // Wide hit area, match text height
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Scroll to top")
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("scroll-top-anchor", anchor: .top)
+                    }
+                    currentResponseIndex = 0
+                }
+            )
+            .help("Previous prompt (double-click for top)")
             
-            // Scroll to bottom button
+            // Down button - larger hit area
             Button(action: {
-                withAnimation(.easeInOut(duration: 0.3)) {
-                    proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
-                }
+                navigateDown(proxy: proxy, promptIds: promptIds)
             }) {
-                Image(systemName: "chevron.down.circle.fill")
-                    .font(.system(size: 22))
-                    .foregroundColor(contentSecondaryTextColor.opacity(0.6))
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(fgColor)
+                    .frame(width: 24, height: 16) // Wide hit area, match text height
+                    .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
-            .help("Scroll to bottom")
+            .simultaneousGesture(
+                TapGesture(count: 2).onEnded {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+                    }
+                    currentResponseIndex = promptIds.count - 1
+                }
+            )
+            .help("Next prompt (double-click for bottom)")
         }
         .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.vertical, 6) // Match Send button padding
         .background(
             Capsule()
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.8))
-                .shadow(color: .black.opacity(0.1), radius: 2, x: 0, y: 1)
+                .fill(bgColor)
         )
+        .onHover { hovering in
+            if hovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+    
+    /// Navigate to previous prompt
+    private func navigateUp(proxy: ScrollViewProxy, promptIds: [UUID]) {
+        guard !promptIds.isEmpty else {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo("scroll-top-anchor", anchor: .top)
+            }
+            return
+        }
+        
+        // If not tracking, start from the last prompt
+        if currentResponseIndex < 0 {
+            currentResponseIndex = promptIds.count - 1
+        }
+        
+        // Navigate to previous prompt
+        let newIndex = max(0, currentResponseIndex - 1)
+        currentResponseIndex = newIndex
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            proxy.scrollTo(promptIds[newIndex], anchor: .top)
+        }
+    }
+    
+    /// Navigate to next prompt
+    private func navigateDown(proxy: ScrollViewProxy, promptIds: [UUID]) {
+        guard !promptIds.isEmpty else {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+            }
+            return
+        }
+        
+        // If not tracking, start from the first prompt
+        if currentResponseIndex < 0 {
+            currentResponseIndex = 0
+        }
+        
+        // Navigate to next prompt
+        let newIndex = min(promptIds.count - 1, currentResponseIndex + 1)
+        currentResponseIndex = newIndex
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
+            proxy.scrollTo(promptIds[newIndex], anchor: .top)
+        }
     }
     
     private func scrollToBottomThenShow(proxy: ScrollViewProxy) {

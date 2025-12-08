@@ -10,6 +10,9 @@ import SwiftUI
 struct ResizeGripView: View {
     @Environment(\.colorScheme) var colorScheme
     
+    /// Whether to force black color (for light backgrounds in dark mode)
+    var forceBlack: Bool = false
+    
     var body: some View {
         Canvas { context, size in
             let lineWidth: CGFloat = 1.5
@@ -17,9 +20,15 @@ struct ResizeGripView: View {
             let lineLength: CGFloat = 12
             
             // Color based on appearance
-            let color = colorScheme == .dark 
-                ? Color.white.opacity(0.4)
-                : Color.black.opacity(0.3)
+            // In dark mode with light node colors, use black for visibility
+            let color: Color
+            if forceBlack {
+                color = Color.black.opacity(0.4)
+            } else {
+                color = colorScheme == .dark 
+                    ? Color.white.opacity(0.4)
+                    : Color.black.opacity(0.3)
+            }
             
             // Draw three diagonal lines (bottom-left to top-right)
             for i in 0..<3 {

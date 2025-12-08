@@ -57,6 +57,8 @@ struct NodeItemWrapper: View {
     let hasBottomConnection: Bool
     let hasLeftConnection: Bool
     
+    @Environment(\.colorScheme) var colorScheme
+    
     @State private var isResizingActive: Bool = false
     @State private var resizeCompensation: CGSize = .zero
     @State private var isTitleResizing: Bool = false
@@ -217,9 +219,18 @@ struct NodeItemWrapper: View {
         return node.width
     }
 
+    /// Whether to use black for UI elements in dark mode with light node colors
+    private var shouldUseBlackForDarkModeContrast: Bool {
+        guard colorScheme == .dark else { return false }
+        if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
+            return nodeColor.isLightColor
+        }
+        return false
+    }
+    
     // Corner resize grip specifically for title nodes
     private var titleResizeGripOverlay: some View {
-        ResizeGripView()
+        ResizeGripView(forceBlack: shouldUseBlackForDarkModeContrast)
             .frame(width: 16, height: 16)
             .padding(.trailing, 8)
             .padding(.bottom, 8)

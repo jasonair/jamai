@@ -27,6 +27,11 @@ struct NodeColor: Identifiable, Equatable {
         return luminance > 0.5 ? .black : .white
     }
     
+    /// Whether this is a light color (high luminance) that needs dark UI elements for contrast
+    var isLightColor: Bool {
+        return color.luminance > 0.5
+    }
+    
     // Static color palette matching FigJam style
     static let palette: [[NodeColor]] = [
         // Row 1: Vibrant colors
