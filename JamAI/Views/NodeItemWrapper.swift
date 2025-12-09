@@ -11,6 +11,7 @@ struct NodeItemWrapper: View {
     @Binding var node: Node
     let isSelected: Bool
     let isMultiSelected: Bool  // Part of multi-select group (shift-click selection)
+    let isRecentlyOpened: Bool  // Node was recently opened (within last 3) - keeps content expanded
     let isGenerating: Bool
     let hasError: Bool
     let hasUnreadResponse: Bool
@@ -111,6 +112,7 @@ struct NodeItemWrapper: View {
                 NodeView(
                     node: $node,
                     isSelected: isSelected,
+                    isRecentlyOpened: isRecentlyOpened,
                     isGenerating: isGenerating,
                     hasError: hasError,
                     hasUnreadResponse: hasUnreadResponse,

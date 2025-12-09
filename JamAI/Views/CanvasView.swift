@@ -822,11 +822,13 @@ struct CanvasView: View {
     private func nodeItemView(_ node: Node) -> some View {
         let isSelected = viewModel.selectedNodeId == node.id
         let isMultiSelected = viewModel.selectedNodeIds.contains(node.id)
+        let isRecentlyOpened = viewModel.recentlyOpenedNodeIds.contains(node.id)
 
         NodeItemWrapper(
             node: binding(for: node.id),
             isSelected: isSelected,
             isMultiSelected: isMultiSelected,
+            isRecentlyOpened: isRecentlyOpened,
             isGenerating: viewModel.generatingNodeId == node.id || viewModel.orchestratingNodeIds.contains(node.id),
             hasError: viewModel.errorNodeId == node.id,
             hasUnreadResponse: viewModel.nodesWithUnreadResponse.contains(node.id),

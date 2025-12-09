@@ -23,6 +23,7 @@ class CanvasViewModel: ObservableObject {
             // Clear unread indicator when node is selected
             if let nodeId = selectedNodeId {
                 nodesWithUnreadResponse.remove(nodeId)
+                trackOpenedNode(nodeId)
             }
         }
     }
@@ -66,6 +67,12 @@ class CanvasViewModel: ObservableObject {
     // Multi-select state
     @Published var selectedNodeIds: Set<UUID> = []  // Multiple selected nodes (shift-click)
     @Published var isShiftPressed: Bool = false  // Track shift key state
+    
+    // Recently opened nodes tracking (for performance - limit to 2 open nodes)
+    // Nodes in this set will show expanded content even when not selected
+    @Published var recentlyOpenedNodeIds: Set<UUID> = []
+    private var recentlyOpenedOrder: [UUID] = []  // Tracks order for FIFO eviction
+    private let maxOpenNodes = 2
     
     // Snap-to-align state
     @Published var snapGuides: [SnapGuide] = []  // Active snap guide lines to display
@@ -1564,6 +1571,9 @@ class CanvasViewModel: ObservableObject {
         // Clear saved scroll offset for deleted node
         clearScrollOffset(for: nodeId)
         
+        // Remove from recently opened tracking
+        removeFromRecentlyOpened(nodeId)
+        
         // Remove from search index
         searchIndex.removeNode(nodeId: nodeId)
         
@@ -2533,6 +2543,33 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
             try? await Task.sleep(nanoseconds: 550_000_000) // 0.55s (0.5s animation + 0.05s buffer)
             positionsVersion &+= 1
         }
+    }
+    
+    // MARK: - Open Node Management
+    
+    /// Track a node being opened and manage the queue of recently opened nodes.
+    /// When more than maxOpenNodes are opened, the oldest one is automatically closed.
+    private func trackOpenedNode(_ nodeId: UUID) {
+        // Remove if already in the order list (will be re-added at end)
+        recentlyOpenedOrder.removeAll { $0 == nodeId }
+        
+        // Add to end of order list (most recent)
+        recentlyOpenedOrder.append(nodeId)
+        
+        // Add to the published set
+        recentlyOpenedNodeIds.insert(nodeId)
+        
+        // If we exceed max, remove the oldest node from tracking
+        while recentlyOpenedOrder.count > maxOpenNodes {
+            let oldestNodeId = recentlyOpenedOrder.removeFirst()
+            recentlyOpenedNodeIds.remove(oldestNodeId)
+        }
+    }
+    
+    /// Remove a node from the recently opened tracking (called when node is deleted)
+    func removeFromRecentlyOpened(_ nodeId: UUID) {
+        recentlyOpenedOrder.removeAll { $0 == nodeId }
+        recentlyOpenedNodeIds.remove(nodeId)
     }
     
     // MARK: - Zoom Controls

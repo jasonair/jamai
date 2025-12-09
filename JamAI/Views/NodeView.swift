@@ -12,6 +12,7 @@ import AppKit
 struct NodeView: View {
     @Binding var node: Node
     let isSelected: Bool
+    let isRecentlyOpened: Bool  // Node was recently opened (within last 3) - keeps content expanded
     let isGenerating: Bool
     let hasError: Bool
     let hasUnreadResponse: Bool
@@ -146,8 +147,8 @@ struct NodeView: View {
                 // Content with fixed input at bottom
                 ZStack {
                 VStack(spacing: 0) {
-                    // Notes always show content; other nodes require selection
-                    if node.type == .note || isSelected || showExpandedContent {
+                    // Notes always show content; other nodes require selection or recent opening
+                    if node.type == .note || isSelected || showExpandedContent || isRecentlyOpened {
                         // Content area - different layout for notes vs standard nodes
                         // Use flexible frame to account for team member tray height
                         Group {
@@ -405,9 +406,9 @@ struct NodeView: View {
                     }
                 }
                 
-                // Cover view - shown when not selected OR when selected but content not visible yet
+                // Cover view - shown when not selected/recently opened OR when content not visible yet
                 // Notes never show cover view - they always display content
-                if node.type != .note && (!isSelected || !isContentVisible || isClosing) {
+                if node.type != .note && ((!isSelected && !isRecentlyOpened) || !isContentVisible || isClosing) {
                     ZStack {
                         // Background stays solid
                         contentBackground
@@ -454,7 +455,7 @@ struct NodeView: View {
                 .background(contentBackground)
                 .overlay(alignment: .top) {
                     // Team Member Tray - slides down from top as overlay
-                    if shouldShowTeamMemberTray && (isSelected || showExpandedContent) && node.teamMember != nil {
+                    if shouldShowTeamMemberTray && (isSelected || showExpandedContent || isRecentlyOpened) && node.teamMember != nil {
                         VStack(spacing: 0) {
                             if let teamMember = node.teamMember {
                                 TeamMemberTray(
@@ -689,9 +690,14 @@ struct NodeView: View {
             resizeGripOverlay
         }
         .onAppear {
-            if isSelected {
-                // Only focus prompt for non-note nodes or when chat section is visible
-                if node.type != .note || showChatSection {
+            // For nodes that should be expanded, just set showExpandedContent
+            // The ScrollView's inner onAppear will handle the animation sequence
+            if isSelected || isRecentlyOpened {
+                showExpandedContent = true
+                isClosing = false
+                
+                // Only focus prompt for selected non-note nodes or when chat section is visible
+                if isSelected && (node.type != .note || showChatSection) {
                     isPromptFocused = true
                 }
                 isEditingTitle = false
@@ -699,7 +705,8 @@ struct NodeView: View {
         }
         .onChange(of: isSelected) { oldValue, newValue in
             if newValue {
-                // Opening - set showExpandedContent immediately
+                // Opening - set showExpandedContent to trigger content area render
+                // The ScrollView's onAppear will handle the animation sequence
                 showExpandedContent = true
                 isClosing = false
                 // Only focus prompt for non-note nodes or when chat section is visible
@@ -715,13 +722,23 @@ struct NodeView: View {
                     onScrollOffsetChanged?(currentScrollOffset)
                 }
                 
-                // Closing - animate out before hiding content
-                isClosing = true
+                // Clear focus states regardless
                 isDescFocused = false
                 isPromptFocused = false
                 isTitleFocused = false
                 isEditingTitle = false
                 isEditingDescription = false
+                
+                // If node is in recently opened list, don't run closing animation
+                // Keep it visually expanded
+                if isRecentlyOpened {
+                    isClosing = false
+                    // Keep content visible - don't animate out
+                    return
+                }
+                
+                // Run closing animation only if node is not in recently opened list
+                isClosing = true
                 
                 // Step 1: Fade out content
                 withAnimation(.easeOut(duration: 0.15)) {
@@ -748,6 +765,36 @@ struct NodeView: View {
                     }
                 }
             }
+        }
+        .onChange(of: isRecentlyOpened) { oldValue, newValue in
+            // Handle when node is evicted from recently opened list
+            if oldValue && !newValue && !isSelected {
+                // Node was in list, now removed, and not selected - run closing animation
+                isClosing = true
+                
+                withAnimation(.easeOut(duration: 0.15)) {
+                    isContentVisible = false
+                }
+                
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    withAnimation(.easeIn(duration: 0.15)) {
+                        isCoverFadingOut = false
+                    }
+                    
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        withAnimation(.easeIn(duration: 0.2)) {
+                            isScrollReady = false
+                        }
+                        
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                            showExpandedContent = false
+                            isClosing = false
+                        }
+                    }
+                }
+            }
+            // Note: Adding to recently opened list only happens when selecting,
+            // so the ScrollView's onAppear will handle the opening animation
         }
         .allowsHitTesting(!modalCoordinator.isModalPresented) // Disable all interaction when modal is open
         )
@@ -960,7 +1007,7 @@ struct NodeView: View {
                 }
             }
             
-            if isSelected || showExpandedContent || node.type == .note {
+            if isSelected || showExpandedContent || isRecentlyOpened || node.type == .note {
                 // Title and icons with fade animation (hide title for notes)
                 if node.type != .note {
                     Group {
