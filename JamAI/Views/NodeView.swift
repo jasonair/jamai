@@ -42,6 +42,10 @@ struct NodeView: View {
     var onUseLocalModel: (() -> Void) = {}
     var onDismissCreditError: (() -> Void) = {}
     
+    // Scroll position memory callbacks (macOS 15+)
+    var onScrollOffsetChanged: ((CGFloat) -> Void)? = nil
+    var savedScrollOffset: CGFloat? = nil
+    
     /// Z-order check callback - returns true if this node should process the tap at the given window point
     var shouldProcessTap: ((NSPoint) -> Bool)? = nil
     
@@ -96,6 +100,10 @@ struct NodeView: View {
     @State private var currentScrollProxy: ScrollViewProxy?
     @State private var currentResponseIndex: Int = -1  // -1 = not set, tracks current response for navigation
     @State private var isNavHovered: Bool = false
+    
+    // macOS 15+ scroll position tracking
+    @State private var scrollPosition = ScrollPosition(edge: .bottom)
+    @State private var currentScrollOffset: CGFloat = 0
     
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject private var modalCoordinator: ModalCoordinator
@@ -289,6 +297,13 @@ struct NodeView: View {
                                         }
                                         .padding(Node.padding)
                                     }
+                                    .scrollPosition($scrollPosition)
+                                    // Track scroll offset for position memory (macOS 15+)
+                                    .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                                        geometry.contentOffset.y
+                                    } action: { _, newValue in
+                                        currentScrollOffset = newValue
+                                    }
                                     .disabled(!isSelected)
                                     // Use safeAreaInset to properly inset content below team bar
                                     // This makes .top anchor work correctly for scroll navigation
@@ -298,12 +313,20 @@ struct NodeView: View {
                                 }
                                 .opacity(isContentVisible ? 1 : 0)
                                 .onAppear {
-                                    // Reset states and scroll to bottom
+                                    // Reset states
                                     isScrollReady = false
                                     isCoverFadingOut = false
                                     isContentVisible = false
                                     currentScrollProxy = proxy
-                                    scrollToBottomThenShow(proxy: proxy)
+                                    
+                                    // Check if we have a saved scroll position to restore
+                                    if let savedOffset = savedScrollOffset, savedOffset > 0 {
+                                        // Restore to saved position
+                                        scrollToSavedPositionThenShow(proxy: proxy, savedOffset: savedOffset)
+                                    } else {
+                                        // No saved position - scroll to bottom (default behavior)
+                                        scrollToBottomThenShow(proxy: proxy)
+                                    }
                                 }
                                 .onChange(of: node.conversation.count) { oldCount, newCount in
                                     if newCount > oldCount {
@@ -686,6 +709,12 @@ struct NodeView: View {
                 }
                 isEditingTitle = false
             } else {
+                // Closing - save scroll position before animating out
+                // Only save if we have a meaningful offset (user has scrolled)
+                if currentScrollOffset > 0 {
+                    onScrollOffsetChanged?(currentScrollOffset)
+                }
+                
                 // Closing - animate out before hiding content
                 isClosing = true
                 isDescFocused = false
@@ -2133,6 +2162,45 @@ struct NodeView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
             // One final scroll right before showing to ensure position is correct
             proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+            
+            // Step 1: Team bar slides down
+            withAnimation(.easeOut(duration: 0.3)) {
+                isScrollReady = true
+            }
+            
+            // Step 2: Cover icon/text fades out (after team bar animation)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                withAnimation(.easeOut(duration: 0.2)) {
+                    isCoverFadingOut = true
+                }
+                
+                // Step 3: Content fades in (after cover fades out)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                    withAnimation(.easeIn(duration: 0.2)) {
+                        isContentVisible = true
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Restore scroll to a saved Y offset position (macOS 15+)
+    private func scrollToSavedPositionThenShow(proxy: ScrollViewProxy, savedOffset: CGFloat) {
+        // Use the new ScrollPosition API to restore exact Y position
+        // Give content time to lay out first
+        let scrollDelays: [Double] = [0.1, 0.25, 0.4, 0.55, 0.7]
+        
+        for delay in scrollDelays {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                // Use ScrollPosition.scrollTo(y:) for exact position restoration
+                scrollPosition.scrollTo(y: savedOffset)
+            }
+        }
+        
+        // After scrolling is complete, trigger animations in sequence
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            // One final scroll right before showing to ensure position is correct
+            scrollPosition.scrollTo(y: savedOffset)
             
             // Step 1: Team bar slides down
             withAnimation(.easeOut(duration: 0.3)) {

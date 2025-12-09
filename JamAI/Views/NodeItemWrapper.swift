@@ -43,6 +43,10 @@ struct NodeItemWrapper: View {
     let onUseLocalModel: () -> Void
     let onDismissCreditError: () -> Void
     
+    // Scroll position memory callbacks (macOS 15+)
+    var onScrollOffsetChanged: ((CGFloat) -> Void)? = nil
+    var savedScrollOffset: CGFloat? = nil
+    
     /// Z-order check callback - returns true if this node should process the tap at the given window point
     var shouldProcessTap: ((NSPoint) -> Bool)? = nil
     
@@ -141,6 +145,8 @@ struct NodeItemWrapper: View {
                     onUpgradePlan: onUpgradePlan,
                     onUseLocalModel: onUseLocalModel,
                     onDismissCreditError: onDismissCreditError,
+                    onScrollOffsetChanged: onScrollOffsetChanged,
+                    savedScrollOffset: savedScrollOffset,
                     shouldProcessTap: shouldProcessTap,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,

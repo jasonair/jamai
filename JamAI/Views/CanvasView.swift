@@ -906,6 +906,10 @@ struct CanvasView: View {
             onUpgradePlan: { handleUpgradePlan() },
             onUseLocalModel: { handleUseLocalModel() },
             onDismissCreditError: { handleDismissCreditError() },
+            onScrollOffsetChanged: { offset in
+                viewModel.saveScrollOffset(offset, for: node.id)
+            },
+            savedScrollOffset: viewModel.getSavedScrollOffset(for: node.id),
             shouldProcessTap: { windowPoint in
                 // Convert window coordinates (bottom-left origin) to screen coordinates (top-left origin)
                 // that the viewModel can use for z-order hit testing

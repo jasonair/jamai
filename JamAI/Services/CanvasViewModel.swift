@@ -87,6 +87,25 @@ class CanvasViewModel: ObservableObject {
         return vm
     }()
     
+    // Scroll position memory - stores Y offset for each node to restore reading position
+    // Not persisted to database - session-only memory
+    var nodeScrollOffsets: [UUID: CGFloat] = [:]
+    
+    /// Save scroll offset for a node (called when node is deselected)
+    func saveScrollOffset(_ offset: CGFloat, for nodeId: UUID) {
+        nodeScrollOffsets[nodeId] = offset
+    }
+    
+    /// Get saved scroll offset for a node (called when node is selected)
+    func getSavedScrollOffset(for nodeId: UUID) -> CGFloat? {
+        return nodeScrollOffsets[nodeId]
+    }
+    
+    /// Clear scroll offset for a node (called when node is deleted)
+    func clearScrollOffset(for nodeId: UUID) {
+        nodeScrollOffsets.removeValue(forKey: nodeId)
+    }
+    
     // Services
     let geminiClient: GeminiClient
     let ragService: RAGService
@@ -1541,6 +1560,9 @@ class CanvasViewModel: ObservableObject {
         }
         
         nodes.removeValue(forKey: nodeId)
+        
+        // Clear saved scroll offset for deleted node
+        clearScrollOffset(for: nodeId)
         
         // Remove from search index
         searchIndex.removeNode(nodeId: nodeId)
