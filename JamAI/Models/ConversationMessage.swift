@@ -17,6 +17,11 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
     let webSearchEnabled: Bool
     let searchResults: [SearchResult]?
     
+    // Team member info for assistant messages - stores the persona used for this response
+    let teamMemberRoleId: String?
+    let teamMemberRoleName: String?
+    let teamMemberExperienceLevel: String?
+    
     nonisolated init(
         id: UUID = UUID(), 
         role: MessageRole, 
@@ -25,7 +30,10 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
         imageData: Data? = nil,
         imageMimeType: String? = nil,
         webSearchEnabled: Bool = false,
-        searchResults: [SearchResult]? = nil
+        searchResults: [SearchResult]? = nil,
+        teamMemberRoleId: String? = nil,
+        teamMemberRoleName: String? = nil,
+        teamMemberExperienceLevel: String? = nil
     ) {
         self.id = id
         self.role = role
@@ -35,6 +43,9 @@ struct ConversationMessage: Identifiable, Codable, Equatable, Sendable {
         self.imageMimeType = imageMimeType
         self.webSearchEnabled = webSearchEnabled
         self.searchResults = searchResults
+        self.teamMemberRoleId = teamMemberRoleId
+        self.teamMemberRoleName = teamMemberRoleName
+        self.teamMemberExperienceLevel = teamMemberExperienceLevel
     }
     
     var hasImage: Bool {

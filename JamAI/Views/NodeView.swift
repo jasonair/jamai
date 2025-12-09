@@ -1276,94 +1276,108 @@ struct NodeView: View {
             return AnyView(
                 HStack {
                     Spacer(minLength: 0)
-                    ZStack(alignment: .topTrailing) {
-                        VStack(alignment: .leading, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        // "You" label row with revert button on right
+                        HStack {
                             Text("You")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(contentSecondaryTextColor)
-                                .padding(.horizontal, 8)
                             
-                            VStack(alignment: .leading, spacing: 8) {
-                                // Show image if present
-                                if let imageData = conversationMsg?.imageData,
-                                   let nsImage = NSImage(data: imageData) {
-                                    Image(nsImage: nsImage)
-                                        .resizable()
-                                        .aspectRatio(contentMode: .fit)
-                                        .frame(maxWidth: 200, maxHeight: 200)
-                                        .cornerRadius(8)
-                                        .overlay(
-                                            RoundedRectangle(cornerRadius: 8)
-                                                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
-                                        )
+                            Spacer()
+                            
+                            // Revert button - aligned right on same row as "You"
+                            if let concreteMessage = message {
+                                Button(action: {
+                                    revertConversation(to: concreteMessage, originalContent: content)
+                                }) {
+                                    Image(systemName: "arrow.counterclockwise.circle")
+                                        .font(.system(size: 14))
+                                        .foregroundColor(contentSecondaryTextColor.opacity(0.9))
                                 }
-                                
-                                // Show text content with clickable links
-                                if !displayText.isEmpty {
-                                    Text(displayText.withDetectedLinks())
-                                        .font(.system(size: 15, weight: .light))
-                                        .foregroundColor(contentPrimaryTextColor)
-                                        .textSelection(.enabled)
-                                        .environment(\.openURL, OpenURLAction { url in
-                                            if ExternalLinkService.shared.isExternalURL(url) {
-                                                ExternalLinkService.shared.openWithConfirmation(url: url)
-                                            } else {
-                                                NSWorkspace.shared.open(url)
-                                            }
-                                            return .handled
-                                        })
-                                }
-                                
-                                if isLongMessage, let messageId = messageId {
-                                    Button(action: {
-                                        if expandedUserMessageIds.contains(messageId) {
-                                            expandedUserMessageIds.remove(messageId)
-                                        } else {
-                                            expandedUserMessageIds.insert(messageId)
-                                        }
-                                    }) {
-                                        Text(isExpanded ? "Show less" : "See more")
-                                            .font(.system(size: 11, weight: .medium))
-                                            .foregroundColor(.accentColor)
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                    .padding(.top, 2)
-                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .help("Revert to this prompt")
+                                .disabled(isGenerating)
+                                .opacity(isGenerating ? 0.4 : 1.0)
                             }
-                            .padding(8)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(Color.secondary.opacity(0.1))
-                            .cornerRadius(8)
                         }
-                        .frame(maxWidth: 700, alignment: .leading)
+                        .padding(.horizontal, 8)
                         
-                        if let concreteMessage = message {
-                            Button(action: {
-                                revertConversation(to: concreteMessage, originalContent: content)
-                            }) {
-                                Image(systemName: "arrow.counterclockwise.circle")
-                                    .font(.system(size: 14))
-                                    .foregroundColor(contentSecondaryTextColor.opacity(0.9))
+                        VStack(alignment: .leading, spacing: 8) {
+                            // Show image if present
+                            if let imageData = conversationMsg?.imageData,
+                               let nsImage = NSImage(data: imageData) {
+                                Image(nsImage: nsImage)
+                                    .resizable()
+                                    .aspectRatio(contentMode: .fit)
+                                    .frame(maxWidth: 200, maxHeight: 200)
+                                    .cornerRadius(8)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+                                    )
                             }
-                            .buttonStyle(PlainButtonStyle())
-                            .padding(.top, 24)
-                            .padding(.trailing, 4)
-                            .help("Revert to this prompt")
-                            .disabled(isGenerating)
-                            .opacity(isGenerating ? 0.4 : 1.0)
+                            
+                            // Show text content with clickable links
+                            if !displayText.isEmpty {
+                                Text(displayText.withDetectedLinks())
+                                    .font(.system(size: 15, weight: .light))
+                                    .foregroundColor(contentPrimaryTextColor)
+                                    .textSelection(.enabled)
+                                    .environment(\.openURL, OpenURLAction { url in
+                                        if ExternalLinkService.shared.isExternalURL(url) {
+                                            ExternalLinkService.shared.openWithConfirmation(url: url)
+                                        } else {
+                                            NSWorkspace.shared.open(url)
+                                        }
+                                        return .handled
+                                    })
+                            }
+                            
+                            if isLongMessage, let messageId = messageId {
+                                Button(action: {
+                                    if expandedUserMessageIds.contains(messageId) {
+                                        expandedUserMessageIds.remove(messageId)
+                                    } else {
+                                        expandedUserMessageIds.insert(messageId)
+                                    }
+                                }) {
+                                    Text(isExpanded ? "Show less" : "See more")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundColor(.accentColor)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                .padding(.top, 2)
+                            }
                         }
+                        .padding(8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(userPromptBackgroundColor)
+                        .cornerRadius(8)
                     }
+                    .frame(maxWidth: 700, alignment: .leading)
                     Spacer(minLength: 0)
                 }
             )
         } else {
             // Assistant messages: title centered, content can extend full width
+            // Display team member role name with experience level if available, otherwise "Jam"
+            let assistantLabel: String
+            if let roleName = conversationMsg?.teamMemberRoleName, !roleName.isEmpty {
+                if let experienceLevel = conversationMsg?.teamMemberExperienceLevel, !experienceLevel.isEmpty {
+                    assistantLabel = "\(roleName) (\(experienceLevel))"
+                } else {
+                    assistantLabel = roleName
+                }
+            } else {
+                assistantLabel = "Jam"
+            }
+            
             return AnyView(
                 VStack(alignment: .leading, spacing: 4) {
-                    // Center the "Jam" title at text content width
+                    // Center the assistant label at text content width
                     HStack {
                         Spacer(minLength: 0)
-                        Text("Jam")
+                        Text(assistantLabel)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(contentSecondaryTextColor)
                             .frame(maxWidth: 700, alignment: .leading)
@@ -1799,6 +1813,18 @@ struct NodeView: View {
         }
     }
     
+    /// Background color for user prompt bubbles - provides contrast against card background
+    /// Uses white overlay in light mode and lighter overlay in dark mode for visibility
+    private var userPromptBackgroundColor: Color {
+        if colorScheme == .dark {
+            // Dark mode: use white overlay for contrast
+            return Color.white.opacity(0.15)
+        } else {
+            // Light mode: use darker overlay for contrast
+            return Color.black.opacity(0.06)
+        }
+    }
+    
     private var cardBackground: some View {
         if let nodeColor = NodeColor.color(for: node.color), node.color != "none" {
             // Apply tint to card body; stronger tint for notes to stand out
@@ -1964,57 +1990,78 @@ struct NodeView: View {
             return .white
         }()
         
-        // Use fixed height to match Send button exactly
-        // Send button: font 13 + padding 6*2 ≈ 27px total height
-        return HStack(spacing: 16) {
-            // Up button - larger hit area
-            Button(action: {
-                navigateUp(proxy: proxy, promptIds: promptIds)
-            }) {
-                Image(systemName: "chevron.up")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(fgColor)
-                    .frame(width: 24, height: 16) // Wide hit area, match text height
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PlainButtonStyle())
-            .simultaneousGesture(
-                TapGesture(count: 2).onEnded {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("scroll-top-anchor", anchor: .top)
-                    }
-                    currentResponseIndex = 0
-                }
-            )
-            .help("Previous prompt (double-click for top)")
-            
-            // Down button - larger hit area
-            Button(action: {
-                navigateDown(proxy: proxy, promptIds: promptIds)
-            }) {
-                Image(systemName: "chevron.down")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(fgColor)
-                    .frame(width: 24, height: 16) // Wide hit area, match text height
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(PlainButtonStyle())
-            .simultaneousGesture(
-                TapGesture(count: 2).onEnded {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
-                    }
-                    currentResponseIndex = promptIds.count - 1
-                }
-            )
-            .help("Next prompt (double-click for bottom)")
+        // Calculate current position for display
+        // currentResponseIndex is -1 when not tracking, otherwise 0-indexed
+        let totalPrompts = promptIds.count
+        let displayPosition: Int
+        if currentResponseIndex < 0 {
+            // Not tracking yet, show last position (most recent prompt)
+            displayPosition = totalPrompts
+        } else {
+            // Convert 0-indexed to 1-indexed for display
+            displayPosition = currentResponseIndex + 1
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6) // Match Send button padding
-        .background(
-            Capsule()
-                .fill(bgColor)
-        )
+        
+        // Counter text color - use secondary text color for subtlety
+        let counterColor = contentSecondaryTextColor
+        
+        // Use fixed height to match Send button exactly
+        return HStack(spacing: 6) {
+            // Position counter (e.g., "3/10") - OUTSIDE the capsule
+            if totalPrompts > 0 {
+                Text("\(displayPosition)/\(totalPrompts)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(counterColor)
+                    .monospacedDigit()
+            }
+            
+            // Navigation buttons inside capsule
+            HStack(spacing: 12) {
+                // Up button
+                Button(action: {
+                    navigateUp(proxy: proxy, promptIds: promptIds)
+                }) {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(fgColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo("scroll-top-anchor", anchor: .top)
+                        }
+                        currentResponseIndex = 0
+                    }
+                )
+                .help("Previous prompt (double-click for top)")
+                
+                // Down button
+                Button(action: {
+                    navigateDown(proxy: proxy, promptIds: promptIds)
+                }) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(fgColor)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .simultaneousGesture(
+                    TapGesture(count: 2).onEnded {
+                        withAnimation(.easeInOut(duration: 0.3)) {
+                            proxy.scrollTo("scroll-bottom-anchor", anchor: .bottom)
+                        }
+                        currentResponseIndex = promptIds.count - 1
+                    }
+                )
+                .help("Next prompt (double-click for bottom)")
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(bgColor)
+            )
+        }
         .onHover { hovering in
             if hovering {
                 NSCursor.pointingHand.push()

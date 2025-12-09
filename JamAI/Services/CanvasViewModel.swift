@@ -1192,9 +1192,20 @@ class CanvasViewModel: ObservableObject {
         
         generatingNodeId = nodeId
         
+        // Capture team member info for this response BEFORE async work
+        let teamMemberRoleId = node.teamMember?.roleId
+        let teamMemberRoleName: String?
+        if let teamMember = node.teamMember,
+           let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+            teamMemberRoleName = role.name
+        } else {
+            teamMemberRoleName = nil
+        }
+        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
+        
         // Do not store user prompt; expansions keep the conversation clean
         
-        Task {
+        Task { [teamMemberRoleId, teamMemberRoleName, teamMemberExperienceLevel] in
             do {
                 let aiContext = self.buildAIContext(for: node)
                 let contextTextsForBilling = aiContext.map { $0.content }
@@ -1252,8 +1263,14 @@ class CanvasViewModel: ObservableObject {
                             switch result {
                             case .success(let fullResponse):
                                 guard var finalNode = self?.nodes[nodeId] else { return }
-                                // Only add assistant response to conversation (not the prompt)
-                                finalNode.addMessage(role: .assistant, content: fullResponse)
+                                // Only add assistant response to conversation (not the prompt) with team member info
+                                finalNode.addMessage(
+                                    role: .assistant,
+                                    content: fullResponse,
+                                    teamMemberRoleId: teamMemberRoleId,
+                                    teamMemberRoleName: teamMemberRoleName,
+                                    teamMemberExperienceLevel: teamMemberExperienceLevel
+                                )
                                 finalNode.response = fullResponse
                                 finalNode.updatedAt = Date()
                                 self?.nodes[nodeId] = finalNode
@@ -1767,13 +1784,25 @@ class CanvasViewModel: ObservableObject {
         generatingNodeId = nodeId
         // Web search path is currently disabled; always fall through to plain AI generation.
         
+        // Capture team member info for this response BEFORE async work
+        // This preserves which persona was used even if user changes it mid-generation
+        let teamMemberRoleId = node.teamMember?.roleId
+        let teamMemberRoleName: String?
+        if let teamMember = node.teamMember,
+           let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+            teamMemberRoleName = role.name
+        } else {
+            teamMemberRoleName = nil
+        }
+        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
+        
         // Add user message to conversation without search
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
         // Also update legacy prompt field for backwards compatibility
         node.prompt = prompt
         nodes[nodeId] = node
         
-        Task { [weak self] in
+        Task { [weak self, teamMemberRoleId, teamMemberRoleName, teamMemberExperienceLevel] in
             guard let self = self else { return }
             
             do {
@@ -1833,8 +1862,14 @@ class CanvasViewModel: ObservableObject {
                             switch result {
                             case .success(let fullResponse):
                                 guard var finalNode = self?.nodes[nodeId] else { return }
-                                // Add assistant message to conversation
-                                finalNode.addMessage(role: .assistant, content: fullResponse)
+                                // Add assistant message to conversation with team member info
+                                finalNode.addMessage(
+                                    role: .assistant,
+                                    content: fullResponse,
+                                    teamMemberRoleId: teamMemberRoleId,
+                                    teamMemberRoleName: teamMemberRoleName,
+                                    teamMemberExperienceLevel: teamMemberExperienceLevel
+                                )
                                 // Also update legacy response field for backwards compatibility
                                 finalNode.response = fullResponse
                                 finalNode.updatedAt = Date()
@@ -1858,8 +1893,8 @@ class CanvasViewModel: ObservableObject {
                                         contextTexts: contextTextsForBilling,
                                         nodeId: nodeId,
                                         projectId: self?.project.id ?? UUID(),
-                                        teamMemberRoleId: finalNode.teamMember?.roleId,
-                                        teamMemberExperienceLevel: finalNode.teamMember?.experienceLevel.rawValue,
+                                        teamMemberRoleId: teamMemberRoleId,
+                                        teamMemberExperienceLevel: teamMemberExperienceLevel,
                                         generationType: "chat"
                                     )
                                 }
@@ -1917,6 +1952,17 @@ class CanvasViewModel: ObservableObject {
         searchResults: [SearchResult]?
     ) async {
         guard let node = nodes[nodeId] else { return }
+        
+        // Capture team member info for this response
+        let teamMemberRoleId = node.teamMember?.roleId
+        let teamMemberRoleName: String?
+        if let teamMember = node.teamMember,
+           let role = RoleManager.shared.roles.first(where: { $0.id == teamMember.roleId }) {
+            teamMemberRoleName = role.name
+        } else {
+            teamMemberRoleName = nil
+        }
+        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
         
         // Build enhanced prompt with search context
         var enhancedPrompt = prompt
@@ -1987,7 +2033,7 @@ class CanvasViewModel: ObservableObject {
                         self?.nodes[nodeId] = currentNode
                     }
                 },
-                onComplete: { [weak self] result in
+                onComplete: { [weak self, teamMemberRoleId, teamMemberRoleName, teamMemberExperienceLevel] result in
                     Task { @MainActor in
                         self?.generatingNodeId = nil
                         // Also clear from orchestrating set if present (cleanup for edge cases)
@@ -1996,8 +2042,14 @@ class CanvasViewModel: ObservableObject {
                         switch result {
                         case .success(let fullResponse):
                             guard var finalNode = self?.nodes[nodeId] else { return }
-                            // Add assistant message to conversation
-                            finalNode.addMessage(role: .assistant, content: fullResponse)
+                            // Add assistant message to conversation with team member info
+                            finalNode.addMessage(
+                                role: .assistant,
+                                content: fullResponse,
+                                teamMemberRoleId: teamMemberRoleId,
+                                teamMemberRoleName: teamMemberRoleName,
+                                teamMemberExperienceLevel: teamMemberExperienceLevel
+                            )
                             finalNode.response = fullResponse
                             finalNode.updatedAt = Date()
                             self?.nodes[nodeId] = finalNode

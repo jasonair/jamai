@@ -205,7 +205,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         imageData: Data? = nil, 
         imageMimeType: String? = nil,
         webSearchEnabled: Bool = false,
-        searchResults: [SearchResult]? = nil
+        searchResults: [SearchResult]? = nil,
+        teamMemberRoleId: String? = nil,
+        teamMemberRoleName: String? = nil,
+        teamMemberExperienceLevel: String? = nil
     ) {
         var messages = conversation
         messages.append(ConversationMessage(
@@ -214,7 +217,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
             imageData: imageData,
             imageMimeType: imageMimeType,
             webSearchEnabled: webSearchEnabled,
-            searchResults: searchResults
+            searchResults: searchResults,
+            teamMemberRoleId: teamMemberRoleId,
+            teamMemberRoleName: teamMemberRoleName,
+            teamMemberExperienceLevel: teamMemberExperienceLevel
         ))
         setConversation(messages)
     }
