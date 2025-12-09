@@ -1123,16 +1123,21 @@ class CanvasViewModel: ObservableObject {
         // Create branch without inheriting conversation immediately to avoid race with async creation
         let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
-        // Inherit team member from parent if present
-        if let parentTeamMember = parent.teamMember {
-            if var child = nodes[childId] {
+        // Inherit team member and personality from parent if present
+        if var child = nodes[childId] {
+            if let parentTeamMember = parent.teamMember {
                 child.setTeamMember(parentTeamMember)
-                updateNode(child, immediate: true)
             }
+            // Always inherit personality/thinking style from parent
+            child.personality = parent.personality
+            updateNode(child, immediate: true)
         }
         
         // Indicate generation immediately so UI shows spinner
         generatingNodeId = childId
+        
+        // Navigate to center the new node in viewport
+        navigateToNode(childId, viewportSize: viewportSize)
         
         // Start tasks in parallel: title generation + TLDR context
         Task { [weak self] in
@@ -1171,10 +1176,12 @@ class CanvasViewModel: ObservableObject {
         // Get the newly created child
         guard var child = self.nodes[childId] else { return }
         
-        // Inherit team member from parent if present
+        // Inherit team member and personality from parent if present
         if let parentTeamMember = parent.teamMember {
             child.setTeamMember(parentTeamMember)
         }
+        // Always inherit personality/thinking style from parent
+        child.personality = parent.personality
         
         // Set selected text as description; no auto response
         child.description = selectedText
@@ -1182,6 +1189,9 @@ class CanvasViewModel: ObservableObject {
         child.prompt = ""
         child.response = ""
         updateNode(child, immediate: true)
+        
+        // Navigate to center the new node in viewport
+        navigateToNode(childId, viewportSize: viewportSize)
         
         // Auto-generate a concise title from the selected text
         Task { [weak self] in
@@ -1227,7 +1237,8 @@ class CanvasViewModel: ObservableObject {
         } else {
             teamMemberRoleName = nil
         }
-        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
+        // Store personality/thinking style instead of experience level for display
+        let teamMemberExperienceLevel = node.personality.displayName
         
         // Do not store user prompt; expansions keep the conversation clean
         
@@ -1826,7 +1837,8 @@ class CanvasViewModel: ObservableObject {
         } else {
             teamMemberRoleName = nil
         }
-        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
+        // Store personality/thinking style instead of experience level for display
+        let teamMemberExperienceLevel = node.personality.displayName
         
         // Add user message to conversation without search
         node.addMessage(role: .user, content: prompt, imageData: imageData, imageMimeType: imageMimeType)
@@ -1994,7 +2006,8 @@ class CanvasViewModel: ObservableObject {
         } else {
             teamMemberRoleName = nil
         }
-        let teamMemberExperienceLevel = node.teamMember?.experienceLevel.rawValue
+        // Store personality/thinking style instead of experience level for display
+        let teamMemberExperienceLevel = node.personality.displayName
         
         // Build enhanced prompt with search context
         var enhancedPrompt = prompt

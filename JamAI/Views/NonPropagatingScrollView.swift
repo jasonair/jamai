@@ -16,6 +16,103 @@ extension View {
     func blockScrollPropagation() -> some View {
         self.overlay(ScrollEventBlocker())
     }
+    
+    /// Blocks horizontal scrolling completely by finding and modifying the underlying NSScrollView.
+    /// Uses VerticalOnlyClipView to constrain bounds to x=0, preventing any horizontal movement.
+    func lockHorizontalScroll() -> some View {
+        self.background(HorizontalScrollLocker())
+    }
+}
+
+/// Background view that finds the parent NSScrollView and installs a VerticalOnlyClipView
+/// to completely block horizontal scrolling at the source level.
+private struct HorizontalScrollLocker: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = HorizontalScrollLockingView()
+        return view
+    }
+    
+    func updateNSView(_ nsView: NSView, context: Context) {
+        // Re-apply lock on updates in case scroll view was recreated
+        if let lockingView = nsView as? HorizontalScrollLockingView {
+            lockingView.applyHorizontalLock()
+        }
+    }
+}
+
+/// Helper view that finds and modifies the parent NSScrollView
+private class HorizontalScrollLockingView: NSView {
+    private weak var lockedScrollView: NSScrollView?
+    
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // Apply lock immediately and with delays to catch late-created scroll views
+        applyHorizontalLock()
+        DispatchQueue.main.async { [weak self] in
+            self?.applyHorizontalLock()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
+            self?.applyHorizontalLock()
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.applyHorizontalLock()
+        }
+    }
+    
+    override func viewDidMoveToSuperview() {
+        super.viewDidMoveToSuperview()
+        applyHorizontalLock()
+    }
+    
+    func applyHorizontalLock() {
+        // Find the parent NSScrollView
+        var currentView: NSView? = self.superview
+        while currentView != nil {
+            if let scrollView = currentView as? NSScrollView {
+                // Check if we already have a VerticalOnlyClipView installed
+                if !(scrollView.contentView is VerticalOnlyClipViewPublic) {
+                    // Install our custom clip view
+                    let currentBounds = scrollView.contentView.bounds
+                    let verticalClipView = VerticalOnlyClipViewPublic()
+                    verticalClipView.drawsBackground = false
+                    
+                    // Preserve the document view
+                    let documentView = scrollView.documentView
+                    scrollView.contentView = verticalClipView
+                    scrollView.documentView = documentView
+                    
+                    // Restore bounds
+                    verticalClipView.setBoundsOrigin(NSPoint(x: 0, y: currentBounds.origin.y))
+                    
+                    // Disable horizontal scroller and elasticity
+                    scrollView.hasHorizontalScroller = false
+                    scrollView.horizontalScrollElasticity = .none
+                    
+                    lockedScrollView = scrollView
+                }
+                break
+            }
+            currentView = currentView?.superview
+        }
+    }
+}
+
+/// Public version of VerticalOnlyClipView that can be used by the modifier.
+/// Prevents any horizontal scrolling by constraining bounds to x=0.
+class VerticalOnlyClipViewPublic: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrainedBounds = super.constrainBoundsRect(proposedBounds)
+        // Lock horizontal position to 0 - prevents any horizontal scrolling
+        constrainedBounds.origin.x = 0
+        return constrainedBounds
+    }
+    
+    override func scroll(to newOrigin: NSPoint) {
+        // Only allow vertical scrolling by forcing x to 0
+        var constrainedOrigin = newOrigin
+        constrainedOrigin.x = 0
+        super.scroll(to: constrainedOrigin)
+    }
 }
 
 /// Invisible overlay that captures and blocks scroll events while allowing other interactions

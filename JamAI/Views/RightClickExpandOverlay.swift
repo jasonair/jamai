@@ -75,11 +75,11 @@ final class RightClickMonitorView: NSView {
                     DispatchQueue.main.async { [weak self] in
                         guard let self = self else { return }
                         let menu = NSMenu()
-                        let expandItem = NSMenuItem(title: "Expand on Selection", action: #selector(self.handleExpand(_:)), keyEquivalent: "")
+                        let expandItem = NSMenuItem(title: "Expand on this", action: #selector(self.handleExpand(_:)), keyEquivalent: "")
                         expandItem.target = self
                         expandItem.representedObject = text
                         menu.addItem(expandItem)
-                        let jamItem = NSMenuItem(title: "Jam with this", action: #selector(self.handleJamWithThis(_:)), keyEquivalent: "")
+                        let jamItem = NSMenuItem(title: "Ask follow up", action: #selector(self.handleJamWithThis(_:)), keyEquivalent: "")
                         jamItem.target = self
                         jamItem.representedObject = text
                         menu.addItem(jamItem)

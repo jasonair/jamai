@@ -158,7 +158,7 @@ struct NodeView: View {
                                 // When chat is visible, use ScrollView for conversation
                                 ScrollViewReader { proxy in
                                     ZStack(alignment: .bottom) {
-                                        ScrollView {
+                                        ScrollView(.vertical) {
                                             VStack(alignment: .leading, spacing: 12) {
                                                 // Top anchor for scrolling - use id on first real content
                                                 EmptyView().id("scroll-top-anchor")
@@ -184,6 +184,8 @@ struct NodeView: View {
                                                     .id("scroll-bottom-anchor")
                                             }
                                             .padding(Node.padding)
+                                            // Lock horizontal scroll completely using VerticalOnlyClipView
+                                            .lockHorizontalScroll()
                                         }
                                         .disabled(!isSelected)
                                         // Disable horizontal bounce to prevent text shifting left/right
@@ -273,7 +275,7 @@ struct NodeView: View {
                             // For standard nodes: ScrollView with conversation
                             ScrollViewReader { proxy in
                                 ZStack(alignment: .bottom) {
-                                    ScrollView {
+                                    ScrollView(.vertical) {
                                         VStack(alignment: .leading, spacing: 12) {
                                             // Top anchor for scrolling - use EmptyView which takes no space
                                             EmptyView().id("scroll-top-anchor")
@@ -299,6 +301,8 @@ struct NodeView: View {
                                                 .id("scroll-bottom-anchor")
                                         }
                                         .padding(Node.padding)
+                                        // Lock horizontal scroll completely using VerticalOnlyClipView
+                                        .lockHorizontalScroll()
                                     }
                                     .scrollPosition($scrollPosition)
                                     // Track scroll offset for position memory (macOS 15+)
