@@ -229,19 +229,17 @@ class CanvasViewModel: ObservableObject {
         if Config.enableVerboseLogging { print("📝 [NoteCreate] edge id=\(edge.id) color=\(String(describing: edge.color))") }
         
         // Force edge refresh immediately to ensure wire appears
-        Task { @MainActor in
-            self.positionsVersion += 1
-        }
+        self.positionsVersion += 1
         
-        // Use debounced write system for reliable persistence
-        self.scheduleDebouncedWrite(edgeId: edge.id)
-        
-        // Save node atomically
+        // Save node AND edge IMMEDIATELY (not debounced) to prevent loss on quick tab close/app quit
+        // This matches the pattern used in completeWiring() for reliable persistence
         let dbActor = self.dbActor
-        Task { [dbActor, note] in
+        Task { [dbActor, note, edge] in
             do {
-                if Config.enableVerboseLogging { print("📝 [NoteCreate] save begin node=\(note.id)") }
+                if Config.enableVerboseLogging { print("📝 [NoteCreate] save begin node=\(note.id) edge=\(edge.id)") }
                 try await dbActor.saveNode(note)
+                try await dbActor.saveEdge(edge)
+                if Config.enableVerboseLogging { print("📝 [NoteCreate] save complete node=\(note.id) edge=\(edge.id)") }
                 if Config.enableVerboseLogging { print("📝 [NoteCreate] save node ok=\(note.id)") }
                 
                 // Track note creation analytics
@@ -759,8 +757,15 @@ class CanvasViewModel: ObservableObject {
             let edge = Edge(projectId: self.project.id, sourceId: parentId, targetId: node.id, color: parentColor)
             self.edges[edge.id] = edge
             self.undoManager.record(.createEdge(edge))
-            // Use debounced write system to ensure reliable persistence
-            self.scheduleDebouncedWrite(edgeId: edge.id)
+            
+            // Save edge IMMEDIATELY (not debounced) to prevent loss on quick tab close/app quit
+            let dbActorForEdge = self.dbActor
+            Task { [dbActorForEdge, edge] in
+                try? await dbActorForEdge.saveEdge(edge)
+                if Config.enableVerboseLogging {
+                    print("🔗 [CreateNode] edge saved: \(edge.id)")
+                }
+            }
         }
 
         self.nodes[node.id] = node
@@ -1540,8 +1545,16 @@ class CanvasViewModel: ObservableObject {
         edges[edge.id] = edge
         positionsVersion += 1
         
-        // Always use debounced write for reliable persistence
-        scheduleDebouncedWrite(edgeId: edge.id)
+        if immediate {
+            // Save immediately for critical updates
+            let dbActor = self.dbActor
+            Task { [dbActor, edge] in
+                try? await dbActor.saveEdge(edge)
+            }
+        } else {
+            // Use debounced write for non-critical updates (e.g., color changes)
+            scheduleDebouncedWrite(edgeId: edge.id)
+        }
     }
     
     /// Add a new edge to the canvas
@@ -1557,8 +1570,14 @@ class CanvasViewModel: ObservableObject {
         undoManager.record(.createEdge(edge))
         positionsVersion += 1
         
-        // Use debounced write for reliable persistence
-        scheduleDebouncedWrite(edgeId: edge.id)
+        // Save edge IMMEDIATELY (not debounced) to prevent loss on quick tab close/app quit
+        let dbActor = self.dbActor
+        Task { [dbActor, edge] in
+            try? await dbActor.saveEdge(edge)
+            if Config.enableVerboseLogging {
+                print("🔗 [AddEdge] edge saved: \(edge.id)")
+            }
+        }
     }
     
     func deleteNode(_ nodeId: UUID) {
@@ -2391,10 +2410,12 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
                 Task { [dbActor, node] in
                     try? await dbActor.saveNode(node)
                 }
-                // Restore all connected edges using debounced write
+                // Restore all connected edges immediately
                 for edge in connectedEdges {
                     edges[edge.id] = edge
-                    scheduleDebouncedWrite(edgeId: edge.id)
+                    Task { [dbActor, edge] in
+                        try? await dbActor.saveEdge(edge)
+                    }
                 }
             } else {
                 // Redo: delete node and connected edges
@@ -2442,13 +2463,21 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
                 }
             } else {
                 edges[edge.id] = edge
-                scheduleDebouncedWrite(edgeId: edge.id)
+                // Save immediately to prevent loss
+                let dbActor = self.dbActor
+                Task { [dbActor, edge] in
+                    try? await dbActor.saveEdge(edge)
+                }
             }
             
         case .deleteEdge(let edge):
             if reverse {
                 edges[edge.id] = edge
-                scheduleDebouncedWrite(edgeId: edge.id)
+                // Save immediately to prevent loss
+                let dbActor = self.dbActor
+                Task { [dbActor, edge] in
+                    try? await dbActor.saveEdge(edge)
+                }
             } else {
                 edges.removeValue(forKey: edge.id)
                 pendingEdgeWrites.remove(edge.id)
