@@ -137,6 +137,9 @@ private struct ScrollViewWithBlockedPropagation<Content: View>: NSViewRepresenta
         scrollView.drawsBackground = false
         scrollView.borderType = .noBorder
         
+        // Disable horizontal elastic bounce to prevent content shifting left/right during trackpad scroll
+        scrollView.horizontalScrollElasticity = .none
+        
         return scrollView
     }
     
@@ -151,12 +154,57 @@ private struct ScrollViewWithBlockedPropagation<Content: View>: NSViewRepresenta
                 hostingView.frame.size.width = width
             }
         }
+        
+        // Ensure horizontal elasticity stays disabled
+        scrollView.horizontalScrollElasticity = .none
+        
+        // Reset horizontal offset if it drifted from trackpad gestures
+        let clipView = scrollView.contentView
+        if clipView.bounds.origin.x != 0 {
+            clipView.scroll(to: NSPoint(x: 0, y: clipView.bounds.origin.y))
+            scrollView.reflectScrolledClipView(clipView)
+        }
+    }
+}
+
+/// Custom NSClipView that prevents any horizontal scrolling.
+/// By constraining bounds to always have x=0, we completely block horizontal movement.
+private class VerticalOnlyClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrainedBounds = super.constrainBoundsRect(proposedBounds)
+        // Lock horizontal position to 0 - prevents any horizontal scrolling
+        constrainedBounds.origin.x = 0
+        return constrainedBounds
+    }
+    
+    override func scroll(to newOrigin: NSPoint) {
+        // Only allow vertical scrolling by forcing x to 0
+        var constrainedOrigin = newOrigin
+        constrainedOrigin.x = 0
+        super.scroll(to: constrainedOrigin)
     }
 }
 
 /// Custom NSScrollView that intercepts scroll wheel events and prevents propagation to parent views.
 /// This ensures that scrolling within a node's content area doesn't cause the canvas to pan.
 private class NonPropagatingNSScrollView: NSScrollView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupVerticalOnlyClipView()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupVerticalOnlyClipView()
+    }
+    
+    private func setupVerticalOnlyClipView() {
+        // Replace the default clip view with our vertical-only version
+        let verticalClipView = VerticalOnlyClipView()
+        verticalClipView.drawsBackground = false
+        self.contentView = verticalClipView
+    }
+    
     override func scrollWheel(with event: NSEvent) {
         // Always handle scroll ourselves and never propagate to parent
         // This prevents the canvas from moving when scrolling within node content

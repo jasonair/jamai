@@ -186,6 +186,8 @@ struct NodeView: View {
                                             .padding(Node.padding)
                                         }
                                         .disabled(!isSelected)
+                                        // Disable horizontal bounce to prevent text shifting left/right
+                                        .scrollBounceBehavior(.basedOnSize, axes: .vertical)
                                         // Use safeAreaInset to properly inset content below team bar
                                         // This makes .top anchor work correctly for scroll navigation
                                         .safeAreaInset(edge: .top, spacing: 0) {
@@ -306,6 +308,8 @@ struct NodeView: View {
                                         currentScrollOffset = newValue
                                     }
                                     .disabled(!isSelected)
+                                    // Disable horizontal bounce to prevent text shifting left/right
+                                    .scrollBounceBehavior(.basedOnSize, axes: .vertical)
                                     // Use safeAreaInset to properly inset content below team bar
                                     // This makes .top anchor work correctly for scroll navigation
                                     .safeAreaInset(edge: .top, spacing: 0) {

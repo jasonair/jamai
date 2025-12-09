@@ -1391,12 +1391,48 @@ private struct MarkdownTableView: View {
 
 // MARK: - NSTextView Wrapper
 
+/// Custom NSClipView that prevents any horizontal scrolling.
+/// By constraining bounds to always have x=0, we completely block horizontal movement.
+@available(macOS 12.0, *)
+private class VerticalOnlyClipView: NSClipView {
+    override func constrainBoundsRect(_ proposedBounds: NSRect) -> NSRect {
+        var constrainedBounds = super.constrainBoundsRect(proposedBounds)
+        // Lock horizontal position to 0 - prevents any horizontal scrolling
+        constrainedBounds.origin.x = 0
+        return constrainedBounds
+    }
+    
+    override func scroll(to newOrigin: NSPoint) {
+        // Only allow vertical scrolling by forcing x to 0
+        var constrainedOrigin = newOrigin
+        constrainedOrigin.x = 0
+        super.scroll(to: constrainedOrigin)
+    }
+}
+
 // Custom NSScrollView used inside MarkdownText. The content is sized to fit
 // vertically and should not scroll independently of the surrounding SwiftUI
 // ScrollView. To keep text position stable during zoom/pan, always forward
 // scroll events to the parent instead of changing our own content offset.
 @available(macOS 12.0, *)
 private class NonPropagatingScrollView: NSScrollView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        setupVerticalOnlyClipView()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupVerticalOnlyClipView()
+    }
+    
+    private func setupVerticalOnlyClipView() {
+        // Replace the default clip view with our vertical-only version
+        let verticalClipView = VerticalOnlyClipView()
+        verticalClipView.drawsBackground = false
+        self.contentView = verticalClipView
+    }
+    
     override func scrollWheel(with event: NSEvent) {
         nextResponder?.scrollWheel(with: event)
     }
@@ -1530,6 +1566,9 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         scrollView.hasHorizontalScroller = false
         scrollView.drawsBackground = false
         
+        // Disable horizontal elastic bounce to prevent text shifting left/right during trackpad scroll
+        scrollView.horizontalScrollElasticity = .none
+        
         return scrollView
     }
     
@@ -1559,10 +1598,14 @@ private struct NSTextViewWrapper: NSViewRepresentable {
         }
         textView.layoutManager?.ensureLayout(for: textView.textContainer!)
 
-        // Ensure the inner scroll view is always scrolled to the top so
+        // Ensure horizontal elasticity stays disabled
+        scrollView.horizontalScrollElasticity = .none
+        
+        // Ensure the inner scroll view is always scrolled to origin so
         // content cannot appear offset or partially hidden after zoom/pan.
+        // Reset both X and Y to prevent any horizontal drift from trackpad gestures.
         let clipView = scrollView.contentView
-        if clipView.bounds.origin.y != 0 {
+        if clipView.bounds.origin.x != 0 || clipView.bounds.origin.y != 0 {
             clipView.scroll(to: NSPoint(x: 0, y: 0))
             scrollView.reflectScrolledClipView(clipView)
         }
