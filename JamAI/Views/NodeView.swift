@@ -42,6 +42,7 @@ struct NodeView: View {
     var onUpgradePlan: (() -> Void) = {}
     var onUseLocalModel: (() -> Void) = {}
     var onDismissCreditError: (() -> Void) = {}
+    var onNavigateToParent: (() -> Void)? = nil  // Navigate back to parent node for notes
     
     // Scroll position memory callbacks (macOS 15+)
     var onScrollOffsetChanged: ((CGFloat) -> Void)? = nil
@@ -260,16 +261,19 @@ struct NodeView: View {
                                 }
                             } else {
                                 // When chat is hidden, show note content
-                                // Single TextEditor handles both reading and editing
-                                // Notes are always visible - no animation needed
-                                noteDescriptionView
-                                    .padding(Node.padding)
-                                    .onAppear {
-                                        // Notes are always visible - set states immediately
-                                        isScrollReady = true
-                                        isCoverFadingOut = true
-                                        isContentVisible = true
-                                    }
+                                // Wrap in ScrollView to ensure content starts from top and can scroll
+                                ScrollView(.vertical, showsIndicators: false) {
+                                    noteDescriptionView
+                                        .padding(Node.padding)
+                                }
+                                .disabled(!isSelected) // Disable scrolling when not selected so node can be dragged
+                                .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+                                .onAppear {
+                                    // Notes are always visible - set states immediately
+                                    isScrollReady = true
+                                    isCoverFadingOut = true
+                                    isContentVisible = true
+                                }
                             }
                         } else {
                             // For standard nodes: ScrollView with conversation
@@ -962,11 +966,23 @@ struct NodeView: View {
     
     private var headerView: some View {
         HStack {
-            // Node type icon (note icon for notes, no icon for standard nodes)
+            // Node type icon (back chevron for notes with parent, note icon for orphan notes)
             if node.type == .note {
-                Image(systemName: "note.text")
-                    .foregroundColor(headerTextColor)
-                    .font(.system(size: 16))
+                if node.parentId != nil, let onNavigateToParent = onNavigateToParent {
+                    // Back button to navigate to parent node
+                    Button(action: onNavigateToParent) {
+                        Image(systemName: "chevron.left")
+                            .foregroundColor(headerTextColor)
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .help("Go back to source")
+                } else {
+                    // Orphan note - show note icon
+                    Image(systemName: "note.text")
+                        .foregroundColor(headerTextColor)
+                        .font(.system(size: 16))
+                }
             }
             
             // Color button

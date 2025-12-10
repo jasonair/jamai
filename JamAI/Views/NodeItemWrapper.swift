@@ -43,6 +43,7 @@ struct NodeItemWrapper: View {
     let onUpgradePlan: () -> Void
     let onUseLocalModel: () -> Void
     let onDismissCreditError: () -> Void
+    var onNavigateToParent: (() -> Void)? = nil  // Navigate back to parent node for notes
     
     // Scroll position memory callbacks (macOS 15+)
     var onScrollOffsetChanged: ((CGFloat) -> Void)? = nil
@@ -147,6 +148,7 @@ struct NodeItemWrapper: View {
                     onUpgradePlan: onUpgradePlan,
                     onUseLocalModel: onUseLocalModel,
                     onDismissCreditError: onDismissCreditError,
+                    onNavigateToParent: onNavigateToParent,
                     onScrollOffsetChanged: onScrollOffsetChanged,
                     savedScrollOffset: savedScrollOffset,
                     shouldProcessTap: shouldProcessTap,

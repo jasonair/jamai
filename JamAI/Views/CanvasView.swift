@@ -908,6 +908,11 @@ struct CanvasView: View {
             onUpgradePlan: { handleUpgradePlan() },
             onUseLocalModel: { handleUseLocalModel() },
             onDismissCreditError: { handleDismissCreditError() },
+            onNavigateToParent: node.parentId != nil ? {
+                if let parentId = node.parentId {
+                    viewModel.navigateToNode(parentId, viewportSize: viewportSize)
+                }
+            } : nil,
             onScrollOffsetChanged: { offset in
                 viewModel.saveScrollOffset(offset, for: node.id)
             },

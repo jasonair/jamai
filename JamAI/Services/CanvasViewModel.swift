@@ -227,7 +227,7 @@ class CanvasViewModel: ObservableObject {
         
         self.nodes[note.id] = note
         self.bringToFront([note.id])
-        self.selectedNodeId = note.id
+        // Don't select the note - keep the parent node selected
         self.undoManager.record(.createNode(note))
         
         // Create edge with parent's color
