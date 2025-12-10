@@ -54,7 +54,7 @@ struct ZoomControlsView: View {
             ZoomButton(icon: "plus.circle", action: onCreateChat, tooltip: "New Chat")
             ZoomButton(icon: "doc.text", action: onCreateNote, tooltip: "New Note")
             ZoomButton(icon: "textformat.size", action: onCreateTitle, tooltip: "New Title")
-            ZoomButton(icon: "doc.badge.plus", action: onUploadPDF, tooltip: "Upload PDF")
+            ZoomButton(icon: "doc.badge.plus", action: onUploadPDF, tooltip: "Upload Document")
             
             Divider()
                 .frame(width: 1, height: 20)

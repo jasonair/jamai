@@ -149,7 +149,7 @@ struct CanvasView: View {
             )
             .fileImporter(
                 isPresented: $showPDFPicker,
-                allowedContentTypes: [.pdf],
+                allowedContentTypes: [.pdf, .plainText, .rtf, .html],
                 allowsMultipleSelection: true
             ) { result in
                 handlePDFFileImport(result)
@@ -835,6 +835,7 @@ struct CanvasView: View {
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
             onDelete: { handleDeleteNode(node.id) },
+            onRevealInFinder: { viewModel.revealPDFInFinder(nodeId: node.id) },
             onCreateChild: { handleCreateChildNode(node.id) },
             onDuplicate: { viewModel.duplicateNode(node.id) },
             onColorChange: { colorId in handleColorChange(colorId, for: node.id) },
@@ -1290,12 +1291,16 @@ struct CanvasView: View {
                         return
                     }
                     
-                    // Check if it's a PDF file
-                    guard url.pathExtension.lowercased() == "pdf" else {
+                    // Check if it's a supported document type
+                    let ext = url.pathExtension.lowercased()
+                    let supportedExtensions: Set<String> = [
+                        "pdf", "txt", "text", "md", "markdown", "html", "htm", "xml", "csv", "json", "rtf"
+                    ]
+                    guard supportedExtensions.contains(ext) else {
                         return
                     }
                     
-                    // Read PDF data
+                    // Read file data
                     guard let pdfData = try? Data(contentsOf: url) else {
                         return
                     }
@@ -1332,7 +1337,7 @@ struct CanvasView: View {
                 }
                 defer { url.stopAccessingSecurityScopedResource() }
                 
-                // Read PDF data
+                // Read document data
                 guard let pdfData = try? Data(contentsOf: url) else {
                     continue
                 }

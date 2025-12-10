@@ -14,6 +14,7 @@ struct PDFNodeView: View {
     let isSelected: Bool
     let isMultiSelected: Bool
     let onDelete: () -> Void
+    let onRevealInFinder: () -> Void
     
     // Wiring props
     var isWiring: Bool = false
@@ -119,15 +120,25 @@ struct PDFNodeView: View {
                 
                 Spacer(minLength: 0)
                 
-                // Delete button (shown on hover)
+                // Actions (shown on hover)
                 if isHovering || isSelected {
-                    Button(action: onDelete) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
+                    HStack(spacing: 6) {
+                        Button(action: onRevealInFinder) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Reveal in Finder")
+                        
+                        Button(action: onDelete) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .help("Delete Document")
                     }
-                    .buttonStyle(.plain)
-                    .help("Delete PDF")
                 }
             }
             .padding(.horizontal, 12)
@@ -214,7 +225,8 @@ struct PDFNodeView: View {
             )),
             isSelected: false,
             isMultiSelected: false,
-            onDelete: {}
+            onDelete: {},
+            onRevealInFinder: {}
         )
         
         PDFNodeView(
@@ -225,7 +237,8 @@ struct PDFNodeView: View {
             )),
             isSelected: true,
             isMultiSelected: false,
-            onDelete: {}
+            onDelete: {},
+            onRevealInFinder: {}
         )
     }
     .padding()

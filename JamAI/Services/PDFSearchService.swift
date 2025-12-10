@@ -86,15 +86,16 @@ class PDFSearchService {
         }
         
         // Ensure all files are active (re-upload if expired)
-        var activeFileUris: [String] = []
+        var activeFiles: [(uri: String, mimeType: String, displayName: String)] = []
         for node in validPdfNodes {
+            let displayName = node.pdfFileName ?? "Document"
             if let existingUri = node.pdfFileUri {
                 // Check if file is still active
                 do {
                     if let fileId = node.pdfFileId {
                         let file = try await pdfFileService.getFileStatus(fileId: fileId)
                         if file.isActive {
-                            activeFileUris.append(existingUri)
+                            activeFiles.append((uri: file.uri, mimeType: file.mimeType, displayName: displayName))
                             continue
                         }
                     }
@@ -104,14 +105,15 @@ class PDFSearchService {
                 
                 // Re-upload if needed
                 if let newFile = try await pdfFileService.ensureFileActive(node: node) {
-                    activeFileUris.append(newFile.uri)
+                    activeFiles.append((uri: newFile.uri, mimeType: newFile.mimeType, displayName: displayName))
                 } else {
-                    activeFileUris.append(existingUri)
+                    // Fallback: we only have the URI, assume PDF for legacy nodes
+                    activeFiles.append((uri: existingUri, mimeType: "application/pdf", displayName: displayName))
                 }
             }
         }
         
-        guard !activeFileUris.isEmpty else {
+        guard !activeFiles.isEmpty else {
             throw PDFSearchError.noFilesProvided
         }
         
@@ -125,8 +127,8 @@ class PDFSearchService {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        // Build request body with file search tool
-        let body = buildFileSearchRequest(query: query, fileUris: activeFileUris)
+        // Build request body with file search tool (include filenames so model knows what files it has)
+        let body = buildFileSearchRequest(query: query, files: activeFiles)
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
         let (data, response) = try await session.data(for: request)
@@ -170,20 +172,24 @@ class PDFSearchService {
     
     // MARK: - Private Helpers
     
-    private func buildFileSearchRequest(query: String, fileUris: [String]) -> [String: Any] {
-        // Build file data parts for each PDF
+    private func buildFileSearchRequest(query: String, files: [(uri: String, mimeType: String, displayName: String)]) -> [String: Any] {
+        // Build file data parts for each document
         var fileParts: [[String: Any]] = []
-        for uri in fileUris {
+        for file in files {
             fileParts.append([
                 "file_data": [
-                    "file_uri": uri,
-                    "mime_type": "application/pdf"
+                    "file_uri": file.uri,
+                    "mime_type": file.mimeType
                 ]
             ])
         }
         
-        // Add the query as text
-        fileParts.append(["text": query])
+        // Build a preamble that tells the model what files it has access to
+        let fileList = files.map { $0.displayName }.joined(separator: ", ")
+        let preamble = "You have access to the following document(s): \(fileList)\n\nUser question: "
+        
+        // Add the query as text with the preamble
+        fileParts.append(["text": preamble + query])
         
         return [
             "contents": [

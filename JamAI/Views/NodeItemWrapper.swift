@@ -24,6 +24,7 @@ struct NodeItemWrapper: View {
     let onTitleEdit: (String) -> Void
     let onDescriptionEdit: (String) -> Void
     let onDelete: () -> Void
+    let onRevealInFinder: () -> Void
     let onCreateChild: () -> Void
     let onDuplicate: () -> Void
     let onColorChange: (String) -> Void
@@ -115,6 +116,7 @@ struct NodeItemWrapper: View {
                     isSelected: isSelected,
                     isMultiSelected: isMultiSelected,
                     onDelete: onDelete,
+                    onRevealInFinder: onRevealInFinder,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,

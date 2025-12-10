@@ -402,6 +402,47 @@ class CanvasViewModel: ObservableObject {
             }
         }
     }
+    
+    /// Reveal the underlying document for a PDF node in Finder by writing a temporary copy
+    /// so the user can quickly open and inspect it.
+    func revealPDFInFinder(nodeId: UUID) {
+        guard let node = nodes[nodeId], node.type == .pdf else {
+            return
+        }
+        
+        guard let data = node.pdfData else {
+            errorMessage = "No local copy of this document is stored."
+            return
+        }
+        
+        let originalName = node.pdfFileName ?? "Document.pdf"
+        let sanitizedName = sanitizeFilename(originalName)
+        
+        let tempDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        let folderURL = tempDir.appendingPathComponent("JamAI Documents", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: folderURL, withIntermediateDirectories: true)
+            let fileURL = folderURL.appendingPathComponent(sanitizedName)
+            
+            // Overwrite any existing temp file for this node
+            try data.write(to: fileURL, options: .atomic)
+            
+            NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+        } catch {
+            errorMessage = "Failed to open document in Finder: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Sanitize a filename for use on disk by removing path separators and illegal characters.
+    private func sanitizeFilename(_ name: String) -> String {
+        let invalidCharacters = CharacterSet(charactersIn: "/\\:?%*|\"<>")
+        let components = name.components(separatedBy: invalidCharacters)
+        var sanitized = components.joined(separator: "_")
+        if sanitized.isEmpty {
+            sanitized = "Document.pdf"
+        }
+        return sanitized
+    }
 
     func createTitleLabel(at position: CGPoint) {
         // Defer state changes to avoid publishing during view updates

@@ -61,7 +61,7 @@ enum PDFFileError: LocalizedError {
         case .fileTooLarge:
             return "File exceeds maximum size (20MB)"
         case .unsupportedFormat:
-            return "Unsupported file format. Only PDF files are supported."
+            return "Unsupported file format. Only PDF and text-based documents are supported."
         }
     }
 }
@@ -102,8 +102,11 @@ class PDFFileService {
             throw PDFFileError.fileTooLarge
         }
         
+        // Infer MIME type: PDFs are application/pdf, other supported docs as text/plain
+        let mimeType = inferMimeType(from: filename)
+        
         // Step 1: Initiate resumable upload
-        let uploadUrl = try await initiateUpload(filename: filename, mimeType: "application/pdf", fileSize: data.count, apiKey: apiKey)
+        let uploadUrl = try await initiateUpload(filename: filename, mimeType: mimeType, fileSize: data.count, apiKey: apiKey)
         
         // Step 2: Upload the file data
         let file = try await uploadData(data: data, uploadUrl: uploadUrl)
@@ -283,6 +286,17 @@ class PDFFileService {
             uri: uri,
             state: state
         )
+    }
+    
+    /// Infer an appropriate MIME type for the uploaded document based on its extension.
+    /// PDFs use application/pdf. All other supported document formats are treated as
+    /// text/plain so Gemini reads the raw text while preserving structure.
+    private func inferMimeType(from filename: String) -> String {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        if ext == "pdf" {
+            return "application/pdf"
+        }
+        return "text/plain"
     }
     
     // MARK: - Re-upload on Expiration
