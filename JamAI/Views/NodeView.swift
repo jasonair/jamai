@@ -261,18 +261,29 @@ struct NodeView: View {
                                 }
                             } else {
                                 // When chat is hidden, show note content
-                                // Wrap in ScrollView to ensure content starts from top and can scroll
-                                ScrollView(.vertical, showsIndicators: false) {
+                                if isSelected {
+                                    // Edit mode: TextEditor fills entire space (no ScrollView wrapper needed - TextEditor scrolls internally)
                                     noteDescriptionView
                                         .padding(Node.padding)
-                                }
-                                .disabled(!isSelected) // Disable scrolling when not selected so node can be dragged
-                                .scrollBounceBehavior(.basedOnSize, axes: .vertical)
-                                .onAppear {
-                                    // Notes are always visible - set states immediately
-                                    isScrollReady = true
-                                    isCoverFadingOut = true
-                                    isContentVisible = true
+                                        .onAppear {
+                                            isScrollReady = true
+                                            isCoverFadingOut = true
+                                            isContentVisible = true
+                                        }
+                                } else {
+                                    // View mode: Wrap in ScrollView to ensure content starts from top and can scroll
+                                    ScrollView(.vertical, showsIndicators: false) {
+                                        noteDescriptionView
+                                            .padding(Node.padding)
+                                    }
+                                    .disabled(true) // Disable scrolling when not selected so node can be dragged
+                                    .scrollBounceBehavior(.basedOnSize, axes: .vertical)
+                                    .onAppear {
+                                        // Notes are always visible - set states immediately
+                                        isScrollReady = true
+                                        isCoverFadingOut = true
+                                        isContentVisible = true
+                                    }
                                 }
                             }
                         } else {
@@ -1206,10 +1217,11 @@ struct NodeView: View {
                     
                     TextEditor(text: $editedDescription)
                         .font(.system(size: 15, weight: .regular))
-                        .foregroundColor(contentSecondaryTextColor)
+                        .foregroundColor(contentPrimaryTextColor)
                         .scrollContentBackground(.hidden)
                         .background(Color.clear)
                         .focused($isDescFocused)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .onKeyPress("a", phases: .down) { keyPress in
                             // Enable Command+A to select all text within the note editor
                             if keyPress.modifiers.contains(.command) {
@@ -1219,6 +1231,7 @@ struct NodeView: View {
                             return .ignored
                         }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 // View mode: show formatted MarkdownText for proper bullet/list alignment
                 if node.description.isEmpty {
@@ -1230,7 +1243,7 @@ struct NodeView: View {
                 } else {
                     MarkdownText(
                         text: node.description,
-                        textColorOverride: contentSecondaryTextColor
+                        textColorOverride: contentPrimaryTextColor
                     )
                     .padding(.top, 4)
                 }
@@ -1286,6 +1299,7 @@ struct NodeView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
     
     private var conversationView: some View {
