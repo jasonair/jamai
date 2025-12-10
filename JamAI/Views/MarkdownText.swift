@@ -225,26 +225,40 @@ private struct FormattedTextView: View {
         let nsAttrString = NSMutableAttributedString()
         
         // Build NSAttributedString from scratch with proper NSFont attributes
-        // Use a lighter weight for base body text to keep responses feeling airy
-        let baseFont = NSFont.systemFont(ofSize: 15, weight: .light)
-        let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .bold)
-        let codeFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
-        let headerFont = NSFont.systemFont(ofSize: 20, weight: .semibold)
+        // Typography best practices: .regular weight for body text (not .light which is too thin for reading)
+        // San Francisco font automatically handles tracking/letter-spacing at different sizes
+        let baseFont = NSFont.systemFont(ofSize: 15, weight: .regular)
+        let baseBoldFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: 13, weight: .regular)
+        let headerFont = NSFont.systemFont(ofSize: 18, weight: .semibold)
         
         // Set text color based on override or color scheme
-        // Use softer off-white / off-black by default, but allow callers to override for contrast
+        // Improved contrast for readability while maintaining soft aesthetic
+        // WCAG AA requires 4.5:1 contrast ratio for normal text
         let textColor: NSColor
         if let override = textColorOverride,
            let cgColor = override.cgColor,
            let nsColor = NSColor(cgColor: cgColor) {
             textColor = nsColor
         } else if colorScheme == .dark {
-            // Soft light grey (~#D4D4D4)
-            textColor = NSColor(calibratedRed: 0.83, green: 0.83, blue: 0.83, alpha: 1.0)
+            // Warmer off-white for dark mode (~#E8E8E8) - better contrast than #D4D4D4
+            textColor = NSColor(calibratedRed: 0.91, green: 0.91, blue: 0.91, alpha: 1.0)
         } else {
-            // Dark grey (~#252526) instead of pure black
-            textColor = NSColor(calibratedRed: 0.15, green: 0.15, blue: 0.16, alpha: 1.0)
+            // Rich dark grey (~#1D1D1F) - Apple's standard text color
+            textColor = NSColor(calibratedRed: 0.114, green: 0.114, blue: 0.122, alpha: 1.0)
         }
+        
+        // Create base paragraph style with optimal line height for reading
+        // Research shows 1.4-1.5x line height improves reading accuracy by ~20%
+        let baseParagraphStyle = NSMutableParagraphStyle()
+        baseParagraphStyle.lineHeightMultiple = 1.45  // 1.45x multiplier for comfortable reading
+        baseParagraphStyle.paragraphSpacing = 4  // Space between paragraphs (reduced from 8)
+        
+        // Header paragraph style - less spacing after headers since they introduce content
+        let headerParagraphStyle = NSMutableParagraphStyle()
+        headerParagraphStyle.lineHeightMultiple = 1.3  // Slightly tighter for headers
+        headerParagraphStyle.paragraphSpacing = 2  // Minimal spacing after headers
+        headerParagraphStyle.paragraphSpacingBefore = 12  // Add space before headers for separation
         
         // Process runs from the original AttributedString
         for run in attributedString.runs {
@@ -290,10 +304,13 @@ private struct FormattedTextView: View {
                 font = baseFont
             }
             
-            // Create attributed string for this run
+            // Create attributed string for this run with appropriate paragraph style
+            // Headers get special treatment with less spacing after them
+            let paragraphStyle = isHeader ? headerParagraphStyle : baseParagraphStyle
             let runAttrString = NSMutableAttributedString(string: runText)
             runAttrString.addAttribute(.font, value: font, range: NSRange(location: 0, length: runLength))
             runAttrString.addAttribute(.foregroundColor, value: textColor, range: NSRange(location: 0, length: runLength))
+            runAttrString.addAttribute(.paragraphStyle, value: paragraphStyle, range: NSRange(location: 0, length: runLength))
             
             // Check if this run has a link (markdown links like [text](url))
             if let link = run.link {
@@ -330,9 +347,10 @@ private struct FormattedTextView: View {
             // wrapped lines align perfectly with the text after the bullet marker.
             if (trimmed.hasPrefix("•") || trimmed.hasPrefix("- ")) && length > 0 {
                 let ps = NSMutableParagraphStyle()
+                ps.lineHeightMultiple = 1.45  // Match base line height
                 ps.firstLineHeadIndent = 0
-                // Slightly increase spacing between bullet items for better readability
-                ps.paragraphSpacing = 5
+                // Increased spacing between bullet items for better readability
+                ps.paragraphSpacing = 6
                 
                 // Compute the exact prefix width from the start of the line up to the first
                 // content character after the bullet marker (including indentation, bullet,
@@ -369,9 +387,10 @@ private struct FormattedTextView: View {
                 let pattern = "^[0-9]+\\. "
                 if trimmed.range(of: pattern, options: .regularExpression) != nil {
                     let ps = NSMutableParagraphStyle()
+                    ps.lineHeightMultiple = 1.45  // Match base line height
                     ps.firstLineHeadIndent = 0
                     // Match bullet list spacing for numbered lists as well
-                    ps.paragraphSpacing = 5
+                    ps.paragraphSpacing = 6
 
                     // Build the exact numeric prefix (including leading spaces) so that
                     // wrapped lines align precisely with the first word after "N. ".
@@ -404,6 +423,19 @@ private struct FormattedTextView: View {
                     nsAttrString.addAttribute(
                         .paragraphStyle,
                         value: ps,
+                        range: NSRange(location: location, length: length)
+                    )
+                }
+            }
+            // Detect standalone header lines (bold text ending with colon, not in a list)
+            // Apply header paragraph style for reduced spacing after headers
+            else if trimmed.hasSuffix(":") && !trimmed.hasPrefix("•") && !trimmed.hasPrefix("- ") {
+                // Check if line doesn't start with a number (numbered list item)
+                let startsWithNumber = trimmed.first?.isNumber == true
+                if !startsWithNumber && length > 0 {
+                    nsAttrString.addAttribute(
+                        .paragraphStyle,
+                        value: headerParagraphStyle,
                         range: NSRange(location: location, length: length)
                     )
                 }
@@ -1041,10 +1073,10 @@ private class TableLayerView: NSView {
             : NSFont.systemFont(ofSize: fontSize)
         let boldFont = NSFont.systemFont(ofSize: fontSize, weight: .bold)
         
-        // Match main markdown body colors: soft off-white / off-black
+        // Match improved markdown body colors for better contrast
         let textColor: NSColor = isDarkMode
-            ? NSColor(calibratedRed: 0.83, green: 0.83, blue: 0.83, alpha: 1.0)
-            : NSColor(calibratedRed: 0.15, green: 0.15, blue: 0.16, alpha: 1.0)
+            ? NSColor(calibratedRed: 0.91, green: 0.91, blue: 0.91, alpha: 1.0)
+            : NSColor(calibratedRed: 0.114, green: 0.114, blue: 0.122, alpha: 1.0)
         
         let attributedString = NSMutableAttributedString()
         

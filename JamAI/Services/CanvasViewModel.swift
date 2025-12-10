@@ -221,6 +221,8 @@ class CanvasViewModel: ObservableObject {
         ancestry.append(parentId)
         note.setAncestry(ancestry)
         note.systemPromptSnapshot = self.project.systemPrompt
+        // Inherit personality/thinking style from parent
+        note.personality = parent.personality
         if Config.enableVerboseLogging { print("📝 [NoteCreate] note id=\(note.id) x=\(note.x) y=\(note.y)") }
         
         self.nodes[note.id] = note
@@ -1112,12 +1114,14 @@ class CanvasViewModel: ObservableObject {
         // The parent's summary will be used as context instead
         let childId = createNodeImmediate(at: CGPoint(x: childX, y: childY), parentId: parentId, inheritContext: false)
         
-        // Inherit team member from parent if present
-        if let parentTeamMember = parent.teamMember {
-            if var child = nodes[childId] {
+        // Inherit team member and personality from parent if present
+        if var child = nodes[childId] {
+            if let parentTeamMember = parent.teamMember {
                 child.setTeamMember(parentTeamMember)
-                updateNode(child, immediate: true)
             }
+            // Always inherit personality/thinking style from parent
+            child.personality = parent.personality
+            updateNode(child, immediate: true)
         }
         
         // Generate TLDR summary asynchronously to provide context for the branch

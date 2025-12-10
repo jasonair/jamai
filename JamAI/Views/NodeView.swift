@@ -168,7 +168,7 @@ struct NodeView: View {
                                                     HStack {
                                                         Spacer(minLength: 0)
                                                         Text(node.description)
-                                                            .font(.system(size: 15, weight: .light))
+                                                            .font(.system(size: 15, weight: .regular))
                                                             .foregroundColor(contentSecondaryTextColor)
                                                             .frame(maxWidth: 700)
                                                         Spacer(minLength: 0)
@@ -285,7 +285,7 @@ struct NodeView: View {
                                                 HStack {
                                                     Spacer(minLength: 0)
                                                     Text(node.description)
-                                                        .font(.system(size: 15, weight: .light))
+                                                        .font(.system(size: 15, weight: .regular))
                                                         .foregroundColor(contentSecondaryTextColor)
                                                         .frame(maxWidth: 700)
                                                     Spacer(minLength: 0)
@@ -1172,42 +1172,57 @@ struct NodeView: View {
     }
     
     private var noteDescriptionView: some View {
-        // Notes: Always use TextEditor for consistent layout (no text jumping)
-        // When not selected, overlay a transparent hit-test blocker to allow dragging
+        // Notes: Show formatted MarkdownText when not selected for proper bullet alignment
+        // When selected, use TextEditor for raw text editing
         ZStack(alignment: .topLeading) {
-            // Placeholder when empty
-            if (isSelected ? editedDescription : node.description).isEmpty {
-                Text("Click to start typing...")
-                    .font(.system(size: 15, weight: .light))
-                    .foregroundColor(contentSecondaryTextColor.opacity(0.5))
-                    .padding(.top, 8)
-                    .padding(.leading, 5)
-                    .allowsHitTesting(false)
-            }
-            
-            // Always use TextEditor for consistent text rendering
-            TextEditor(text: isSelected ? $editedDescription : .constant(node.description))
-                .font(.system(size: 15, weight: .light))
-                .foregroundColor(contentSecondaryTextColor)
-                .scrollContentBackground(.hidden)
-                .background(Color.clear)
-                .focused($isDescFocused)
-                .disabled(!isSelected)  // Disable editing when not selected
-                .onKeyPress("a", phases: .down) { keyPress in
-                    // Enable Command+A to select all text within the note editor
-                    if keyPress.modifiers.contains(.command) && isSelected {
-                        NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
-                        return .handled
+            if isSelected {
+                // Editing mode: show TextEditor for raw text input
+                ZStack(alignment: .topLeading) {
+                    // Placeholder when empty
+                    if editedDescription.isEmpty {
+                        Text("Click to start typing...")
+                            .font(.system(size: 15, weight: .regular))
+                            .foregroundColor(contentSecondaryTextColor.opacity(0.5))
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
                     }
-                    return .ignored
+                    
+                    TextEditor(text: $editedDescription)
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(contentSecondaryTextColor)
+                        .scrollContentBackground(.hidden)
+                        .background(Color.clear)
+                        .focused($isDescFocused)
+                        .onKeyPress("a", phases: .down) { keyPress in
+                            // Enable Command+A to select all text within the note editor
+                            if keyPress.modifiers.contains(.command) {
+                                NSApp.sendAction(#selector(NSText.selectAll(_:)), to: nil, from: nil)
+                                return .handled
+                            }
+                            return .ignored
+                        }
                 }
-            
-            // When not selected, overlay transparent view to block TextEditor interaction
-            // This allows the drag gesture to work for repositioning
-            if !isSelected {
+            } else {
+                // View mode: show formatted MarkdownText for proper bullet/list alignment
+                if node.description.isEmpty {
+                    Text("Click to start typing...")
+                        .font(.system(size: 15, weight: .regular))
+                        .foregroundColor(contentSecondaryTextColor.opacity(0.5))
+                        .padding(.top, 8)
+                        .padding(.leading, 5)
+                } else {
+                    MarkdownText(
+                        text: node.description,
+                        textColorOverride: contentSecondaryTextColor
+                    )
+                    .padding(.top, 4)
+                }
+                
+                // Overlay transparent view to block MarkdownText interaction for dragging
                 Color.clear
                     .contentShape(Rectangle())
-                    .allowsHitTesting(true)  // Capture clicks/drags when not selected
+                    .allowsHitTesting(true)
             }
         }
         .onAppear {
@@ -1404,7 +1419,7 @@ struct NodeView: View {
                             // Show text content with clickable links
                             if !displayText.isEmpty {
                                 Text(displayText.withDetectedLinks())
-                                    .font(.system(size: 15, weight: .light))
+                                    .font(.system(size: 15, weight: .regular))
                                     .foregroundColor(contentPrimaryTextColor)
                                     .textSelection(.enabled)
                                     .environment(\.openURL, OpenURLAction { url in
@@ -1662,7 +1677,7 @@ struct NodeView: View {
                 ZStack(alignment: .topLeading) {
                     if promptText.isEmpty {
                         Text("Ask a question...")
-                            .font(.system(size: 15, weight: .light))
+                            .font(.system(size: 15, weight: .regular))
                             .foregroundColor(contentSecondaryTextColor.opacity(0.7))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 10)
@@ -1671,7 +1686,7 @@ struct NodeView: View {
                     }
 
                     TextEditor(text: $promptText)
-                        .font(.system(size: 15, weight: .light))
+                        .font(.system(size: 15, weight: .regular))
                         .foregroundColor(contentPrimaryTextColor)
                         .scrollContentBackground(.hidden)
                         // Slightly smaller external horizontal padding to offset TextEditor internal inset
@@ -2413,7 +2428,7 @@ struct NodeView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text(processingMessages[processingMessageIndex])
-                            .font(.system(size: 15, weight: .light))
+                            .font(.system(size: 15, weight: .regular))
                             .foregroundColor(contentSecondaryTextColor)
                             .opacity(processingOpacity)
                             .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: processingOpacity)
