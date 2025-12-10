@@ -44,13 +44,7 @@ struct CanvasView: View {
     @State private var wasSnappedX: Bool = false
     @State private var wasSnappedY: Bool = false
     
-    // Local zoom state for smooth gesture tracking
-    @State private var isZooming: Bool = false
-    @State private var gestureZoom: CGFloat = 1.0
-    @State private var gestureOffset: CGSize = .zero
-    @State private var gestureStartZoom: CGFloat = 1.0
-    @State private var gestureStartOffset: CGSize = .zero
-    @State private var zoomStartLocation: CGPoint = .zero
+    // Note: Trackpad pinch-to-zoom disabled - use +/- buttons in ZoomControlsView
     
     // Pan debounce timer for two-finger scrolling
     @State private var panDebounceTimer: Timer?
@@ -127,9 +121,9 @@ struct CanvasView: View {
         }
     }
     
-    // Use local gesture state during zoom, otherwise use viewModel values
-    private var currentZoom: CGFloat { isZooming ? gestureZoom : viewModel.zoom }
-    private var currentOffset: CGSize { isZooming ? gestureOffset : viewModel.offset }
+    // Zoom values from viewModel (trackpad pinch-to-zoom disabled)
+    private var currentZoom: CGFloat { viewModel.zoom }
+    private var currentOffset: CGSize { viewModel.offset }
 
     var body: some View {
         canvasContent
@@ -398,73 +392,7 @@ struct CanvasView: View {
                         viewModel.isPanning = false  // Re-enable normal rendering
                     }
             )
-            .simultaneousGesture(
-                MagnificationGesture()
-                    .onChanged { value in
-                        // Block if modal is open
-                        if modalCoordinator.isModalPresented {
-                            return
-                        }
-                        // Block if pinch started in outline pane area
-                        if showOutline {
-                            let outlineRect = CGRect(
-                                x: 20,
-                                y: 56,
-                                width: 280,
-                                height: geometry.size.height - 56
-                            )
-                            if outlineRect.contains(mouseLocation) {
-                                return
-                            }
-                        }
-                        guard !isResizingActive else { return }
-                        
-                        // Initialize gesture state on first change
-                        if !isZooming {
-                            isZooming = true
-                            viewModel.isZooming = true  // Signal to MarkdownText to skip rendering
-                            gestureStartZoom = viewModel.zoom
-                            gestureStartOffset = viewModel.offset
-                            gestureZoom = viewModel.zoom
-                            gestureOffset = viewModel.offset
-                            zoomStartLocation = mouseLocation
-                        }
-                        
-                        // Cursor-anchored zoom: keep the world point under cursor fixed
-                        // Use ORIGINAL captured values for calculation
-                        let baseZoom = gestureStartZoom
-                        let baseOffset = gestureStartOffset
-                        
-                        // High sensitivity for fast zooming (was 0.1, now 0.5 for 5× faster)
-                        let dampingFactor: CGFloat = 0.5
-                        let zoomDelta = (value - 1.0) * dampingFactor
-                        let newZoom = max(Config.minZoom, min(Config.maxZoom, baseZoom * (1.0 + zoomDelta)))
-                        let s = zoomStartLocation
-                        
-                        // Calculate world point under cursor using ORIGINAL offset and zoom
-                        let wx = (s.x - baseOffset.width) / max(baseZoom, 0.001)
-                        let wy = (s.y - baseOffset.height) / max(baseZoom, 0.001)
-                        
-                        // Update local state only - no viewModel updates during gesture
-                        gestureZoom = newZoom
-                        gestureOffset = CGSize(
-                            width: s.x - wx * newZoom,
-                            height: s.y - wy * newZoom
-                        )
-                    }
-                    .onEnded { _ in
-                        // Block if modal is open
-                        if modalCoordinator.isModalPresented {
-                            return
-                        }
-                        // Only update viewModel once at the end
-                        viewModel.zoom = gestureZoom
-                        viewModel.offset = gestureOffset
-                        lastZoom = gestureZoom
-                        isZooming = false
-                        viewModel.isZooming = false  // Re-enable markdown rendering
-                    }
-            )
+            // Trackpad pinch-to-zoom disabled - use +/- buttons in ZoomControlsView instead
             // Double-click to create node disabled - use right-click menu instead
             .task {
                 // Use task to prevent duplicate renders

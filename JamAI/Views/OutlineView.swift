@@ -426,11 +426,22 @@ private struct OutlineItemView: View {
                         .frame(width: 6, height: 6)
                 }
                 
-                // Node title
-                Text(nodeTitle)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                    .foregroundColor(isSelected ? .white : .primary)
+                // Node title and note preview in vertical stack
+                VStack(alignment: .leading, spacing: 2) {
+                    // Node title (allow multi-line for full title display)
+                    Text(nodeTitle)
+                        .font(.system(size: 13))
+                        .lineLimit(2)
+                        .foregroundColor(isSelected ? .white : .primary)
+                    
+                    // Note preview (first line of content)
+                    if outlineNode.node.type == .note && !notePreview.isEmpty {
+                        Text(notePreview)
+                            .font(.system(size: 11))
+                            .lineLimit(1)
+                            .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+                    }
+                }
                 
                 Spacer()
                 
@@ -490,7 +501,30 @@ private struct OutlineItemView: View {
             }
         }
         
+        // For notes without a title, use "Note" as default
+        if outlineNode.node.type == .note {
+            return "Note"
+        }
+        
         return "Untitled"
+    }
+    
+    /// Preview of note content - first line truncated
+    private var notePreview: String {
+        guard outlineNode.node.type == .note else { return "" }
+        
+        let content = outlineNode.node.description.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !content.isEmpty else { return "" }
+        
+        // Get first line only
+        let firstLine = content.components(separatedBy: .newlines).first ?? content
+        let trimmed = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        
+        // Truncate if too long
+        if trimmed.count > 40 {
+            return String(trimmed.prefix(40)) + "..."
+        }
+        return trimmed
     }
     
     private var nodeColor: Color {
