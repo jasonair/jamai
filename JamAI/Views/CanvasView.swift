@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 // FocusedValue key for canvas view model
 struct CanvasViewModelKey: FocusedValueKey {
@@ -43,6 +44,9 @@ struct CanvasView: View {
     // Snap haptic feedback state - track previous snap state to detect transitions
     @State private var wasSnappedX: Bool = false
     @State private var wasSnappedY: Bool = false
+    
+    // PDF file picker state
+    @State private var showPDFPicker: Bool = false
     
     // Note: Trackpad pinch-to-zoom disabled - use +/- buttons in ZoomControlsView
     
@@ -143,6 +147,13 @@ struct CanvasView: View {
                 )
                 .frame(width: 0, height: 0)
             )
+            .fileImporter(
+                isPresented: $showPDFPicker,
+                allowedContentTypes: [.pdf],
+                allowsMultipleSelection: true
+            ) { result in
+                handlePDFFileImport(result)
+            }
     }
     
     private var canvasContent: some View {
@@ -162,6 +173,10 @@ struct CanvasView: View {
                 return .handled
             }
             return .ignored
+        }
+        // PDF drag-and-drop support
+        .onDrop(of: [.fileURL], isTargeted: nil) { providers, location in
+            handlePDFDrop(providers: providers, at: location)
         }
     }
     
@@ -648,6 +663,9 @@ struct CanvasView: View {
                         onCreateTitle: {
                             let centerPos = viewportCenterInCanvas()
                             viewModel.createTitleLabel(at: centerPos)
+                        },
+                        onUploadPDF: {
+                            showPDFPicker = true
                         }
                     )
                     Spacer()
@@ -1254,6 +1272,83 @@ struct CanvasView: View {
         colorScheme == .dark
             ? Color.white.opacity(0.05)
             : Color.black.opacity(0.05)
+    }
+    
+    // MARK: - PDF Drop Handling
+    
+    /// Handle PDF file drop onto canvas
+    func handlePDFDrop(providers: [NSItemProvider], at location: CGPoint) -> Bool {
+        // Capture viewModel before the escaping closure
+        let vm = viewModel
+        
+        for provider in providers {
+            // Check if it's a file URL
+            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                    guard let data = item as? Data,
+                          let url = URL(dataRepresentation: data, relativeTo: nil) else {
+                        return
+                    }
+                    
+                    // Check if it's a PDF file
+                    guard url.pathExtension.lowercased() == "pdf" else {
+                        return
+                    }
+                    
+                    // Read PDF data
+                    guard let pdfData = try? Data(contentsOf: url) else {
+                        return
+                    }
+                    
+                    let filename = url.lastPathComponent
+                    
+                    // Convert screen location to canvas coordinates
+                    Task { @MainActor in
+                        let canvasX = (location.x - vm.offset.width) / vm.zoom
+                        let canvasY = (location.y - vm.offset.height) / vm.zoom
+                        let canvasPoint = CGPoint(x: canvasX, y: canvasY)
+                        
+                        vm.createPDFNode(pdfData: pdfData, filename: filename, at: canvasPoint)
+                    }
+                }
+                return true
+            }
+        }
+        return false
+    }
+    
+    /// Handle PDF file import from file picker
+    private func handlePDFFileImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            // Calculate center position for PDFs
+            let centerPos = viewportCenterInCanvas()
+            var xOffset: CGFloat = 0
+            
+            for url in urls {
+                // Start accessing security-scoped resource
+                guard url.startAccessingSecurityScopedResource() else {
+                    continue
+                }
+                defer { url.stopAccessingSecurityScopedResource() }
+                
+                // Read PDF data
+                guard let pdfData = try? Data(contentsOf: url) else {
+                    continue
+                }
+                
+                let filename = url.lastPathComponent
+                let position = CGPoint(x: centerPos.x + xOffset, y: centerPos.y)
+                
+                viewModel.createPDFNode(pdfData: pdfData, filename: filename, at: position)
+                
+                // Offset next PDF to the right
+                xOffset += Node.pdfWidth + 20
+            }
+            
+        case .failure(let error):
+            viewModel.errorMessage = "Failed to import PDF: \(error.localizedDescription)"
+        }
     }
 }
 

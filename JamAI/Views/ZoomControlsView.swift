@@ -17,6 +17,7 @@ struct ZoomControlsView: View {
     let onCreateChat: () -> Void
     let onCreateNote: () -> Void
     let onCreateTitle: () -> Void
+    let onUploadPDF: () -> Void
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -53,6 +54,7 @@ struct ZoomControlsView: View {
             ZoomButton(icon: "plus.circle", action: onCreateChat, tooltip: "New Chat")
             ZoomButton(icon: "doc.text", action: onCreateNote, tooltip: "New Note")
             ZoomButton(icon: "textformat.size", action: onCreateTitle, tooltip: "New Title")
+            ZoomButton(icon: "doc.badge.plus", action: onUploadPDF, tooltip: "Upload PDF")
             
             Divider()
                 .frame(width: 1, height: 20)

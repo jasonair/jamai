@@ -26,6 +26,7 @@ enum NodeType: String, Codable, Sendable {
     case title
     case shape
     case image
+    case pdf
 }
 
 struct Node: Identifiable, Codable, Equatable, Sendable {
@@ -73,6 +74,12 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     // Image data (for image nodes)
     var imageData: Data?
     
+    // PDF data (for pdf nodes)
+    var pdfFileUri: String?      // Gemini File API URI (files/xxx)
+    var pdfFileName: String?     // Original filename for display
+    var pdfFileId: String?       // Gemini file ID for deletion
+    var pdfData: Data?           // Local PDF data for persistence
+    
     // Embeddings for RAG
     var embeddingJSON: String? // JSON array of Float values for semantic search
     var embeddingUpdatedAt: Date? // When the embedding was last generated
@@ -115,6 +122,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         fontFamily: String? = nil,
         shapeKind: ShapeKind? = nil,
         imageData: Data? = nil,
+        pdfFileUri: String? = nil,
+        pdfFileName: String? = nil,
+        pdfFileId: String? = nil,
+        pdfData: Data? = nil,
         embeddingJSON: String? = nil,
         embeddingUpdatedAt: Date? = nil,
         orchestratorSessionId: UUID? = nil,
@@ -159,6 +170,10 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.fontFamily = fontFamily
         self.shapeKind = shapeKind
         self.imageData = imageData
+        self.pdfFileUri = pdfFileUri
+        self.pdfFileName = pdfFileName
+        self.pdfFileId = pdfFileId
+        self.pdfData = pdfData
         self.embeddingJSON = embeddingJSON
         self.embeddingUpdatedAt = embeddingUpdatedAt
         self.orchestratorSessionId = orchestratorSessionId
@@ -324,6 +339,8 @@ extension Node {
     nonisolated static let titleWidth: CGFloat = 700
     nonisolated static let textWidth: CGFloat = 200
     nonisolated static let shapeWidth: CGFloat = 160
+    nonisolated static let pdfWidth: CGFloat = 200 // PDF nodes are compact (50% of standard)
+    nonisolated static let pdfHeight: CGFloat = 80  // Compact height for PDF nodes
     nonisolated static let collapsedHeight: CGFloat = 654 // Same as expanded height - nodes stay at 490.26x654
     nonisolated static let expandedHeight: CGFloat = 654 // Default expanded height
     nonisolated static let minHeight: CGFloat = 654 // Minimum height when resizing
@@ -345,6 +362,7 @@ extension Node {
         case .text: return textWidth
         case .shape: return shapeWidth
         case .image: return 300 // Default image width
+        case .pdf: return pdfWidth
         case .standard: return nodeWidth
         }
     }

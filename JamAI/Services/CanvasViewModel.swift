@@ -117,6 +117,7 @@ class CanvasViewModel: ObservableObject {
     let geminiClient: GeminiClient
     let ragService: RAGService
     let embeddingService: NodeEmbeddingService
+    let pdfSearchService: PDFSearchService
     let database: Database
     let dbActor: DatabaseActor
     let undoManager: CanvasUndoManager
@@ -142,6 +143,7 @@ class CanvasViewModel: ObservableObject {
         self.geminiClient = GeminiClient()
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
         self.embeddingService = NodeEmbeddingService(geminiClient: geminiClient)
+        self.pdfSearchService = PDFSearchService.shared
         self.undoManager = CanvasUndoManager()
         // Initialize AI client based on active provider
         switch AIProviderManager.shared.activeProvider {
@@ -266,6 +268,137 @@ class CanvasViewModel: ObservableObject {
                 }
             } catch {
                 if Config.enableVerboseLogging { print("⚠️ Failed to save note: \(error.localizedDescription)") }
+            }
+        }
+    }
+    
+    // MARK: - PDF Node Creation
+    
+    /// Create a PDF node from uploaded PDF data
+    /// - Parameters:
+    ///   - pdfData: The raw PDF file data
+    ///   - filename: Original filename for display
+    ///   - position: Position on canvas
+    func createPDFNode(pdfData: Data, filename: String, at position: CGPoint) {
+        Task(priority: .userInitiated) { @MainActor in
+            // Create the PDF node
+            let node = Node(
+                projectId: self.project.id,
+                parentId: nil,
+                x: position.x,
+                y: position.y,
+                width: Node.pdfWidth,
+                height: Node.pdfHeight,
+                title: filename,
+                titleSource: .user,
+                description: "",
+                descriptionSource: .user,
+                isExpanded: false,
+                color: "none",
+                type: .pdf,
+                pdfFileName: filename,
+                pdfData: pdfData
+            )
+            
+            self.nodes[node.id] = node
+            self.bringToFront([node.id])
+            self.selectedNodeId = node.id
+            self.undoManager.record(.createNode(node))
+            
+            // Save node immediately
+            let dbActor = self.dbActor
+            Task { [weak self, dbActor, node] in
+                do {
+                    try await dbActor.saveNode(node)
+                    
+                    // Track PDF upload analytics
+                    if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                        await AnalyticsService.shared.trackNodeCreation(
+                            userId: userId,
+                            projectId: node.projectId,
+                            nodeId: node.id,
+                            nodeType: "pdf",
+                            creationMethod: .manual,
+                            parentNodeId: nil,
+                            teamMemberRoleId: nil
+                        )
+                    }
+                } catch {
+                    await MainActor.run {
+                        self?.errorMessage = "Failed to save PDF node: \(error.localizedDescription)"
+                    }
+                }
+            }
+            
+            // Upload PDF to Gemini File API in background
+            Task { [weak self] in
+                await self?.uploadPDFToGemini(nodeId: node.id)
+            }
+        }
+    }
+    
+    /// Upload PDF data to Gemini File API and update node with file URI
+    private func uploadPDFToGemini(nodeId: UUID) async {
+        guard var node = nodes[nodeId],
+              node.type == .pdf,
+              let pdfData = node.pdfData,
+              let filename = node.pdfFileName else {
+            return
+        }
+        
+        do {
+            if Config.enableVerboseLogging {
+                print("📄 Uploading PDF '\(filename)' to Gemini File API...")
+            }
+            
+            let file = try await PDFFileService.shared.uploadPDF(data: pdfData, filename: filename)
+            
+            // Update node with file info
+            node.pdfFileUri = file.uri
+            node.pdfFileId = file.fileId
+            nodes[nodeId] = node
+            
+            // Save updated node
+            let dbActor = self.dbActor
+            try await dbActor.saveNode(node)
+            
+            if Config.enableVerboseLogging {
+                print("📄 PDF '\(filename)' uploaded successfully: \(file.uri)")
+            }
+        } catch {
+            if Config.enableVerboseLogging {
+                print("⚠️ Failed to upload PDF '\(filename)': \(error.localizedDescription)")
+            }
+            // Node is still usable, just won't have file search until re-upload
+            errorMessage = "PDF indexing failed: \(error.localizedDescription)"
+        }
+    }
+    
+    /// Re-upload a PDF if its file has expired (files expire after 48 hours)
+    func ensurePDFFileActive(nodeId: UUID) async {
+        guard var node = nodes[nodeId],
+              node.type == .pdf else {
+            return
+        }
+        
+        do {
+            if let newFile = try await PDFFileService.shared.ensureFileActive(node: node) {
+                // Update node with new file info
+                node.pdfFileUri = newFile.uri
+                node.pdfFileId = newFile.fileId
+                nodes[nodeId] = node
+                
+                // Save updated node
+                let dbActor = self.dbActor
+                try await dbActor.saveNode(node)
+                
+                if Config.enableVerboseLogging {
+                    print("📄 PDF '\(node.pdfFileName ?? "Unknown")' re-uploaded after expiration")
+                }
+            }
+        } catch {
+            if Config.enableVerboseLogging {
+                print("⚠️ Failed to re-upload expired PDF: \(error.localizedDescription)")
             }
         }
     }
@@ -1261,7 +1394,7 @@ class CanvasViewModel: ObservableObject {
         
         Task { [teamMemberRoleId, teamMemberRoleName, teamMemberExperienceLevel] in
             do {
-                let aiContext = self.buildAIContext(for: node)
+                let aiContext = await self.buildAIContext(for: node)
                 let contextTextsForBilling = aiContext.map { $0.content }
                 var streamedResponse = ""
                 
@@ -1881,7 +2014,7 @@ class CanvasViewModel: ObservableObject {
             guard let self = self else { return }
             
             do {
-                let aiContext = self.buildAIContext(for: node)
+                let aiContext = await self.buildAIContext(for: node, userQuery: prompt)
                 let contextTextsForBilling = aiContext.map { $0.content }
                 var streamedResponse = ""
                 
@@ -2059,7 +2192,7 @@ class CanvasViewModel: ObservableObject {
         }
         
         do {
-            let aiContext = buildAIContext(for: node)
+            let aiContext = await buildAIContext(for: node, userQuery: prompt)
             var contextTextsForBilling = aiContext.map { $0.content }
             // Also include the search context in billing if present
             if enhancedPrompt != prompt {
@@ -2193,7 +2326,7 @@ class CanvasViewModel: ObservableObject {
         return messages
     }
 
-private func buildAIContext(for node: Node) -> [AIChatMessage] {
+private func buildAIContext(for node: Node, userQuery: String? = nil) async -> [AIChatMessage] {
     var messages: [AIChatMessage] = []
     
     // 1. Context from parent node (existing behavior)
@@ -2208,13 +2341,18 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
     // Find all incoming edges (edges where this node is the target)
     let incomingEdges = edges.values.filter { $0.targetId == node.id }
     
-    if Config.enableVerboseLogging {
-        print("🔗 Building AI context for node '\(node.title)' (id: \(node.id))")
-        print("🔗 Total edges: \(edges.count), incoming edges: \(incomingEdges.count)")
+    // Always log edge info for PDF debugging
+    print("🔗 [Context] Building AI context for node '\(node.title)' (id: \(node.id))")
+    print("🔗 [Context] Total edges: \(edges.count), incoming edges to this node: \(incomingEdges.count)")
+    for edge in incomingEdges {
+        if let sourceNode = nodes[edge.sourceId] {
+            print("🔗 [Context] - Incoming from '\(sourceNode.title)' (type: \(sourceNode.type))")
+        }
     }
     
     if !incomingEdges.isEmpty {
         var connectedContextParts: [String] = []
+        var connectedPDFNodes: [Node] = []
         
         for edge in incomingEdges {
             guard let sourceNode = nodes[edge.sourceId] else {
@@ -2225,7 +2363,13 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
             }
             
             if Config.enableVerboseLogging {
-                print("🔗 Found connected source node: '\(sourceNode.title)' (id: \(sourceNode.id))")
+                print("🔗 Found connected source node: '\(sourceNode.title)' (id: \(sourceNode.id), type: \(sourceNode.type))")
+            }
+            
+            // Collect PDF nodes separately for file search
+            if sourceNode.type == .pdf && sourceNode.pdfFileUri != nil {
+                connectedPDFNodes.append(sourceNode)
+                continue
             }
             
             // Build context snippet from connected node
@@ -2247,6 +2391,41 @@ private func buildAIContext(for node: Node) -> [AIChatMessage] {
                 role: .user,
                 content: "Context from connected knowledge sources:\n\n\(connectedContext)"
             ))
+        }
+        
+        // 2.5. Context from connected PDF documents via Gemini File Search
+        if !connectedPDFNodes.isEmpty, let query = userQuery ?? node.conversation.last(where: { $0.role == .user })?.content {
+            // Always log PDF search attempts for debugging
+            print("📄 [PDF Search] Found \(connectedPDFNodes.count) connected PDF nodes")
+            for pdfNode in connectedPDFNodes {
+                print("📄 [PDF Search] - '\(pdfNode.pdfFileName ?? "Unknown")' URI: \(pdfNode.pdfFileUri ?? "nil")")
+            }
+            print("📄 [PDF Search] Query: '\(query.prefix(100))...'")
+            
+            do {
+                let pdfContext = try await pdfSearchService.buildPDFContext(query: query, pdfNodes: connectedPDFNodes)
+                if !pdfContext.isEmpty {
+                    messages.append(AIChatMessage(
+                        role: .user,
+                        content: pdfContext
+                    ))
+                    print("📄 [PDF Search] SUCCESS - Added context (\(pdfContext.count) chars)")
+                } else {
+                    print("📄 [PDF Search] WARNING - Empty context returned")
+                }
+            } catch {
+                print("⚠️ [PDF Search] FAILED: \(error.localizedDescription)")
+                // Continue without PDF context - don't block the response
+            }
+        } else if connectedPDFNodes.isEmpty {
+            // Check if there are any PDF nodes that weren't included
+            let allPdfSourceNodes = incomingEdges.compactMap { nodes[$0.sourceId] }.filter { $0.type == .pdf }
+            if !allPdfSourceNodes.isEmpty {
+                print("📄 [PDF Search] WARNING - Found \(allPdfSourceNodes.count) PDF nodes but none had valid file URIs")
+                for pdfNode in allPdfSourceNodes {
+                    print("📄 [PDF Search] - '\(pdfNode.pdfFileName ?? "Unknown")' URI: \(pdfNode.pdfFileUri ?? "nil")")
+                }
+            }
         }
     }
     

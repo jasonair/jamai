@@ -265,6 +265,28 @@ final class Database: Sendable {
                 }
             }
             
+            // Add PDF columns if they don't exist (migration for PDF nodes)
+            if try db.columns(in: "nodes").first(where: { $0.name == "pdf_file_uri" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "pdf_file_uri", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "pdf_file_name" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "pdf_file_name", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "pdf_file_id" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "pdf_file_id", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "pdf_data" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "pdf_data", .blob)
+                }
+            }
+            
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -451,8 +473,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, embedding_json, embedding_updated_at, orchestrator_session_id, orchestrator_role, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, pdf_file_uri, pdf_file_name, pdf_file_id, pdf_data, embedding_json, embedding_updated_at, orchestrator_session_id, orchestrator_role, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -483,6 +505,10 @@ final class Database: Sendable {
                     node.fontFamily,
                     node.shapeKind?.rawValue,
                     node.imageData,
+                    node.pdfFileUri,
+                    node.pdfFileName,
+                    node.pdfFileId,
+                    node.pdfData,
                     node.embeddingJSON,
                     node.embeddingUpdatedAt,
                     node.orchestratorSessionId?.uuidString,
@@ -531,6 +557,10 @@ final class Database: Sendable {
                     fontFamily: row["font_family"] as String?,
                     shapeKind: (row["shape_kind"] as String?).flatMap { ShapeKind(rawValue: $0) },
                     imageData: row["image_data"] as Data?,
+                    pdfFileUri: row["pdf_file_uri"] as String?,
+                    pdfFileName: row["pdf_file_name"] as String?,
+                    pdfFileId: row["pdf_file_id"] as String?,
+                    pdfData: row["pdf_data"] as Data?,
                     embeddingJSON: row["embedding_json"] as String?,
                     embeddingUpdatedAt: row["embedding_updated_at"] as Date?,
                     orchestratorSessionId: (row["orchestrator_session_id"] as String?).flatMap { UUID(uuidString: $0) },

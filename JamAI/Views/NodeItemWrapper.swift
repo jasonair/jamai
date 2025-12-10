@@ -109,6 +109,25 @@ struct NodeItemWrapper: View {
                     onTap: onTap,
                     onDelete: onDelete
                 )
+            } else if node.type == .pdf {
+                PDFNodeView(
+                    node: $node,
+                    isSelected: isSelected,
+                    isMultiSelected: isMultiSelected,
+                    onDelete: onDelete,
+                    isWiring: isWiring,
+                    wireSourceNodeId: wireSourceNodeId,
+                    onClickToStartWiring: onClickToStartWiring,
+                    onClickToConnect: onClickToConnect,
+                    onDeleteConnection: onDeleteConnection,
+                    hasTopConnection: hasTopConnection,
+                    hasRightConnection: hasRightConnection,
+                    hasBottomConnection: hasBottomConnection,
+                    hasLeftConnection: hasLeftConnection
+                )
+                .onTapGesture {
+                    onTap()
+                }
             } else {
                 NodeView(
                     node: $node,
@@ -220,6 +239,8 @@ struct NodeItemWrapper: View {
         case .image:
             return node.height
         case .standard:
+            return node.height
+        case .pdf:
             return node.height
         }
     }
