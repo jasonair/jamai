@@ -1,8 +1,54 @@
 import Foundation
 
 enum AIProvider: String, Codable, CaseIterable {
-    case local
-    case gemini
+    case local          // Local LLM (free, offline)
+    case gemini         // Hosted Gemini (your API key, subscription users)
+    case openai         // BYOK OpenAI
+    case claude         // BYOK Anthropic Claude
+    case geminiByok     // BYOK Gemini (user's own key)
+    
+    var displayName: String {
+        switch self {
+        case .local: return "Local (Free)"
+        case .gemini: return "Gemini (Cloud)"
+        case .openai: return "OpenAI"
+        case .claude: return "Claude"
+        case .geminiByok: return "Gemini (Your Key)"
+        }
+    }
+    
+    var description: String {
+        switch self {
+        case .local: return "Runs on your Mac, no internet required"
+        case .gemini: return "Fast cloud AI, uses your subscription credits"
+        case .openai: return "GPT-4o, uses your OpenAI API key"
+        case .claude: return "Claude 3.5 Sonnet, uses your Anthropic API key"
+        case .geminiByok: return "Gemini 2.0 Flash, uses your Google API key"
+        }
+    }
+    
+    /// Whether this provider requires a user-provided API key (BYOK)
+    var isByok: Bool {
+        switch self {
+        case .openai, .claude, .geminiByok: return true
+        case .local, .gemini: return false
+        }
+    }
+    
+    /// Whether this provider uses your hosted API (costs you money)
+    var isHosted: Bool {
+        return self == .gemini
+    }
+    
+    /// Keychain identifier for storing the API key
+    var keychainIdentifier: String? {
+        switch self {
+        case .openai: return "openai-api-key"
+        case .claude: return "anthropic-api-key"
+        case .geminiByok: return "gemini-byok-api-key"
+        default: return nil
+        }
+    }
 }
 
 struct ProviderCapabilities: Equatable {

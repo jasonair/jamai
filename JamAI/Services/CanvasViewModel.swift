@@ -143,15 +143,23 @@ class CanvasViewModel: ObservableObject {
         self.ragService = RAGService(geminiClient: geminiClient, database: database)
         self.embeddingService = NodeEmbeddingService(geminiClient: geminiClient)
         self.undoManager = CanvasUndoManager()
-        if AIProviderManager.shared.activeProvider == .local {
+        // Initialize AI client based on active provider
+        switch AIProviderManager.shared.activeProvider {
+        case .local:
             let model = AIProviderManager.shared.activeModelName ?? AIProviderManager.availableLocalModels.first
             if let name = model {
                 AIProviderManager.shared.setClient(LlamaCppClient(modelId: name))
             } else {
                 AIProviderManager.shared.setClient(LlamaCppClient(modelId: "deepseek-r1:1.5b"))
             }
-        } else {
+        case .gemini:
             AIProviderManager.shared.setClient(GeminiClientAdapter(geminiClient: geminiClient))
+        case .openai:
+            AIProviderManager.shared.setClient(OpenAIClientAdapter())
+        case .claude:
+            AIProviderManager.shared.setClient(ClaudeClientAdapter())
+        case .geminiByok:
+            AIProviderManager.shared.setClient(GeminiByokClientAdapter())
         }
         Task { await AIProviderManager.shared.refreshHealth() }
         

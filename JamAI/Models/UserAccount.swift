@@ -14,6 +14,7 @@ enum UserPlan: String, Codable, CaseIterable {
     case pro = "pro"
     case teams = "teams"
     case enterprise = "enterprise"
+    case lifetime = "lifetime" // Early bird lifetime deal - BYOK only
     
     var displayName: String {
         switch self {
@@ -21,6 +22,7 @@ enum UserPlan: String, Codable, CaseIterable {
         case .pro: return "Pro"
         case .teams: return "Teams"
         case .enterprise: return "Enterprise"
+        case .lifetime: return "Lifetime"
         }
     }
     
@@ -30,6 +32,7 @@ enum UserPlan: String, Codable, CaseIterable {
         case .pro: return "$15"
         case .teams: return "$30"
         case .enterprise: return "Let's talk"
+        case .lifetime: return "One-time"
         }
     }
     
@@ -39,7 +42,18 @@ enum UserPlan: String, Codable, CaseIterable {
         case .pro: return 1000 // ~1M tokens ≈ $0.60 cost
         case .teams: return 1500 // ~1.5M tokens ≈ $0.90 cost
         case .enterprise: return 5000 // ~5M tokens ≈ $3 cost
+        case .lifetime: return 0 // BYOK only - no hosted credits
         }
+    }
+    
+    /// Lifetime deal users must use BYOK - no access to hosted Gemini
+    var isLifetimeDeal: Bool {
+        return self == .lifetime
+    }
+    
+    /// Whether this plan has access to hosted cloud AI (your Gemini API)
+    var hasHostedCloudAccess: Bool {
+        return self != .lifetime
     }
     
     // All plans now have unlimited team members and all experience levels
@@ -72,6 +86,14 @@ enum UserPlan: String, Codable, CaseIterable {
                 "Everything in Teams, plus:",
                 "5,000 prompt credits / user / month",
                 "Dedicated account manager"
+            ]
+        case .lifetime:
+            return [
+                "One-time purchase",
+                "Bring Your Own Keys (BYOK)",
+                "OpenAI, Claude, Gemini support",
+                "Local model included",
+                "All features unlocked forever"
             ]
         }
     }

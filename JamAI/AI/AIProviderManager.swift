@@ -67,11 +67,25 @@ final class AIProviderManager: ObservableObject {
                 supportsTools: false,
                 maxOutputTokens: 4096
             )
-        case .gemini:
+        case .gemini, .geminiByok:
             return ProviderCapabilities(
                 supportsVision: true,
                 supportsAudio: true,
                 supportsTools: false,
+                maxOutputTokens: 8192
+            )
+        case .openai:
+            return ProviderCapabilities(
+                supportsVision: true,
+                supportsAudio: true,
+                supportsTools: true,
+                maxOutputTokens: 16384
+            )
+        case .claude:
+            return ProviderCapabilities(
+                supportsVision: true,
+                supportsAudio: false,
+                supportsTools: true,
                 maxOutputTokens: 8192
             )
         }
@@ -102,6 +116,53 @@ final class AIProviderManager: ObservableObject {
             self.client = LlamaCppClient(modelId: finalName)
         }
         Task { await refreshHealth() }
+    }
+    
+    /// Activate a BYOK provider (OpenAI, Claude, or Gemini BYOK)
+    func activateByokProvider(_ provider: AIProvider) {
+        guard provider.isByok else { return }
+        setProvider(provider)
+        
+        switch provider {
+        case .openai:
+            self.client = OpenAIClientAdapter()
+        case .claude:
+            self.client = ClaudeClientAdapter()
+        case .geminiByok:
+            self.client = GeminiByokClientAdapter()
+        default:
+            break
+        }
+        
+        Task { await refreshHealth() }
+    }
+    
+    /// Activate hosted Gemini (your API key)
+    func activateHostedGemini(geminiClient: GeminiClient) {
+        setProvider(.gemini)
+        self.client = GeminiClientAdapter(geminiClient: geminiClient)
+        Task { await refreshHealth() }
+    }
+    
+    /// Check if a BYOK provider has a valid API key configured
+    func hasApiKey(for provider: AIProvider) -> Bool {
+        return KeychainService.shared.hasKey(for: provider)
+    }
+    
+    /// Get available providers for a user's plan
+    func availableProviders(for plan: UserPlan?) -> [AIProvider] {
+        // Always available: local
+        var providers: [AIProvider] = [.local]
+        
+        // Hosted Gemini only for subscription users (not lifetime)
+        if let plan = plan, plan.hasHostedCloudAccess {
+            providers.append(.gemini)
+        }
+        
+        // BYOK providers always available
+        providers.append(contentsOf: [.openai, .claude, .geminiByok])
+        
+        return providers
     }
     
     func startLocalModelInstall(onProgress: ((Double) -> Void)? = nil) async {

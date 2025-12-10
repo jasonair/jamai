@@ -548,6 +548,7 @@ struct UserSettingsView: View {
         case .pro: return .blue
         case .teams: return .purple
         case .enterprise: return .green
+        case .lifetime: return .orange
         }
     }
     

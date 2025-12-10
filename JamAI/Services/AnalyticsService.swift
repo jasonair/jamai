@@ -299,6 +299,9 @@ class AnalyticsService {
                 case .enterprise:
                     analytics.totalPaidUsers += 1
                     analytics.estimatedRevenue += 99.00 // Enterprise estimated monthly price (custom pricing)
+                case .lifetime:
+                    analytics.totalPaidUsers += 1
+                    // Lifetime deals are one-time, don't contribute to monthly recurring revenue
                 }
             }
             
