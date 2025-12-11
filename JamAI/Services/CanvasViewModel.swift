@@ -337,6 +337,150 @@ class CanvasViewModel: ObservableObject {
         }
     }
     
+    // MARK: - YouTube Node Creation
+    
+    /// Create a YouTube video node from a URL
+    /// - Parameters:
+    ///   - urlString: The YouTube URL (various formats supported)
+    ///   - position: Position on canvas
+    func createYouTubeNode(urlString: String, at position: CGPoint) {
+        Task(priority: .userInitiated) { @MainActor in
+            do {
+                // Validate and extract video ID
+                guard let videoId = YouTubeService.shared.extractVideoId(from: urlString) else {
+                    self.errorMessage = "Invalid YouTube URL. Please paste a valid YouTube video link."
+                    return
+                }
+                
+                // Fetch metadata
+                let metadata = try await YouTubeService.shared.fetchMetadata(for: urlString)
+                
+                // Create the YouTube node
+                let node = Node(
+                    projectId: self.project.id,
+                    parentId: nil,
+                    x: position.x,
+                    y: position.y,
+                    width: Node.youtubeWidth,
+                    height: Node.youtubeHeight,
+                    title: metadata.title,
+                    titleSource: .user,
+                    description: "",
+                    descriptionSource: .user,
+                    isExpanded: false,
+                    color: "none",
+                    type: .youtube,
+                    youtubeUrl: urlString,
+                    youtubeVideoId: videoId,
+                    youtubeTitle: metadata.title,
+                    youtubeThumbnailUrl: metadata.thumbnailUrl
+                )
+                
+                self.nodes[node.id] = node
+                self.bringToFront([node.id])
+                self.selectedNodeId = node.id
+                self.undoManager.record(.createNode(node))
+                
+                // Save node immediately
+                let dbActor = self.dbActor
+                let nodeId = node.id
+                try await dbActor.saveNode(node)
+                
+                // Track YouTube node analytics
+                if let userId = FirebaseAuthService.shared.currentUser?.uid {
+                    await AnalyticsService.shared.trackNodeCreation(
+                        userId: userId,
+                        projectId: node.projectId,
+                        nodeId: node.id,
+                        nodeType: "youtube",
+                        creationMethod: .manual,
+                        parentNodeId: nil,
+                        teamMemberRoleId: nil
+                    )
+                }
+                
+                if Config.enableVerboseLogging {
+                    print("🎬 Created YouTube node: '\(metadata.title)' (id: \(videoId))")
+                }
+                
+                // Fetch transcript and upload to Gemini in background
+                Task { [weak self] in
+                    await self?.uploadYouTubeTranscriptToGemini(nodeId: nodeId)
+                }
+            } catch {
+                self.errorMessage = error.localizedDescription
+            }
+        }
+    }
+    
+    /// Fetch transcript from YouTube and upload to Gemini File API
+    private func uploadYouTubeTranscriptToGemini(nodeId: UUID) async {
+        guard var node = nodes[nodeId],
+              node.type == .youtube,
+              let videoId = node.youtubeVideoId else {
+            return
+        }
+        
+        do {
+            let title = node.youtubeTitle ?? "YouTube Video"
+            
+            if Config.enableVerboseLogging {
+                print("🎬 [YouTube] Fetching transcript for '\(title)'...")
+            }
+            
+            // Fetch transcript
+            let transcript = try await YouTubeService.shared.fetchTranscript(videoId: videoId)
+            
+            if transcript.isEmpty {
+                if Config.enableVerboseLogging {
+                    print("⚠️ [YouTube] No transcript available for '\(title)'")
+                }
+                return
+            }
+            
+            if Config.enableVerboseLogging {
+                print("🎬 [YouTube] Got transcript (\(transcript.count) chars), uploading to Gemini...")
+            }
+            
+            // Store transcript locally
+            node.youtubeTranscript = transcript
+            
+            // Upload to Gemini
+            let filename = "\(title.prefix(50))_transcript.txt"
+            let geminiFile = try await PDFFileService.shared.uploadText(text: transcript, filename: filename)
+            
+            // Update node with file info
+            node.youtubeFileUri = geminiFile.uri
+            node.youtubeFileId = geminiFile.fileId
+            node.updatedAt = Date()
+            
+            // Update in-memory and save
+            await MainActor.run {
+                self.nodes[nodeId] = node
+            }
+            try await dbActor.saveNode(node)
+            
+            if Config.enableVerboseLogging {
+                print("🎬 [YouTube] Transcript uploaded successfully (fileId: \(geminiFile.fileId))")
+            }
+        } catch {
+            if Config.enableVerboseLogging {
+                print("⚠️ [YouTube] Failed to upload transcript: \(error.localizedDescription)")
+            }
+        }
+    }
+    
+    /// Open a YouTube video in the default browser
+    func openYouTubeInBrowser(nodeId: UUID) {
+        guard let node = nodes[nodeId],
+              node.type == .youtube,
+              let videoId = node.youtubeVideoId,
+              let url = URL(string: "https://www.youtube.com/watch?v=\(videoId)") else {
+            return
+        }
+        NSWorkspace.shared.open(url)
+    }
+    
     /// Upload PDF data to Gemini File API and update node with file URI
     private func uploadPDFToGemini(nodeId: UUID) async {
         guard var node = nodes[nodeId],
@@ -2394,6 +2538,7 @@ private func buildAIContext(for node: Node, userQuery: String? = nil) async -> [
     if !incomingEdges.isEmpty {
         var connectedContextParts: [String] = []
         var connectedPDFNodes: [Node] = []
+        var connectedYouTubeNodes: [Node] = []
         
         for edge in incomingEdges {
             guard let sourceNode = nodes[edge.sourceId] else {
@@ -2410,6 +2555,12 @@ private func buildAIContext(for node: Node, userQuery: String? = nil) async -> [
             // Collect PDF nodes separately for file search
             if sourceNode.type == .pdf && sourceNode.pdfFileUri != nil {
                 connectedPDFNodes.append(sourceNode)
+                continue
+            }
+            
+            // Collect YouTube nodes separately for transcript file search
+            if sourceNode.type == .youtube && sourceNode.youtubeFileUri != nil {
+                connectedYouTubeNodes.append(sourceNode)
                 continue
             }
             
@@ -2465,6 +2616,41 @@ private func buildAIContext(for node: Node, userQuery: String? = nil) async -> [
                 print("📄 [PDF Search] WARNING - Found \(allPdfSourceNodes.count) PDF nodes but none had valid file URIs")
                 for pdfNode in allPdfSourceNodes {
                     print("📄 [PDF Search] - '\(pdfNode.pdfFileName ?? "Unknown")' URI: \(pdfNode.pdfFileUri ?? "nil")")
+                }
+            }
+        }
+        
+        // 2.6. Context from connected YouTube video transcripts via Gemini File Search
+        if !connectedYouTubeNodes.isEmpty, let query = userQuery ?? node.conversation.last(where: { $0.role == .user })?.content {
+            // Log YouTube search attempts for debugging
+            print("🎬 [YouTube] Found \(connectedYouTubeNodes.count) connected YouTube nodes with transcripts")
+            for ytNode in connectedYouTubeNodes {
+                print("🎬 [YouTube] - '\(ytNode.youtubeTitle ?? "Unknown")' FileURI: \(ytNode.youtubeFileUri ?? "nil")")
+            }
+            print("🎬 [YouTube] Query: '\(query.prefix(100))...'")
+            
+            do {
+                let youtubeContext = try await pdfSearchService.buildYouTubeContext(query: query, youtubeNodes: connectedYouTubeNodes)
+                if !youtubeContext.isEmpty {
+                    messages.append(AIChatMessage(
+                        role: .user,
+                        content: youtubeContext
+                    ))
+                    print("🎬 [YouTube] SUCCESS - Added context (\(youtubeContext.count) chars)")
+                } else {
+                    print("🎬 [YouTube] WARNING - Empty context returned")
+                }
+            } catch {
+                print("⚠️ [YouTube] FAILED: \(error.localizedDescription)")
+                // Continue without YouTube context - don't block the response
+            }
+        } else if connectedYouTubeNodes.isEmpty {
+            // Check if there are any YouTube nodes that weren't included
+            let allYouTubeSourceNodes = incomingEdges.compactMap { nodes[$0.sourceId] }.filter { $0.type == .youtube }
+            if !allYouTubeSourceNodes.isEmpty {
+                print("🎬 [YouTube] WARNING - Found \(allYouTubeSourceNodes.count) YouTube nodes but none had uploaded transcripts")
+                for ytNode in allYouTubeSourceNodes {
+                    print("🎬 [YouTube] - '\(ytNode.youtubeTitle ?? "Unknown")' FileURI: \(ytNode.youtubeFileUri ?? "nil") (transcript pending upload?)")
                 }
             }
         }

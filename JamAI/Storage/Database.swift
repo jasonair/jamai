@@ -287,6 +287,44 @@ final class Database: Sendable {
                 }
             }
             
+            // Add YouTube columns if they don't exist (migration for YouTube nodes)
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_url" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_url", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_video_id" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_video_id", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_title" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_title", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_thumbnail_url" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_thumbnail_url", .text)
+                }
+            }
+            // Add YouTube RAG columns (transcript + Gemini file info)
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_transcript" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_transcript", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_file_uri" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_file_uri", .text)
+                }
+            }
+            if try db.columns(in: "nodes").first(where: { $0.name == "youtube_file_id" }) == nil {
+                try db.alter(table: "nodes") { t in
+                    t.add(column: "youtube_file_id", .text)
+                }
+            }
+            
             // Edges table
             try db.create(table: "edges", ifNotExists: true) { t in
                 t.column("id", .text).primaryKey()
@@ -473,8 +511,8 @@ final class Database: Sendable {
                 sql: """
                 INSERT OR REPLACE INTO nodes 
                 (id, project_id, parent_id, x, y, width, height, title, title_source, description, description_source, 
-                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, pdf_file_uri, pdf_file_name, pdf_file_id, pdf_data, embedding_json, embedding_updated_at, orchestrator_session_id, orchestrator_role, display_order, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 conversation_json, prompt, response, ancestry_json, summary, system_prompt_snapshot, team_member_json, personality, is_expanded, is_frozen_context, color, type, font_size, is_bold, font_family, shape_kind, image_data, pdf_file_uri, pdf_file_name, pdf_file_id, pdf_data, youtube_url, youtube_video_id, youtube_title, youtube_thumbnail_url, youtube_transcript, youtube_file_uri, youtube_file_id, embedding_json, embedding_updated_at, orchestrator_session_id, orchestrator_role, display_order, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 arguments: [
                     node.id.uuidString,
@@ -509,6 +547,13 @@ final class Database: Sendable {
                     node.pdfFileName,
                     node.pdfFileId,
                     node.pdfData,
+                    node.youtubeUrl,
+                    node.youtubeVideoId,
+                    node.youtubeTitle,
+                    node.youtubeThumbnailUrl,
+                    node.youtubeTranscript,
+                    node.youtubeFileUri,
+                    node.youtubeFileId,
                     node.embeddingJSON,
                     node.embeddingUpdatedAt,
                     node.orchestratorSessionId?.uuidString,
@@ -561,6 +606,13 @@ final class Database: Sendable {
                     pdfFileName: row["pdf_file_name"] as String?,
                     pdfFileId: row["pdf_file_id"] as String?,
                     pdfData: row["pdf_data"] as Data?,
+                    youtubeUrl: row["youtube_url"] as String?,
+                    youtubeVideoId: row["youtube_video_id"] as String?,
+                    youtubeTitle: row["youtube_title"] as String?,
+                    youtubeThumbnailUrl: row["youtube_thumbnail_url"] as String?,
+                    youtubeTranscript: row["youtube_transcript"] as String?,
+                    youtubeFileUri: row["youtube_file_uri"] as String?,
+                    youtubeFileId: row["youtube_file_id"] as String?,
                     embeddingJSON: row["embedding_json"] as String?,
                     embeddingUpdatedAt: row["embedding_updated_at"] as Date?,
                     orchestratorSessionId: (row["orchestrator_session_id"] as String?).flatMap { UUID(uuidString: $0) },

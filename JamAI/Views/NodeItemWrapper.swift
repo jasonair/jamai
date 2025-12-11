@@ -130,6 +130,26 @@ struct NodeItemWrapper: View {
                 .onTapGesture {
                     onTap()
                 }
+            } else if node.type == .youtube {
+                YouTubeNodeView(
+                    node: $node,
+                    isSelected: isSelected,
+                    isMultiSelected: isMultiSelected,
+                    onDelete: onDelete,
+                    onOpenInBrowser: onRevealInFinder, // Reuse callback for opening in browser
+                    isWiring: isWiring,
+                    wireSourceNodeId: wireSourceNodeId,
+                    onClickToStartWiring: onClickToStartWiring,
+                    onClickToConnect: onClickToConnect,
+                    onDeleteConnection: onDeleteConnection,
+                    hasTopConnection: hasTopConnection,
+                    hasRightConnection: hasRightConnection,
+                    hasBottomConnection: hasBottomConnection,
+                    hasLeftConnection: hasLeftConnection
+                )
+                .onTapGesture {
+                    onTap()
+                }
             } else {
                 NodeView(
                     node: $node,
@@ -243,6 +263,8 @@ struct NodeItemWrapper: View {
         case .standard:
             return node.height
         case .pdf:
+            return node.height
+        case .youtube:
             return node.height
         }
     }

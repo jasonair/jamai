@@ -4,6 +4,7 @@ struct CanvasContextMenu: View {
     let onCreateChat: () -> Void
     let onCreateNote: () -> Void
     let onCreateTitle: () -> Void
+    var onAddYouTube: (() -> Void)? = nil
     
     @Environment(\.colorScheme) private var colorScheme
     
@@ -26,6 +27,14 @@ struct CanvasContextMenu: View {
                 action: onCreateTitle
             )
             .help("New Title Here")
+            
+            if let onAddYouTube = onAddYouTube {
+                contextButton(
+                    systemImage: "play.rectangle",
+                    action: onAddYouTube
+                )
+                .help("Add YouTube Video")
+            }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)

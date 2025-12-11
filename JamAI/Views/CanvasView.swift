@@ -48,6 +48,11 @@ struct CanvasView: View {
     // PDF file picker state
     @State private var showPDFPicker: Bool = false
     
+    // YouTube URL input state
+    @State private var showYouTubeInput: Bool = false
+    @State private var youtubeURLInput: String = ""
+    @State private var youtubeInputPosition: CGPoint = .zero
+    
     // Note: Trackpad pinch-to-zoom disabled - use +/- buttons in ZoomControlsView
     
     // Pan debounce timer for two-finger scrolling
@@ -153,6 +158,20 @@ struct CanvasView: View {
                 allowsMultipleSelection: true
             ) { result in
                 handlePDFFileImport(result)
+            }
+            .sheet(isPresented: $showYouTubeInput) {
+                YouTubeURLInputView(
+                    urlInput: $youtubeURLInput,
+                    onSubmit: {
+                        if !youtubeURLInput.isEmpty {
+                            viewModel.createYouTubeNode(urlString: youtubeURLInput, at: youtubeInputPosition)
+                        }
+                        showYouTubeInput = false
+                    },
+                    onCancel: {
+                        showYouTubeInput = false
+                    }
+                )
             }
     }
     
@@ -544,6 +563,14 @@ struct CanvasView: View {
                         // Dismiss menu first, then create title
                         contextMenuLocation = nil
                         viewModel.createTitleLabel(at: canvasPos)
+                    },
+                    onAddYouTube: {
+                        let canvasPos = screenToCanvas(menuPoint, in: geometry.size)
+                        // Dismiss menu and show YouTube URL input
+                        contextMenuLocation = nil
+                        youtubeInputPosition = canvasPos
+                        youtubeURLInput = ""
+                        showYouTubeInput = true
                     }
                 )
                 .position(menuPoint)
@@ -666,6 +693,11 @@ struct CanvasView: View {
                         },
                         onUploadPDF: {
                             showPDFPicker = true
+                        },
+                        onAddYouTube: {
+                            youtubeInputPosition = viewportCenterInCanvas()
+                            youtubeURLInput = ""
+                            showYouTubeInput = true
                         }
                     )
                     Spacer()
@@ -835,7 +867,14 @@ struct CanvasView: View {
             onTitleEdit: { title in handleTitleEdit(title, for: node.id) },
             onDescriptionEdit: { desc in handleDescriptionEdit(desc, for: node.id) },
             onDelete: { handleDeleteNode(node.id) },
-            onRevealInFinder: { viewModel.revealPDFInFinder(nodeId: node.id) },
+            onRevealInFinder: {
+                // Handle different node types appropriately
+                if node.type == .youtube {
+                    viewModel.openYouTubeInBrowser(nodeId: node.id)
+                } else {
+                    viewModel.revealPDFInFinder(nodeId: node.id)
+                }
+            },
             onCreateChild: { handleCreateChildNode(node.id) },
             onDuplicate: { viewModel.duplicateNode(node.id) },
             onColorChange: { colorId in handleColorChange(colorId, for: node.id) },

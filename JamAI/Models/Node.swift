@@ -27,6 +27,7 @@ enum NodeType: String, Codable, Sendable {
     case shape
     case image
     case pdf
+    case youtube
 }
 
 struct Node: Identifiable, Codable, Equatable, Sendable {
@@ -80,6 +81,15 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
     var pdfFileId: String?       // Gemini file ID for deletion
     var pdfData: Data?           // Local PDF data for persistence
     
+    // YouTube data (for youtube nodes)
+    var youtubeUrl: String?           // Full YouTube URL
+    var youtubeVideoId: String?       // Extracted video ID (e.g., "dQw4w9WgXcQ")
+    var youtubeTitle: String?         // Video title from oEmbed
+    var youtubeThumbnailUrl: String?  // Thumbnail URL for display
+    var youtubeTranscript: String?    // Cached transcript text
+    var youtubeFileUri: String?       // Gemini File API URI (for RAG)
+    var youtubeFileId: String?        // Gemini file ID for deletion/status
+    
     // Embeddings for RAG
     var embeddingJSON: String? // JSON array of Float values for semantic search
     var embeddingUpdatedAt: Date? // When the embedding was last generated
@@ -126,6 +136,13 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         pdfFileName: String? = nil,
         pdfFileId: String? = nil,
         pdfData: Data? = nil,
+        youtubeUrl: String? = nil,
+        youtubeVideoId: String? = nil,
+        youtubeTitle: String? = nil,
+        youtubeThumbnailUrl: String? = nil,
+        youtubeTranscript: String? = nil,
+        youtubeFileUri: String? = nil,
+        youtubeFileId: String? = nil,
         embeddingJSON: String? = nil,
         embeddingUpdatedAt: Date? = nil,
         orchestratorSessionId: UUID? = nil,
@@ -174,6 +191,13 @@ struct Node: Identifiable, Codable, Equatable, Sendable {
         self.pdfFileName = pdfFileName
         self.pdfFileId = pdfFileId
         self.pdfData = pdfData
+        self.youtubeUrl = youtubeUrl
+        self.youtubeVideoId = youtubeVideoId
+        self.youtubeTitle = youtubeTitle
+        self.youtubeThumbnailUrl = youtubeThumbnailUrl
+        self.youtubeTranscript = youtubeTranscript
+        self.youtubeFileUri = youtubeFileUri
+        self.youtubeFileId = youtubeFileId
         self.embeddingJSON = embeddingJSON
         self.embeddingUpdatedAt = embeddingUpdatedAt
         self.orchestratorSessionId = orchestratorSessionId
@@ -341,6 +365,8 @@ extension Node {
     nonisolated static let shapeWidth: CGFloat = 160
     nonisolated static let pdfWidth: CGFloat = 200 // PDF nodes are compact (50% of standard)
     nonisolated static let pdfHeight: CGFloat = 80  // Compact height for PDF nodes
+    nonisolated static let youtubeWidth: CGFloat = 280 // YouTube nodes show thumbnail
+    nonisolated static let youtubeHeight: CGFloat = 180 // Taller to accommodate thumbnail
     nonisolated static let collapsedHeight: CGFloat = 654 // Same as expanded height - nodes stay at 490.26x654
     nonisolated static let expandedHeight: CGFloat = 654 // Default expanded height
     nonisolated static let minHeight: CGFloat = 654 // Minimum height when resizing
@@ -363,6 +389,7 @@ extension Node {
         case .shape: return shapeWidth
         case .image: return 300 // Default image width
         case .pdf: return pdfWidth
+        case .youtube: return youtubeWidth
         case .standard: return nodeWidth
         }
     }

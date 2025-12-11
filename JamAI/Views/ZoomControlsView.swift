@@ -18,6 +18,7 @@ struct ZoomControlsView: View {
     let onCreateNote: () -> Void
     let onCreateTitle: () -> Void
     let onUploadPDF: () -> Void
+    var onAddYouTube: (() -> Void)? = nil
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -55,6 +56,9 @@ struct ZoomControlsView: View {
             ZoomButton(icon: "doc.text", action: onCreateNote, tooltip: "New Note")
             ZoomButton(icon: "textformat.size", action: onCreateTitle, tooltip: "New Title")
             ZoomButton(icon: "doc.badge.plus", action: onUploadPDF, tooltip: "Upload Document")
+            if let onAddYouTube = onAddYouTube {
+                ZoomButton(icon: "play.rectangle", action: onAddYouTube, tooltip: "Add YouTube Video")
+            }
             
             Divider()
                 .frame(width: 1, height: 20)

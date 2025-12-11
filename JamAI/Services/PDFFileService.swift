@@ -85,7 +85,19 @@ class PDFFileService {
         self.session = URLSession(configuration: config)
     }
     
-    // MARK: - Upload PDF
+    // MARK: - Upload Files
+    
+    /// Upload a text file (transcript) to Gemini File API
+    /// - Parameters:
+    ///   - text: The text content to upload
+    ///   - filename: Filename for display (should end in .txt)
+    /// - Returns: The uploaded GeminiFile object
+    func uploadText(text: String, filename: String) async throws -> GeminiFile {
+        guard let data = text.data(using: .utf8) else {
+            throw PDFFileError.uploadFailed("Failed to encode text as UTF-8")
+        }
+        return try await uploadFile(data: data, filename: filename, mimeType: "text/plain")
+    }
     
     /// Upload a PDF file to Gemini File API
     /// - Parameters:
@@ -93,6 +105,17 @@ class PDFFileService {
     ///   - filename: Original filename for display
     /// - Returns: The uploaded GeminiFile object
     func uploadPDF(data: Data, filename: String) async throws -> GeminiFile {
+        let mimeType = inferMimeType(from: filename)
+        return try await uploadFile(data: data, filename: filename, mimeType: mimeType)
+    }
+    
+    /// Upload a file to Gemini File API with explicit MIME type
+    /// - Parameters:
+    ///   - data: The file data
+    ///   - filename: Filename for display
+    ///   - mimeType: MIME type of the file
+    /// - Returns: The uploaded GeminiFile object
+    func uploadFile(data: Data, filename: String, mimeType: String) async throws -> GeminiFile {
         guard let apiKey = apiKey else {
             throw PDFFileError.noAPIKey
         }
@@ -101,9 +124,6 @@ class PDFFileService {
         guard data.count <= maxFileSize else {
             throw PDFFileError.fileTooLarge
         }
-        
-        // Infer MIME type: PDFs are application/pdf, other supported docs as text/plain
-        let mimeType = inferMimeType(from: filename)
         
         // Step 1: Initiate resumable upload
         let uploadUrl = try await initiateUpload(filename: filename, mimeType: mimeType, fileSize: data.count, apiKey: apiKey)
@@ -329,5 +349,37 @@ class PDFFileService {
         }
         
         return try await uploadPDF(data: pdfData, filename: filename)
+    }
+    
+    /// Re-upload a YouTube transcript if the file has expired (files expire after 48 hours)
+    /// Returns the new file URI if re-upload was needed, nil if file is still active
+    func ensureYouTubeFileActive(node: Node) async throws -> GeminiFile? {
+        guard let fileId = node.youtubeFileId else {
+            // No file ID means we need to upload
+            guard let transcript = node.youtubeTranscript,
+                  let title = node.youtubeTitle else {
+                return nil
+            }
+            let filename = "\(title).txt"
+            return try await uploadText(text: transcript, filename: filename)
+        }
+        
+        do {
+            let file = try await getFileStatus(fileId: fileId)
+            if file.isActive {
+                return nil // File is still active, no re-upload needed
+            }
+        } catch PDFFileError.fileNotFound {
+            // File expired or deleted, re-upload
+        }
+        
+        // Re-upload the file
+        guard let transcript = node.youtubeTranscript,
+              let title = node.youtubeTitle else {
+            throw PDFFileError.fileNotFound
+        }
+        
+        let filename = "\(title).txt"
+        return try await uploadText(text: transcript, filename: filename)
     }
 }
