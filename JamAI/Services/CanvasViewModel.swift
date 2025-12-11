@@ -491,9 +491,7 @@ class CanvasViewModel: ObservableObject {
         }
         
         do {
-            if Config.enableVerboseLogging {
-                print("📄 Uploading PDF '\(filename)' to Gemini File API...")
-            }
+            print("📄 Uploading PDF '\(filename)' to Gemini File API...")
             
             let file = try await PDFFileService.shared.uploadPDF(data: pdfData, filename: filename)
             
@@ -510,11 +508,11 @@ class CanvasViewModel: ObservableObject {
                 print("📄 PDF '\(filename)' uploaded successfully: \(file.uri)")
             }
         } catch {
-            if Config.enableVerboseLogging {
-                print("⚠️ Failed to upload PDF '\(filename)': \(error.localizedDescription)")
-            }
+            print("❌ Failed to upload PDF '\(filename)': \(error)")
             // Node is still usable, just won't have file search until re-upload
-            errorMessage = "PDF indexing failed: \(error.localizedDescription)"
+            await MainActor.run {
+                errorMessage = "PDF indexing failed: \(error.localizedDescription)"
+            }
         }
     }
     

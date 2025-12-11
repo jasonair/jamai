@@ -733,5 +733,297 @@ export const generateWithGemini = onRequest({ invoker: 'public' }, async (req, r
   }
 });
 
+/**
+ * Upload file to Gemini File API
+ * Handles resumable upload protocol on behalf of the client
+ */
+export const uploadFileToGemini = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  if (!geminiApiKey) {
+    console.error('❌ GEMINI_API_KEY not configured');
+    res.status(500).json({ ok: false, error: 'Gemini not configured' });
+    return;
+  }
+
+  try {
+    // Authenticate user
+    const { uid } = await verifyFirebaseAuth(req);
+
+    // Verify user exists
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(403).json({ ok: false, error: 'User account not found' });
+      return;
+    }
+
+    const { filename, mimeType, data: base64Data } = req.body || {};
+    
+    if (!filename || !mimeType || !base64Data) {
+      res.status(400).json({ ok: false, error: 'Missing filename, mimeType, or data' });
+      return;
+    }
+
+    // Decode base64 data
+    const fileData = Buffer.from(base64Data, 'base64');
+    const fileSize = fileData.length;
+
+    // Check file size (20MB limit)
+    const maxFileSize = 20 * 1024 * 1024;
+    if (fileSize > maxFileSize) {
+      res.status(400).json({ ok: false, error: 'File exceeds 20MB limit' });
+      return;
+    }
+
+    // Step 1: Initiate resumable upload
+    const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${geminiApiKey}`;
+    
+    const initResponse = await (globalThis as any).fetch(initUrl, {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+        'X-Goog-Upload-Header-Content-Length': fileSize.toString(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        file: { display_name: filename }
+      }),
+    });
+
+    if (!initResponse.ok) {
+      const errorText = await initResponse.text();
+      console.error('❌ Failed to initiate upload', errorText);
+      res.status(500).json({ ok: false, error: 'Failed to initiate upload', details: errorText });
+      return;
+    }
+
+    const uploadUrl = initResponse.headers.get('X-Goog-Upload-URL');
+    if (!uploadUrl) {
+      res.status(500).json({ ok: false, error: 'No upload URL returned' });
+      return;
+    }
+
+    // Step 2: Upload the file data
+    const uploadResponse = await (globalThis as any).fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        'X-Goog-Upload-Command': 'upload, finalize',
+        'X-Goog-Upload-Offset': '0',
+      },
+      body: fileData,
+    });
+
+    if (!uploadResponse.ok) {
+      const errorText = await uploadResponse.text();
+      console.error('❌ Failed to upload file', errorText);
+      res.status(500).json({ ok: false, error: 'Failed to upload file', details: errorText });
+      return;
+    }
+
+    const uploadResult = await uploadResponse.json();
+    const file = uploadResult.file;
+
+    if (!file) {
+      res.status(500).json({ ok: false, error: 'No file returned from upload' });
+      return;
+    }
+
+    // Return the file info
+    res.json({
+      ok: true,
+      file: {
+        name: file.name,
+        displayName: file.displayName || filename,
+        mimeType: file.mimeType,
+        sizeBytes: file.sizeBytes,
+        createTime: file.createTime,
+        updateTime: file.updateTime,
+        expirationTime: file.expirationTime,
+        sha256Hash: file.sha256Hash,
+        uri: file.uri,
+        state: file.state,
+      }
+    });
+  } catch (err: any) {
+    console.error('❌ uploadFileToGemini failed', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'Upload failed' });
+  }
+});
+
+/**
+ * Get file status from Gemini File API
+ */
+export const getGeminiFileStatus = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  if (!geminiApiKey) {
+    res.status(500).json({ ok: false, error: 'Gemini not configured' });
+    return;
+  }
+
+  try {
+    await verifyFirebaseAuth(req);
+
+    const { fileId } = req.body || {};
+    if (!fileId) {
+      res.status(400).json({ ok: false, error: 'Missing fileId' });
+      return;
+    }
+
+    const url = `${GEMINI_BASE_URL}/files/${fileId}?key=${geminiApiKey}`;
+    const response = await (globalThis as any).fetch(url);
+    
+    if (response.status === 404) {
+      res.status(404).json({ ok: false, error: 'File not found' });
+      return;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      res.status(response.status).json({ ok: false, error: errorText });
+      return;
+    }
+
+    const file = await response.json();
+    res.json({ ok: true, file });
+  } catch (err: any) {
+    console.error('❌ getGeminiFileStatus failed', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'Status check failed' });
+  }
+});
+
+/**
+ * Search files using Gemini File Search
+ * Proxies generateContent requests with file_data to Gemini
+ */
+export const searchGeminiFiles = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  if (!geminiApiKey) {
+    res.status(500).json({ ok: false, error: 'Gemini not configured' });
+    return;
+  }
+
+  try {
+    const { uid } = await verifyFirebaseAuth(req);
+
+    // Verify user exists and has credits
+    const userRef = db.collection('users').doc(uid);
+    const userSnap = await userRef.get();
+    if (!userSnap.exists) {
+      res.status(403).json({ ok: false, error: 'User account not found' });
+      return;
+    }
+
+    const { body, model } = req.body || {};
+    if (!body || typeof body !== 'object') {
+      res.status(400).json({ ok: false, error: 'Missing or invalid request body' });
+      return;
+    }
+
+    // Use the specified model or default to gemini-2.5-flash for file search
+    const modelId = model || 'models/gemini-2.5-flash';
+    const url = `${GEMINI_BASE_URL}/${modelId}:generateContent?key=${geminiApiKey}`;
+
+    const geminiResponse = await (globalThis as any).fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+    const rawText = await geminiResponse.text();
+
+    if (!geminiResponse.ok) {
+      console.error('❌ Gemini file search error', geminiResponse.status, rawText);
+      res.status(geminiResponse.status).json({ ok: false, error: 'Gemini API error', details: rawText });
+      return;
+    }
+
+    let json: any;
+    try {
+      json = JSON.parse(rawText);
+    } catch {
+      res.status(500).json({ ok: false, error: 'Invalid response from Gemini' });
+      return;
+    }
+
+    res.json({ ok: true, result: json });
+  } catch (err: any) {
+    console.error('❌ searchGeminiFiles failed', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'Search failed' });
+  }
+});
+
+/**
+ * Generate embeddings using Gemini
+ * Used for RAG node embeddings
+ */
+export const generateEmbedding = onRequest({ invoker: 'public' }, async (req, res) => {
+  if (req.method !== 'POST') {
+    res.status(405).send('Method Not Allowed');
+    return;
+  }
+
+  if (!geminiApiKey) {
+    res.status(500).json({ ok: false, error: 'Gemini not configured' });
+    return;
+  }
+
+  try {
+    await verifyFirebaseAuth(req);
+
+    const { text } = req.body || {};
+    if (!text || typeof text !== 'string') {
+      res.status(400).json({ ok: false, error: 'Missing or invalid text' });
+      return;
+    }
+
+    const url = `${GEMINI_BASE_URL}/models/text-embedding-004:embedContent?key=${geminiApiKey}`;
+
+    const response = await (globalThis as any).fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'models/text-embedding-004',
+        content: {
+          parts: [{ text }]
+        }
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Embedding generation error', response.status, errorText);
+      res.status(response.status).json({ ok: false, error: 'Embedding generation failed' });
+      return;
+    }
+
+    const json = await response.json();
+    const values = json?.embedding?.values;
+
+    if (!Array.isArray(values)) {
+      res.status(500).json({ ok: false, error: 'Invalid embedding response' });
+      return;
+    }
+
+    res.json({ ok: true, embedding: values });
+  } catch (err: any) {
+    console.error('❌ generateEmbedding failed', err?.message || err);
+    res.status(500).json({ ok: false, error: err?.message || 'Embedding failed' });
+  }
+});
+
 export { health as healthV2 } from './health';
 export { migrateCreditsFields, migrateUserStats } from './migrate-credits';

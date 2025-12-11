@@ -3,6 +3,7 @@
 //  JamAI
 //
 //  Gemini 2.0 Flash API client with streaming support
+//  Uses Cloud Functions to proxy requests with server-side API key
 //
 
 import Foundation
@@ -11,12 +12,6 @@ import FirebaseAuth
 
 class GeminiClient: ObservableObject {
     private let session: URLSession
-    
-    // Local API key is still used for embeddings/RAG in development builds.
-    // Chat generation goes through the JamAI backend and does not rely on this.
-    private var apiKey: String? {
-        ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"]
-    }
     
     init() {
         let config = URLSessionConfiguration.default
@@ -164,27 +159,23 @@ class GeminiClient: ObservableObject {
     // MARK: - Embeddings
     
     func generateEmbedding(text: String) async throws -> [Float] {
-        guard let apiKey = apiKey else {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
             throw GeminiError.noAPIKey
         }
         
-        let urlString = "\(Config.geminiAPIBaseURL)/\(Config.geminiEmbeddingModel):embedContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        let token = try await currentUser.getIDToken()
+        
+        guard let url = URL(string: Config.geminiEmbeddingURL) else {
             throw GeminiError.invalidURL
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let body: [String: Any] = [
-            "model": Config.geminiEmbeddingModel,
-            "content": [
-                "parts": [["text": text]]
-            ]
-        ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let payload: [String: Any] = ["text": text]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         let (data, response) = try await session.data(for: request)
         
@@ -194,8 +185,8 @@ class GeminiClient: ObservableObject {
         }
         
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let embedding = json["embedding"] as? [String: Any],
-              let values = embedding["values"] as? [Double] else {
+              let ok = json["ok"] as? Bool, ok,
+              let values = json["embedding"] as? [Double] else {
             throw GeminiError.invalidResponse
         }
         

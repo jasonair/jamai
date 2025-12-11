@@ -3,9 +3,11 @@
 //  JamAI
 //
 //  Service for uploading PDFs to Gemini File API and managing file lifecycle
+//  Uses Cloud Functions to proxy requests with server-side API key
 //
 
 import Foundation
+import FirebaseAuth
 
 /// Represents an uploaded PDF file in Gemini File API
 struct GeminiFile: Codable {
@@ -32,7 +34,7 @@ struct GeminiFile: Codable {
 
 /// Error types for PDF file operations
 enum PDFFileError: LocalizedError {
-    case noAPIKey
+    case notAuthenticated
     case invalidURL
     case uploadFailed(String)
     case fileNotFound
@@ -44,8 +46,8 @@ enum PDFFileError: LocalizedError {
     
     var errorDescription: String? {
         switch self {
-        case .noAPIKey:
-            return "API key not configured"
+        case .notAuthenticated:
+            return "Please sign in to upload files"
         case .invalidURL:
             return "Invalid API URL"
         case .uploadFailed(let message):
@@ -66,7 +68,7 @@ enum PDFFileError: LocalizedError {
     }
 }
 
-/// Service for managing PDF files with Gemini File API
+/// Service for managing PDF files with Gemini File API via Cloud Functions
 @MainActor
 class PDFFileService {
     static let shared = PDFFileService()
@@ -74,15 +76,19 @@ class PDFFileService {
     private let session: URLSession
     private let maxFileSize: Int = 20 * 1024 * 1024 // 20MB limit
     
-    private var apiKey: String? {
-        ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"]
-    }
-    
     private init() {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 120 // Longer timeout for uploads
         config.timeoutIntervalForResource = 300
         self.session = URLSession(configuration: config)
+    }
+    
+    /// Get Firebase ID token for authentication
+    private func getAuthToken() async throws -> String {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
+            throw PDFFileError.notAuthenticated
+        }
+        return try await currentUser.getIDToken()
     }
     
     // MARK: - Upload Files
@@ -109,112 +115,97 @@ class PDFFileService {
         return try await uploadFile(data: data, filename: filename, mimeType: mimeType)
     }
     
-    /// Upload a file to Gemini File API with explicit MIME type
+    /// Upload a file to Gemini File API via Cloud Function
     /// - Parameters:
     ///   - data: The file data
     ///   - filename: Filename for display
     ///   - mimeType: MIME type of the file
     /// - Returns: The uploaded GeminiFile object
     func uploadFile(data: Data, filename: String, mimeType: String) async throws -> GeminiFile {
-        guard let apiKey = apiKey else {
-            throw PDFFileError.noAPIKey
-        }
-        
         // Validate file size
         guard data.count <= maxFileSize else {
             throw PDFFileError.fileTooLarge
         }
         
-        // Step 1: Initiate resumable upload
-        let uploadUrl = try await initiateUpload(filename: filename, mimeType: mimeType, fileSize: data.count, apiKey: apiKey)
+        print("📤 [PDFFileService] Getting auth token...")
+        let token = try await getAuthToken()
+        print("📤 [PDFFileService] Got auth token, preparing request to: \(Config.geminiFileUploadURL)")
         
-        // Step 2: Upload the file data
-        let file = try await uploadData(data: data, uploadUrl: uploadUrl)
-        
-        // Step 3: Wait for processing if needed
-        if !file.isActive {
-            return try await waitForProcessing(fileId: file.fileId)
-        }
-        
-        return file
-    }
-    
-    /// Initiate a resumable upload session
-    private func initiateUpload(filename: String, mimeType: String, fileSize: Int, apiKey: String) async throws -> URL {
-        let urlString = "https://generativelanguage.googleapis.com/upload/v1beta/files?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: Config.geminiFileUploadURL) else {
             throw PDFFileError.invalidURL
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
-        request.setValue("resumable", forHTTPHeaderField: "X-Goog-Upload-Protocol")
-        request.setValue("start", forHTTPHeaderField: "X-Goog-Upload-Command")
-        request.setValue(mimeType, forHTTPHeaderField: "X-Goog-Upload-Header-Content-Type")
-        request.setValue("\(fileSize)", forHTTPHeaderField: "X-Goog-Upload-Header-Content-Length")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        let body: [String: Any] = [
-            "file": [
-                "display_name": filename
-            ]
+        // Send file as base64 encoded data
+        let payload: [String: Any] = [
+            "filename": filename,
+            "mimeType": mimeType,
+            "data": data.base64EncodedString()
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
-        let (_, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200,
-              let uploadUrlString = httpResponse.value(forHTTPHeaderField: "X-Goog-Upload-URL"),
-              let uploadUrl = URL(string: uploadUrlString) else {
-            throw PDFFileError.invalidResponse
-        }
-        
-        return uploadUrl
-    }
-    
-    /// Upload file data to the resumable upload URL
-    private func uploadData(data: Data, uploadUrl: URL) async throws -> GeminiFile {
-        var request = URLRequest(url: uploadUrl)
-        request.httpMethod = "POST"
-        request.setValue("upload, finalize", forHTTPHeaderField: "X-Goog-Upload-Command")
-        request.setValue("0", forHTTPHeaderField: "X-Goog-Upload-Offset")
-        request.httpBody = data
-        
+        print("📤 [PDFFileService] Sending request (payload size: \(request.httpBody?.count ?? 0) bytes)...")
         let (responseData, response) = try await session.data(for: request)
+        print("📤 [PDFFileService] Got response")
         
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            if let errorText = String(data: responseData, encoding: .utf8) {
-                throw PDFFileError.uploadFailed(errorText)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw PDFFileError.invalidResponse
+        }
+        
+        print("📤 [PDFFileService] HTTP status: \(httpResponse.statusCode)")
+        
+        guard httpResponse.statusCode == 200 else {
+            let responseText = String(data: responseData, encoding: .utf8) ?? "no body"
+            print("❌ [PDFFileService] Error response: \(responseText)")
+            if let errorJson = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+               let errorMsg = errorJson["error"] as? String {
+                throw PDFFileError.uploadFailed(errorMsg)
             }
-            throw PDFFileError.invalidResponse
+            throw PDFFileError.uploadFailed("HTTP \(httpResponse.statusCode)")
         }
         
-        // Parse the file response
         guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any],
+              let ok = json["ok"] as? Bool, ok,
               let fileJson = json["file"] as? [String: Any] else {
+            let responseText = String(data: responseData, encoding: .utf8) ?? "no body"
+            print("❌ [PDFFileService] Invalid response format: \(responseText)")
             throw PDFFileError.invalidResponse
         }
         
-        return try parseFileResponse(fileJson)
+        print("📤 [PDFFileService] Upload successful, parsing file response...")
+        let file = try parseFileResponse(fileJson)
+        
+        // Wait for processing if needed
+        if !file.isActive {
+            print("📤 [PDFFileService] File is processing, waiting...")
+            return try await waitForProcessing(fileId: file.fileId)
+        }
+        
+        print("📤 [PDFFileService] File is active: \(file.uri)")
+        return file
     }
     
     // MARK: - File Status
     
-    /// Get the status of an uploaded file
+    /// Get the status of an uploaded file via Cloud Function
     func getFileStatus(fileId: String) async throws -> GeminiFile {
-        guard let apiKey = apiKey else {
-            throw PDFFileError.noAPIKey
-        }
+        let token = try await getAuthToken()
         
-        let urlString = "\(Config.geminiAPIBaseURL)/files/\(fileId)?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        guard let url = URL(string: Config.geminiFileStatusURL) else {
             throw PDFFileError.invalidURL
         }
         
         var request = URLRequest(url: url)
-        request.httpMethod = "GET"
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        
+        let payload: [String: Any] = ["fileId": fileId]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         let (data, response) = try await session.data(for: request)
         
@@ -230,11 +221,13 @@ class PDFFileService {
             throw PDFFileError.invalidResponse
         }
         
-        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ok = json["ok"] as? Bool, ok,
+              let fileJson = json["file"] as? [String: Any] else {
             throw PDFFileError.invalidResponse
         }
         
-        return try parseFileResponse(json)
+        return try parseFileResponse(fileJson)
     }
     
     /// Wait for a file to finish processing
@@ -262,26 +255,10 @@ class PDFFileService {
     // MARK: - Delete File
     
     /// Delete a file from Gemini File API
+    /// Note: Files auto-expire after 48 hours, so deletion is optional
     func deleteFile(fileId: String) async throws {
-        guard let apiKey = apiKey else {
-            throw PDFFileError.noAPIKey
-        }
-        
-        let urlString = "\(Config.geminiAPIBaseURL)/files/\(fileId)?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
-            throw PDFFileError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        
-        let (_, response) = try await session.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 || httpResponse.statusCode == 204 else {
-            // Ignore errors on delete - file may already be expired
-            return
-        }
+        // Files auto-expire after 48 hours; explicit deletion not implemented via Cloud Function
+        // This is intentionally a no-op to avoid requiring an additional Cloud Function endpoint
     }
     
     // MARK: - Helpers

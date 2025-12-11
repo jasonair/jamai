@@ -3,9 +3,11 @@
 //  JamAI
 //
 //  Service for searching PDF content using Gemini File Search tool
+//  Uses Cloud Functions to proxy requests with server-side API key
 //
 
 import Foundation
+import FirebaseAuth
 
 /// Result from a PDF file search query
 struct PDFSearchResult: Codable {
@@ -23,7 +25,7 @@ struct PDFCitation: Codable {
 
 /// Error types for PDF search operations
 enum PDFSearchError: LocalizedError {
-    case noAPIKey
+    case notAuthenticated
     case invalidURL
     case searchFailed(String)
     case invalidResponse
@@ -32,8 +34,8 @@ enum PDFSearchError: LocalizedError {
     
     var errorDescription: String? {
         switch self {
-        case .noAPIKey:
-            return "API key not configured"
+        case .notAuthenticated:
+            return "Please sign in to search files"
         case .invalidURL:
             return "Invalid API URL"
         case .searchFailed(let message):
@@ -48,17 +50,13 @@ enum PDFSearchError: LocalizedError {
     }
 }
 
-/// Service for searching PDF content using Gemini File Search tool
+/// Service for searching PDF content using Gemini File Search tool via Cloud Functions
 @MainActor
 class PDFSearchService {
     static let shared = PDFSearchService()
     
     private let session: URLSession
     private let pdfFileService = PDFFileService.shared
-    
-    private var apiKey: String? {
-        ProcessInfo.processInfo.environment["GOOGLE_GEMINI_API_KEY"]
-    }
     
     private init() {
         let config = URLSessionConfiguration.default
@@ -67,17 +65,23 @@ class PDFSearchService {
         self.session = URLSession(configuration: config)
     }
     
+    /// Get Firebase ID token for authentication
+    private func getAuthToken() async throws -> String {
+        guard let currentUser = FirebaseAuthService.shared.currentUser else {
+            throw PDFSearchError.notAuthenticated
+        }
+        return try await currentUser.getIDToken()
+    }
+    
     // MARK: - Search PDFs
     
-    /// Search across PDF files using Gemini File Search tool
+    /// Search across PDF files using Gemini File Search tool via Cloud Function
     /// - Parameters:
     ///   - query: The search query
     ///   - pdfNodes: PDF nodes to search within
     /// - Returns: Search result with answer and citations
     func searchPDFs(query: String, pdfNodes: [Node]) async throws -> PDFSearchResult {
-        guard let apiKey = apiKey else {
-            throw PDFSearchError.noAPIKey
-        }
+        let token = try await getAuthToken()
         
         // Filter to only PDF nodes with file URIs
         let validPdfNodes = pdfNodes.filter { $0.type == .pdf && $0.pdfFileUri != nil }
@@ -117,19 +121,23 @@ class PDFSearchService {
             throw PDFSearchError.noFilesProvided
         }
         
-        // Build file search request (use dedicated file-search-capable model)
-        let urlString = "\(Config.geminiAPIBaseURL)/\(Config.geminiFileSearchModel):generateContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        // Build file search request via Cloud Function
+        guard let url = URL(string: Config.geminiFileSearchURL) else {
             throw PDFSearchError.invalidURL
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
-        // Build request body with file search tool (include filenames so model knows what files it has)
+        // Build request body with file search tool
         let body = buildFileSearchRequest(query: query, files: activeFiles)
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let payload: [String: Any] = [
+            "body": body,
+            "model": Config.geminiFileSearchModel
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         let (data, response) = try await session.data(for: request)
         
@@ -141,7 +149,16 @@ class PDFSearchService {
             throw PDFSearchError.invalidResponse
         }
         
-        return try parseSearchResponse(data: data, query: query)
+        // Parse Cloud Function response
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ok = json["ok"] as? Bool, ok,
+              let result = json["result"] as? [String: Any] else {
+            throw PDFSearchError.invalidResponse
+        }
+        
+        // Convert result back to Data for parsing
+        let resultData = try JSONSerialization.data(withJSONObject: result)
+        return try parseSearchResponse(data: resultData, query: query)
     }
     
     /// Build context string from connected PDF nodes for AI prompts
@@ -172,15 +189,13 @@ class PDFSearchService {
     
     // MARK: - Search YouTube Transcripts
     
-    /// Search across YouTube transcript files using Gemini File Search tool
+    /// Search across YouTube transcript files using Gemini File Search tool via Cloud Function
     /// - Parameters:
     ///   - query: The search query
     ///   - youtubeNodes: YouTube nodes with uploaded transcripts
     /// - Returns: Search result with answer and citations
     func searchYouTubeTranscripts(query: String, youtubeNodes: [Node]) async throws -> PDFSearchResult {
-        guard let apiKey = apiKey else {
-            throw PDFSearchError.noAPIKey
-        }
+        let token = try await getAuthToken()
         
         // Filter to only YouTube nodes with file URIs
         let validYouTubeNodes = youtubeNodes.filter { $0.type == .youtube && $0.youtubeFileUri != nil }
@@ -220,19 +235,23 @@ class PDFSearchService {
             throw PDFSearchError.noFilesProvided
         }
         
-        // Build file search request (use dedicated file-search-capable model)
-        let urlString = "\(Config.geminiAPIBaseURL)/\(Config.geminiFileSearchModel):generateContent?key=\(apiKey)"
-        guard let url = URL(string: urlString) else {
+        // Build file search request via Cloud Function
+        guard let url = URL(string: Config.geminiFileSearchURL) else {
             throw PDFSearchError.invalidURL
         }
         
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         
         // Build request body with YouTube-specific system prompt
         let body = buildYouTubeSearchRequest(query: query, files: activeFiles)
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let payload: [String: Any] = [
+            "body": body,
+            "model": Config.geminiFileSearchModel
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         
         let (data, response) = try await session.data(for: request)
         
@@ -244,7 +263,16 @@ class PDFSearchService {
             throw PDFSearchError.invalidResponse
         }
         
-        return try parseSearchResponse(data: data, query: query)
+        // Parse Cloud Function response
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let ok = json["ok"] as? Bool, ok,
+              let result = json["result"] as? [String: Any] else {
+            throw PDFSearchError.invalidResponse
+        }
+        
+        // Convert result back to Data for parsing
+        let resultData = try JSONSerialization.data(withJSONObject: result)
+        return try parseSearchResponse(data: resultData, query: query)
     }
     
     /// Build context string from connected YouTube nodes for AI prompts

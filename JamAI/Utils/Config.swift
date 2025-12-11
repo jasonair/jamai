@@ -19,6 +19,10 @@ enum Config {
     static let geminiFileSearchModel = "models/gemini-2.5-flash"
     // Call Cloud Function directly for Gemini SaaS backend
     static let geminiBackendURL = "https://europe-west1-jamai-dev.cloudfunctions.net/generateWithGemini"
+    static let geminiFileUploadURL = "https://europe-west1-jamai-dev.cloudfunctions.net/uploadFileToGemini"
+    static let geminiFileStatusURL = "https://europe-west1-jamai-dev.cloudfunctions.net/getGeminiFileStatus"
+    static let geminiFileSearchURL = "https://europe-west1-jamai-dev.cloudfunctions.net/searchGeminiFiles"
+    static let geminiEmbeddingURL = "https://europe-west1-jamai-dev.cloudfunctions.net/generateEmbedding"
     
     // Keychain
     static let keychainService = "com.jamai.api-keys"
