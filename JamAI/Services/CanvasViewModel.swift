@@ -32,6 +32,7 @@ class CanvasViewModel: ObservableObject {
     @Published var nodesWithUnreadResponse: Set<UUID> = [] // Nodes with new AI responses not yet viewed
     @Published var errorMessage: String?
     @Published var orchestratingNodeIds: Set<UUID> = [] // Nodes involved in active orchestration
+    @Published var indexingNodeIds: Set<UUID> = [] // Nodes currently being indexed (PDF/YouTube)
     
     // Credit error state - published so NodeView can show inline message
     @Published var creditErrorNodeId: UUID? // Node where credit error occurred
@@ -421,6 +422,11 @@ class CanvasViewModel: ObservableObject {
             return
         }
         
+        // Mark as indexing
+        _ = await MainActor.run {
+            indexingNodeIds.insert(nodeId)
+        }
+        
         do {
             let title = node.youtubeTitle ?? "YouTube Video"
             
@@ -434,6 +440,10 @@ class CanvasViewModel: ObservableObject {
             if transcript.isEmpty {
                 if Config.enableVerboseLogging {
                     print("⚠️ [YouTube] No transcript available for '\(title)'")
+                }
+                // Remove from indexing and return
+                _ = await MainActor.run {
+                    indexingNodeIds.remove(nodeId)
                 }
                 return
             }
@@ -454,9 +464,12 @@ class CanvasViewModel: ObservableObject {
             node.youtubeFileId = geminiFile.fileId
             node.updatedAt = Date()
             
-            // Update in-memory and save
-            await MainActor.run {
+            // Update in-memory, remove from indexing, and save - all in one MainActor block
+            _ = await MainActor.run {
                 self.nodes[nodeId] = node
+                indexingNodeIds.remove(nodeId)
+                // Force view refresh by incrementing positionsVersion
+                self.positionsVersion += 1
             }
             try await dbActor.saveNode(node)
             
@@ -467,7 +480,32 @@ class CanvasViewModel: ObservableObject {
             if Config.enableVerboseLogging {
                 print("⚠️ [YouTube] Failed to upload transcript: \(error.localizedDescription)")
             }
+            // Remove from indexing on error
+            _ = await MainActor.run {
+                indexingNodeIds.remove(nodeId)
+            }
         }
+    }
+    
+    /// Retry indexing for a YouTube node
+    func retryIndexing(nodeId: UUID) {
+        guard let node = nodes[nodeId], node.type == .youtube else { return }
+        
+        // Reset status
+        var updatedNode = node
+        updatedNode.youtubeFileUri = nil
+        updatedNode.youtubeTranscript = nil
+        nodes[nodeId] = updatedNode
+        
+        Task {
+            await uploadYouTubeTranscriptToGemini(nodeId: nodeId)
+        }
+    }
+    
+    /// Dismiss the credit error message
+    func dismissCreditError() {
+        creditErrorNodeId = nil
+        creditCheckResult = nil
     }
     
     /// Open a YouTube video in the default browser
@@ -490,6 +528,17 @@ class CanvasViewModel: ObservableObject {
             return
         }
         
+        // Mark as indexing
+        _ = await MainActor.run {
+            indexingNodeIds.insert(nodeId)
+        }
+        
+        defer {
+            Task { @MainActor in
+                indexingNodeIds.remove(nodeId)
+            }
+        }
+        
         do {
             print("📄 Uploading PDF '\(filename)' to Gemini File API...")
             
@@ -498,7 +547,9 @@ class CanvasViewModel: ObservableObject {
             // Update node with file info
             node.pdfFileUri = file.uri
             node.pdfFileId = file.fileId
-            nodes[nodeId] = node
+            await MainActor.run {
+                nodes[nodeId] = node
+            }
             
             // Save updated node
             let dbActor = self.dbActor
@@ -863,6 +914,11 @@ class CanvasViewModel: ObservableObject {
         }
         
         resetWiringState()
+        
+        // Auto-select and focus into the newly connected target node
+        selectedNodeId = targetNodeId
+        bringToFront([targetNodeId])
+        navigateToNode(targetNodeId, viewportSize: viewportSize)
     }
     
     /// Cancel the current wiring operation

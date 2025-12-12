@@ -15,6 +15,7 @@ struct PDFNodeView: View {
     let isMultiSelected: Bool
     let onDelete: () -> Void
     let onRevealInFinder: () -> Void
+    var isIndexing: Bool = false  // Passed from CanvasViewModel.indexingNodeIds
     
     // Wiring props
     var isWiring: Bool = false
@@ -29,15 +30,24 @@ struct PDFNodeView: View {
     
     @Environment(\.colorScheme) private var colorScheme
     
-    // Status tracking
-    @State private var uploadStatus: UploadStatus = .ready
     @State private var isHovering: Bool = false
     
-    enum UploadStatus {
-        case ready
+    // Computed upload status based on node state and external indexing flag
+    private var uploadStatus: UploadStatus {
+        if node.pdfFileUri != nil {
+            return .active
+        } else if isIndexing {
+            return .uploading
+        } else if node.pdfData != nil {
+            return .uploading  // Has data, will be indexed
+        } else {
+            return .error("No PDF data")
+        }
+    }
+    
+    enum UploadStatus: Equatable {
         case uploading
         case active
-        case expired
         case error(String)
     }
     
@@ -61,14 +71,10 @@ struct PDFNodeView: View {
     
     private var statusColor: Color {
         switch uploadStatus {
-        case .ready:
-            return .gray
         case .uploading:
             return .orange
         case .active:
             return .green
-        case .expired:
-            return .yellow
         case .error:
             return .red
         }
@@ -76,14 +82,10 @@ struct PDFNodeView: View {
     
     private var statusIcon: String {
         switch uploadStatus {
-        case .ready:
-            return "arrow.up.circle"
         case .uploading:
             return "arrow.up.circle.fill"
         case .active:
             return "checkmark.circle.fill"
-        case .expired:
-            return "exclamationmark.circle.fill"
         case .error:
             return "xmark.circle.fill"
         }
@@ -96,7 +98,7 @@ struct PDFNodeView: View {
                 // PDF Icon
                 Image(systemName: "doc.fill")
                     .font(.system(size: 24, weight: .medium))
-                    .foregroundColor(.red)
+                    .foregroundColor(.blue)
                 
                 // Filename
                 VStack(alignment: .leading, spacing: 2) {
@@ -108,13 +110,19 @@ struct PDFNodeView: View {
                     
                     // Status indicator
                     HStack(spacing: 4) {
-                        Image(systemName: statusIcon)
-                            .font(.system(size: 10))
-                            .foregroundColor(statusColor)
+                        if uploadStatus == .uploading {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                                .frame(width: 10, height: 10)
+                        } else {
+                            Image(systemName: statusIcon)
+                                .font(.system(size: 10))
+                                .foregroundColor(statusColor)
+                        }
                         
                         Text(statusText)
                             .font(.system(size: 10))
-                            .foregroundColor(.secondary)
+                            .foregroundColor(uploadStatus == .uploading ? .orange : .secondary)
                     }
                 }
                 
@@ -178,36 +186,16 @@ struct PDFNodeView: View {
         .onHover { hovering in
             isHovering = hovering
         }
-        .onAppear {
-            updateUploadStatus()
-        }
-        .onChange(of: node.pdfFileUri) { _, _ in
-            updateUploadStatus()
-        }
     }
     
     private var statusText: String {
         switch uploadStatus {
-        case .ready:
-            return "Ready to index"
         case .uploading:
             return "Indexing..."
         case .active:
             return "Indexed"
-        case .expired:
-            return "Re-indexing needed"
         case .error(let message):
             return message
-        }
-    }
-    
-    private func updateUploadStatus() {
-        if node.pdfFileUri != nil {
-            uploadStatus = .active
-        } else if node.pdfData != nil {
-            uploadStatus = .ready
-        } else {
-            uploadStatus = .error("No PDF data")
         }
     }
 }

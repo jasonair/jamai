@@ -45,6 +45,7 @@ struct NodeItemWrapper: View {
     let onUseLocalModel: () -> Void
     let onDismissCreditError: () -> Void
     var onNavigateToParent: (() -> Void)? = nil  // Navigate back to parent node for notes
+    let onRetryIndexing: () -> Void // Retry indexing for YouTube nodes
     
     // Scroll position memory callbacks (macOS 15+)
     var onScrollOffsetChanged: ((CGFloat) -> Void)? = nil
@@ -63,6 +64,7 @@ struct NodeItemWrapper: View {
     let hasRightConnection: Bool
     let hasBottomConnection: Bool
     let hasLeftConnection: Bool
+    var isIndexing: Bool = false  // For PDF/YouTube nodes showing indexing status
     
     @Environment(\.colorScheme) var colorScheme
     
@@ -117,6 +119,7 @@ struct NodeItemWrapper: View {
                     isMultiSelected: isMultiSelected,
                     onDelete: onDelete,
                     onRevealInFinder: onRevealInFinder,
+                    isIndexing: isIndexing,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,
@@ -127,9 +130,7 @@ struct NodeItemWrapper: View {
                     hasBottomConnection: hasBottomConnection,
                     hasLeftConnection: hasLeftConnection
                 )
-                .onTapGesture {
-                    onTap()
-                }
+                // PDF nodes should not be selected/focused on click
             } else if node.type == .youtube {
                 YouTubeNodeView(
                     node: $node,
@@ -137,6 +138,9 @@ struct NodeItemWrapper: View {
                     isMultiSelected: isMultiSelected,
                     onDelete: onDelete,
                     onOpenInBrowser: onRevealInFinder, // Reuse callback for opening in browser
+                    onColorChange: onColorChange,
+                    onRetryIndexing: onRetryIndexing,
+                    isIndexing: isIndexing,
                     isWiring: isWiring,
                     wireSourceNodeId: wireSourceNodeId,
                     onClickToStartWiring: onClickToStartWiring,
@@ -147,9 +151,9 @@ struct NodeItemWrapper: View {
                     hasBottomConnection: hasBottomConnection,
                     hasLeftConnection: hasLeftConnection
                 )
-                .onTapGesture {
-                    onTap()
-                }
+                // Force view refresh when youtubeFileUri changes
+                .id("\(node.id)-\(node.youtubeFileUri ?? "none")")
+                // YouTube nodes should not be selected/focused on click
             } else {
                 NodeView(
                     node: $node,

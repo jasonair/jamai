@@ -893,14 +893,17 @@ struct CanvasView: View {
             onJamSquad: { prompt in handleJamSquad(prompt, for: node.id) },
             onUpgradePlan: { handleUpgradePlan() },
             onUseLocalModel: { handleUseLocalModel() },
-            onDismissCreditError: { handleDismissCreditError() },
-            onNavigateToParent: node.parentId != nil ? {
+            onDismissCreditError: { viewModel.dismissCreditError() },
+            onNavigateToParent: {
                 if let parentId = node.parentId {
-                    viewModel.navigateToNode(parentId, viewportSize: viewportSize)
+                    viewModel.navigateToNode(parentId)
                 }
-            } : nil,
-            onScrollOffsetChanged: { offset in
-                viewModel.saveScrollOffset(offset, for: node.id)
+            },
+            onRetryIndexing: {
+                viewModel.retryIndexing(nodeId: node.id)
+            },
+            onScrollOffsetChanged: { newOffset in
+                viewModel.saveScrollOffset(newOffset, for: node.id)
             },
             savedScrollOffset: viewModel.getSavedScrollOffset(for: node.id),
             shouldProcessTap: { windowPoint in
@@ -923,7 +926,8 @@ struct CanvasView: View {
             hasTopConnection: viewModel.hasConnection(nodeId: node.id, side: .top),
             hasRightConnection: viewModel.hasConnection(nodeId: node.id, side: .right),
             hasBottomConnection: viewModel.hasConnection(nodeId: node.id, side: .bottom),
-            hasLeftConnection: viewModel.hasConnection(nodeId: node.id, side: .left)
+            hasLeftConnection: viewModel.hasConnection(nodeId: node.id, side: .left),
+            isIndexing: viewModel.indexingNodeIds.contains(node.id)
         )
         .zIndex(viewModel.zIndex(for: node.id))
     }

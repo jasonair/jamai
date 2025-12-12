@@ -162,8 +162,9 @@ class YouTubeService {
             let authorName = json["author_name"] as? String
             
             // Construct high-quality thumbnail URL
-            // YouTube provides: default (120x90), mqdefault (320x180), hqdefault (480x360), maxresdefault (1280x720)
-            let thumbnailUrl = "https://img.youtube.com/vi/\(videoId)/mqdefault.jpg"
+            // Prioritize maxresdefault (1280x720) for 16:9, fallback to mqdefault (320x180)
+            // We use maxresdefault because it doesn't have black bars for 16:9 videos, unlike hqdefault
+            let thumbnailUrl = "https://img.youtube.com/vi/\(videoId)/maxresdefault.jpg"
             
             return YouTubeMetadata(
                 videoId: videoId,

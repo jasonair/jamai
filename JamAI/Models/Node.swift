@@ -363,10 +363,12 @@ extension Node {
     nonisolated static let titleWidth: CGFloat = 700
     nonisolated static let textWidth: CGFloat = 200
     nonisolated static let shapeWidth: CGFloat = 160
-    nonisolated static let pdfWidth: CGFloat = 200 // PDF nodes are compact (50% of standard)
+    nonisolated static let pdfWidth: CGFloat = 400 // PDF nodes same width as YouTube
     nonisolated static let pdfHeight: CGFloat = 80  // Compact height for PDF nodes
-    nonisolated static let youtubeWidth: CGFloat = 280 // YouTube nodes show thumbnail
-    nonisolated static let youtubeHeight: CGFloat = 180 // Taller to accommodate thumbnail
+    // YouTube nodes: width chosen so that the 16:9 thumbnail exactly fits without side cropping.
+    // Height = 16:9 thumbnail height (225) + 60pt info bar = 285.
+    nonisolated static let youtubeWidth: CGFloat = 400
+    nonisolated static let youtubeHeight: CGFloat = 285
     nonisolated static let collapsedHeight: CGFloat = 654 // Same as expanded height - nodes stay at 490.26x654
     nonisolated static let expandedHeight: CGFloat = 654 // Default expanded height
     nonisolated static let minHeight: CGFloat = 654 // Minimum height when resizing

@@ -15,17 +15,22 @@ enum ConnectionSide: String, Codable, Sendable, CaseIterable {
     case bottom
     case left
     
-    /// Returns the position of the connection point relative to the node's frame
+    /// Gap between node edge and connection circle center (matches ConnectionPointsOverlayInline.edgeGap)
+    private static let connectionPointOffset: CGFloat = 14
+    
+    /// Returns the position of the connection point circle center relative to the node's frame
+    /// This accounts for the offset where circles are rendered outside the node edge
     func position(for frame: CGRect) -> CGPoint {
+        let offset = Self.connectionPointOffset
         switch self {
         case .top:
-            return CGPoint(x: frame.midX, y: frame.minY)
+            return CGPoint(x: frame.midX, y: frame.minY - offset)
         case .right:
-            return CGPoint(x: frame.maxX, y: frame.midY)
+            return CGPoint(x: frame.maxX + offset, y: frame.midY)
         case .bottom:
-            return CGPoint(x: frame.midX, y: frame.maxY)
+            return CGPoint(x: frame.midX, y: frame.maxY + offset)
         case .left:
-            return CGPoint(x: frame.minX, y: frame.midY)
+            return CGPoint(x: frame.minX - offset, y: frame.midY)
         }
     }
     
